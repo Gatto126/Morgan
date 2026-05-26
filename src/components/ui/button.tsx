@@ -72,6 +72,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         className={cn(buttonVariants({ variant, size, className }), hasLucide ? "has-lucide" : "")}
         ref={ref}
+        style={style}
         {...props}
       >
         {children}
