@@ -1,38 +1,17 @@
 import crypto from "node:crypto";
-import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { SOURCE_INSTITUTIONS } from "@/lib/institutions";
 import { classifyTransaction } from "@/lib/transaction-classifier";
-import type { ParsedTradeRepublicCsvTransaction } from "@/lib/trade-republic-csv-parser";
-import type { ParsedBbvaTransaction } from "@/lib/bbva-xlsx-parser";
 import { fetchAssetMetadata, fetchAssetHistory } from "@/lib/justetf-parser";
 import { fetchCryptoHistory } from "@/lib/binance-parser";
 import { apiLogger } from "@/lib/logger";
+import type { PreviewTransactionPayload } from "@/lib/transaction-preview";
+
+export { markPreviewTransactions, previewTransactionSchema } from "@/lib/transaction-preview";
+export type { PreviewTransactionPayload } from "@/lib/transaction-preview";
 
 const log = apiLogger("Import");
-
-export const previewTransactionSchema = z.object({
-  fingerprint: z.string().min(1),
-  sourceInstitution: z.enum(SOURCE_INSTITUTIONS),
-  pageNumber: z.number().int().positive(),
-  bookingDate: z.string().datetime(),
-  rawDateLabel: z.string().min(1),
-  typeLabel: z.string().min(1),
-  description: z.string().min(1),
-  direction: z.enum(["IN", "OUT"]),
-  amountCents: z.number().int().nonnegative(),
-  balanceCents: z.number().int().nonnegative(),
-  currency: z.literal("EUR"),
-  accountType: z.enum(["checking", "investment", "crypto"]).optional(),
-  productName: z.string().nullable().optional(),
-  isin: z.string().nullable().optional(),
-  quantityUnits: z.number().nullable().optional(),
-  tradeType: z.enum(["buy_trade", "savings_plan"]).nullable().optional()
-});
-
-export type PreviewTransactionPayload = z.infer<typeof previewTransactionSchema>;
-type PreviewableTransaction = PreviewTransactionPayload | ParsedTradeRepublicCsvTransaction | ParsedBbvaTransaction;
 
 export async function getExistingFingerprints(userId: string, fingerprints: string[]) {
   if (fingerprints.length === 0) {
@@ -79,16 +58,6 @@ export async function assertUserExists(userId: string) {
   return user;
 }
 
-export function markPreviewTransactions(
-  transactions: PreviewableTransaction[],
-  existingFingerprints: Set<string>
-) {
-  return transactions.map((transaction) => ({
-    ...transaction,
-    status: existingFingerprints.has(transaction.fingerprint) ? "existing" : "new"
-  }));
-}
-
 export async function importPreviewTransactions(
   userId: string,
   transactions: PreviewTransactionPayload[],
@@ -105,9 +74,9 @@ export async function importPreviewTransactions(
   );
 
   if (transactionsToCreate.length > 0) {
-    const checkingData: any[] = [];
-    const investmentData: any[] = [];
-    const cryptoData: any[] = [];
+    const checkingData: Prisma.CheckingTransactionCreateManyInput[] = [];
+    const investmentData: Prisma.InvestmentTransactionCreateManyInput[] = [];
+    const cryptoData: Prisma.CryptoTransactionCreateManyInput[] = [];
 
     for (const tx of transactionsToCreate) {
       const classification = classifyTransaction(tx.typeLabel, tx.description);
@@ -216,7 +185,7 @@ export async function importPreviewTransactions(
     }
 
     // Atomic insert of user-specific transactions
-    const queries = [];
+    const queries: Prisma.PrismaPromise<Prisma.BatchPayload>[] = [];
     if (investmentData.length > 0) queries.push(prisma.investmentTransaction.createMany({ data: investmentData }));
     if (cryptoData.length > 0) queries.push(prisma.cryptoTransaction.createMany({ data: cryptoData }));
     if (checkingData.length > 0) queries.push(prisma.checkingTransaction.createMany({ data: checkingData }));
@@ -264,7 +233,7 @@ export async function importPreviewTransactions(
         select: { isin: true }
       });
 
-      const existingIsins = new Set((existingAssets as any[]).map((a: any) => a.isin));
+      const existingIsins = new Set(existingAssets.map((a) => a.isin));
       if (existingIsins.size > 0) {
         log.info(`Saltati ${existingIsins.size} ISIN già presenti: ${Array.from(existingIsins).join(", ")}`);
       }

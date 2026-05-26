@@ -7,8 +7,15 @@ import { parseBbvaXlsxStatement } from "@/lib/bbva-xlsx-parser";
 import { apiLogger } from "@/lib/logger";
 
 const log = apiLogger("Preview");
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+const SUPPORTED_EXTENSIONS = [".csv", ".xlsx"] as const;
 
 export const runtime = "nodejs";
+
+function getSupportedExtension(fileName: string) {
+  const normalizedFileName = fileName.toLowerCase();
+  return SUPPORTED_EXTENSIONS.find((extension) => normalizedFileName.endsWith(extension)) ?? null;
+}
 
 export async function POST(request: Request) {
   try {
@@ -32,22 +39,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "File mancante." }, { status: 400 });
     }
 
-    const fileName = file.name.toLowerCase();
-    let parsedDocument;
-
-    if (fileName.endsWith(".csv")) {
-      log.info(`Parsing CSV Trade Republic: "${file.name}"`);
-      parsedDocument = await parseTradeRepublicCsv(file);
-    } else if (fileName.endsWith(".xlsx")) {
-      log.info(`Parsing XLSX BBVA: "${file.name}"`);
-      parsedDocument = await parseBbvaXlsxStatement(file);
-    } else {
+    const fileExtension = getSupportedExtension(file.name);
+    if (!fileExtension) {
       log.response("POST", "/api/transactions/preview", 400, { error: "Formato non supportato", fileName: file.name });
-      return NextResponse.json({ error: "Formato file non supportato. Carica un CSV Trade Republic o un XLSX BBVA." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Formato file non supportato. Carica un CSV Trade Republic o un XLSX BBVA." },
+        { status: 400 }
+      );
+    }
+
+    if (file.size === 0) {
+      log.response("POST", "/api/transactions/preview", 400, { error: "File vuoto", fileName: file.name });
+      return NextResponse.json({ error: "Il file caricato e' vuoto." }, { status: 400 });
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      log.response("POST", "/api/transactions/preview", 413, {
+        error: "File troppo grande",
+        fileName: file.name,
+        fileSize: file.size
+      });
+      return NextResponse.json(
+        { error: "File troppo grande. Carica un documento fino a 8 MB." },
+        { status: 413 }
+      );
     }
 
     await requireOwnedProfile(request, userId);
     await assertUserExists(userId);
+
+    let parsedDocument;
+
+    if (fileExtension === ".csv") {
+      log.info(`Parsing CSV Trade Republic: "${file.name}"`);
+      parsedDocument = await parseTradeRepublicCsv(file);
+    } else {
+      log.info(`Parsing XLSX BBVA: "${file.name}"`);
+      parsedDocument = await parseBbvaXlsxStatement(file);
+    }
+
     const existingFingerprints = await getExistingFingerprints(
       userId,
       parsedDocument.transactions.map((transaction) => transaction.fingerprint)
