@@ -1,0 +1,307 @@
+@import "tailwindcss";
+
+:root {
+  --page-bg: #1f1f1f;
+  --surface-shell: #363636;
+  --surface-canvas: #1f1f1f;
+  --surface-panel: #232323;
+  --surface-elevated: #2b2b2b;
+  --surface-topbar: #343434;
+  --line-strong: #9a9a9a;
+  --line-soft: #747474;
+  --text-main: #f5f5f5;
+  --text-dim: #a8a8a8;
+  --danger: #ff8c8c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--page-bg);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.025), transparent 28%),
+    linear-gradient(180deg, #222222 0%, #1f1f1f 100%);
+  color: var(--text-main);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+body::-webkit-scrollbar {
+  display: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+}
+
+@media (max-width: 767px) {
+  body {
+    background: linear-gradient(180deg, #212121 0%, #1c1c1c 100%);
+  }
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Maschera micro-linee verticali agli angoli della testata tabella */
+.transactions-table thead th {
+  position: relative;
+}
+
+.transactions-table thead th:first-child::before,
+.transactions-table thead th:last-child::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 1px;
+  background: rgba(31,31,31,0.98); /* stesso background della header */
+  z-index: 21;
+}
+
+.transactions-table thead th:first-child::before {
+  left: -1px; /* sovrappone la linea sinistra */
+  border-top-left-radius: 22px;
+}
+
+.transactions-table thead th:last-child::before {
+  right: -1px; /* sovrappone la linea destra */
+  border-top-right-radius: 22px;
+}
+
+/* Lucide icons - global color rules
+   - default (no hover): #4C4C4C
+   - hover / active / focus: #D9D9D9
+   We use currentColor on SVG (lucide uses stroke="currentColor").
+*/
+svg.lucide,
+.lucide {
+  color: #4C4C4C !important;
+  transition: color 0.18s ease-in-out;
+}
+
+/* Parent button states */
+button:hover svg.lucide,
+button:hover .lucide,
+.cursor-pointer:hover svg.lucide {
+  color: #D9D9D9 !important;
+}
+
+/* Icon-level hover/active as fallback */
+svg.lucide:hover {
+  color: #D9D9D9 !important;
+}
+
+/* Button border color when containing a Lucide icon
+   - default: #4C4C4C
+   - hover/active/focus: #D9D9D9
+   We provide two approaches:
+   1) Prefer using :has for plain <button> elements that contain an SVG.lucide
+   2) Also support buttons rendered via the `Button` component which now gains a `has-lucide` class
+*/
+button:has(svg.lucide),
+button.has-lucide {
+  border-color: #4C4C4C !important;
+  border-width: 2px !important;
+}
+
+button.has-lucide[data-active="true"] {
+  border-color: #FFFFFF !important;
+  color: #FFFFFF !important;
+}
+
+button.has-lucide[data-active="true"] svg.lucide,
+button.has-lucide[data-active="true"] .initials {
+  color: #FFFFFF !important;
+}
+
+button.has-lucide:hover {
+  border-color: #D9D9D9 !important;
+  color: #D9D9D9 !important;
+}
+
+button.icon-plain:has(svg.lucide),
+button.icon-plain.has-lucide {
+  background: transparent !important;
+  border-color: transparent !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+}
+
+button.has-lucide:hover .initials {
+  color: #D9D9D9 !important;
+}
+
+/* Initials element inside user button: keep same default color as lucide icons
+   to avoid flicker when switching from icon -> initials. Hover/active/focus
+   follow the same D9D9D9 color. */
+.initials {
+  color: #4C4C4C !important;
+}
+
+button.has-lucide:hover .initials {
+  color: #D9D9D9 !important;
+}
+
+/* Danger icon button (trash) — targets SVG stroke directly so the icon is always red */
+button.trash-danger svg.lucide,
+button.trash-danger:hover svg.lucide,
+button.trash-danger:active svg.lucide,
+button.trash-danger:focus svg.lucide {
+  stroke: rgb(248, 113, 113) !important; /* red-400 always */
+  color: rgb(248, 113, 113) !important;
+}
+button.trash-danger:has(svg.lucide):hover,
+button.trash-danger.is-open:has(svg.lucide) {
+  border-color: rgb(248, 113, 113) !important;
+}
+button.trash-danger:has(svg.lucide):active {
+  border-color: #4C4C4C !important;
+}
+
+/* Keep keyboard focus visible without changing icon/button colors */
+button:focus-visible,
+button:focus-visible * {
+  outline: var(--focus-ring, 2px solid rgba(255,255,255,0.12));
+  outline-offset: 3px;
+}
+
+/* Disable active (pressed) visual changes for all buttons
+   Keep only hover styles; this prevents color/background/border
+   changes on mouse/touch press across the app. */
+button:active,
+button:active *,
+[role="button"]:active,
+.cursor-pointer:active,
+.btn:active,
+.button:active {
+  background-color: transparent !important;
+  color: inherit !important;
+  border-color: inherit !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+@keyframes uploadSlideDown {
+  from { transform: translateY(-18px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+@keyframes uploadSlideUp {
+  from { transform: translateY(0);     opacity: 1; }
+  to   { transform: translateY(-18px); opacity: 0; }
+}
+
+.upload-panel-enter {
+  animation: uploadSlideDown 0.25s ease-out both;
+}
+
+.upload-panel-exit {
+  animation: uploadSlideUp 0.25s ease-in both;
+}
+
+@keyframes submenuFadeIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-submenu-in {
+  animation: submenuFadeIn 0.22s ease-out forwards;
+}
+
+@keyframes loginWelcomeEnter {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+    filter: blur(2px);
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    filter: blur(0);
+    transform: translateX(0);
+  }
+}
+
+.login-welcome-enter {
+  overflow: hidden;
+  transform-origin: left center;
+  animation: loginWelcomeEnter 0.82s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: clip-path, opacity, filter, transform;
+  margin-block: -0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-welcome-enter {
+    animation: none;
+    will-change: auto;
+  }
+}
+
+@keyframes dashboardSpinner {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.card-enter {
+  animation: cardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes deleteConfirmSlideIn {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.animate-delete-confirm-in {
+  animation: deleteConfirmSlideIn 0.22s ease-out forwards;
+}
+
+@keyframes valueFlash {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.value-flash {
+  animation: valueFlash 0.32s ease-out both;
+}
+
+/* Hide duplicate native browser password reveal and autofill controls */
+input::-ms-reveal,
+input::-ms-clear,
+input::-webkit-credentials-auto-fill-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+

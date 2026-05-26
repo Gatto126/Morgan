@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Framework and build output
+.next/
+out/
+dist/
+coverage/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Generated clients and local databases
+generated/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Logs and transient files
+*.log
+*.tsbuildinfo
+tmp_check_*.js
+test-results/
+playwright-report/
+design_frames/*.pdf
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS metadata
+.DS_Store
+Thumbs.db
