@@ -41,7 +41,14 @@ export async function GET(request: NextRequest) {
       interest: number;
       cashback: number;
       tax: number;
-      transactions: any[];
+      transactions: {
+        id: string;
+        bookingDate: Date;
+        typeLabel: string;
+        description: string;
+        direction: string;
+        amountCents: number;
+      }[];
     };
 
     const providerMap = new Map<string, CheckingProviderSummary>();
@@ -80,8 +87,13 @@ export async function GET(request: NextRequest) {
       providerExpenses: Record<string, number>;
     };
 
+    type DailyBucket = Omit<MonthBucket, "month"> & {
+      date: string;
+      month?: string;
+    };
+
     const monthlyMap = new Map<string, MonthBucket>();
-    const dailyMap = new Map<string, any>();
+    const dailyMap = new Map<string, DailyBucket>();
 
     function getCheckingSnapshot(monthKey: string, dayKey: string) {
       let total = 0;
@@ -221,7 +233,7 @@ export async function GET(request: NextRequest) {
 
     const filledMonthlyData: MonthBucket[] = [];
     const monthlyDataRaw = [...monthlyMap.values()].sort((a, b) => a.month.localeCompare(b.month));
-    const filledDailyData: any[] = [];
+    const filledDailyData: DailyBucket[] = [];
     
     if (ascendingTransactions.length > 0) {
       const firstTxDate = new Date(ascendingTransactions[0].bookingDate);
@@ -230,7 +242,7 @@ export async function GET(request: NextRequest) {
       const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
       
       let lastBucket = monthlyDataRaw[0];
-      let currentRunningDay = {
+      let currentRunningDay: DailyBucket = {
         date: "",
         month: "",
         total: 0,

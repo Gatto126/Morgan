@@ -110,9 +110,10 @@ export async function fetchAssetMetadata(isin: string): Promise<AssetMetadata> {
     }
 
     // Extract and format cookies for the AJAX requests
-    const setCookies = (response.headers as any).getSetCookie 
-      ? (response.headers as any).getSetCookie() 
-      : [response.headers.get("set-cookie") || ""];
+    const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+    const setCookies = headers.getSetCookie
+      ? headers.getSetCookie()
+      : [headers.get("set-cookie") || ""];
     const cookieStr = setCookies.map((c: string) => c.split(";")[0]).join("; ");
     
     const html = await response.text();
@@ -323,10 +324,10 @@ export async function fetchAssetMetadata(isin: string): Promise<AssetMetadata> {
       for (const header of potentialHeaders) {
         const headerText = header.text.trim().toLowerCase();
         if (headerText === "countries" || headerText === "sectors") {
-          let container: any = header.parentNode;
+          let container = header.parentNode;
           for (let i = 0; i < 4 && container; i++) {
             const rows = container.querySelectorAll(".row");
-            const validRows = rows.filter((r: any) => r.querySelectorAll(".col-6, .col-5, .col-7").length >= 2);
+            const validRows = rows.filter((r) => r.querySelectorAll(".col-6, .col-5, .col-7").length >= 2);
             if (validRows.length >= 1) {
               for (const row of validRows) {
                 const cols = row.querySelectorAll(".col-6, .col-5, .col-7, div");
@@ -448,19 +449,19 @@ export async function fetchAssetMetadata(isin: string): Promise<AssetMetadata> {
       if (defaultAsset.inceptionDate)        lines.push(`  Inception date:      ${defaultAsset.inceptionDate}`);
 
       if (defaultAsset.topHoldings) {
-        const holdings = JSON.parse(defaultAsset.topHoldings);
+        const holdings = JSON.parse(defaultAsset.topHoldings) as Array<{ name: string; weight: string }>;
         lines.push(`  Top ${holdings.length} Holdings:`);
-        holdings.forEach((h: any) => { lines.push(`    - ${h.name.padEnd(30)} ${h.weight}`); });
+        holdings.forEach((h) => { lines.push(`    - ${h.name.padEnd(30)} ${h.weight}`); });
       }
       if (defaultAsset.countriesWeight) {
-        const countries = JSON.parse(defaultAsset.countriesWeight);
+        const countries = JSON.parse(defaultAsset.countriesWeight) as Array<{ name: string; weight: string }>;
         lines.push(`  Countries (${countries.length}):`);
-        countries.forEach((c: any) => { lines.push(`    - ${c.name.padEnd(30)} ${c.weight}`); });
+        countries.forEach((c) => { lines.push(`    - ${c.name.padEnd(30)} ${c.weight}`); });
       }
       if (defaultAsset.sectorsWeight) {
-        const sectors = JSON.parse(defaultAsset.sectorsWeight);
+        const sectors = JSON.parse(defaultAsset.sectorsWeight) as Array<{ name: string; weight: string }>;
         lines.push(`  Sectors (${sectors.length}):`);
-        sectors.forEach((s: any) => { lines.push(`    - ${s.name.padEnd(30)} ${s.weight}`); });
+        sectors.forEach((s) => { lines.push(`    - ${s.name.padEnd(30)} ${s.weight}`); });
       }
     }
 
@@ -533,14 +534,21 @@ export async function fetchAssetHistory(
       return [];
     }
 
-    const data = await res.json();
+    const data = await res.json() as {
+      series?: Array<{
+        date: string;
+        value: {
+          raw: number;
+        };
+      }>;
+    };
     
     if (!data.series || !Array.isArray(data.series)) {
       return [];
     }
 
     // Mappa il formato grezzo in { date, value }
-    return data.series.map((item: any) => ({
+    return data.series.map((item) => ({
       date: item.date,
       value: item.value.raw,
     }));

@@ -16,7 +16,7 @@ export function saveLivePricesToCache(prices: Record<string, number | null>) {
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem("morgan_live_prices", JSON.stringify(globalLivePricesCache));
-    } catch (e) {
+    } catch {
       // Ignore
     }
   }

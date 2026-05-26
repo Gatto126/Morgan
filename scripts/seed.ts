@@ -150,7 +150,6 @@ async function main() {
     const etfBuyCents = 250_00;
     
     // Double entry - checking out from Trade Republic cash
-    const trCashTxId = `etf-buy-tr-cash-m${month}`;
     const trAssetTxId = `etf-buy-tr-asset-m${month}`;
     
     investmentData.push({

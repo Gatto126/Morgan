@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Bitcoin, X } from "lucide-react";
 import { Line, LineChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/utils";
+import type { ActiveDotProps, ChartPoint, ChartTooltipPayload } from "@/types/chart";
 
 type TimeRange = "ALL" | "1Y" | "6M" | "3M" | "1M" | "1W";
 
@@ -31,7 +32,7 @@ function getMonthLabel(month: string) {
   return `${monthNames[Number.parseInt(m, 10) - 1]} ${shortYear}`;
 }
 
-function filterData(daily: any[], range: TimeRange): any[] {
+function filterData(daily: ChartPoint[], range: TimeRange): ChartPoint[] {
   if (range === "ALL") return daily;
 
   const cutoff = new Date();
@@ -42,10 +43,16 @@ function filterData(daily: any[], range: TimeRange): any[] {
   else if (range === "1Y") cutoff.setFullYear(cutoff.getFullYear() - 1);
 
   const cutoffKey = cutoff.toISOString().split("T")[0];
-  return daily.filter((d) => d.date >= cutoffKey);
+  return daily.filter((d) => (d.date ?? "") >= cutoffKey);
 }
 
-function ChartTooltip({ active, payload, label }: any) {
+type ChartTooltipProps = {
+  active?: boolean;
+  payload?: ChartTooltipPayload[];
+  label?: string;
+};
+
+function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
   if (!active || !payload?.length) return null;
 
   let formattedLabel = label || "";
@@ -62,7 +69,7 @@ function ChartTooltip({ active, payload, label }: any) {
     <div className="rounded-xl border border-[rgba(154,154,154,0.4)] bg-[rgba(35,35,35,0.96)] p-2 px-3.5 text-[13px] text-[#f5f5f5]">
       <div className="mb-1.5 font-bold">{formattedLabel}</div>
       <div className="flex flex-col gap-1">
-        {payload.map((p: any, index: number) => (
+        {payload.map((p, index) => (
           <div key={index} className="flex items-center justify-between gap-6">
             <span className="text-[10px] font-bold uppercase text-white truncate max-w-[150px]">BINANCE</span>
             <span className="font-semibold">{formatEuroCents(p.value)}</span>
@@ -136,7 +143,6 @@ export function BinanceDashboard({
   uploadElement,
   reviewElement,
   previewTransactionsCount = 0,
-  transactionCount = 0,
   isActive = true,
   showSettingsView = false,
   isClosingSettings = false,
@@ -298,14 +304,14 @@ export function BinanceDashboard({
                       stroke="#ffffff"
                       strokeWidth={2.5}
                       isAnimationActive={false}
-                      activeDot={(props: any) => {
+                      activeDot={(props: ActiveDotProps) => {
                         const { cx, cy, payload } = props;
                         return (
                           <circle
                             cx={cx} cy={cy} r={6}
                             fill="#1a1a1a" stroke="#ffffff" strokeWidth={2}
                             style={{ cursor: "pointer", outline: "none" }}
-                            onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: "balance", value: payload.balance }); }}
+                            onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: "balance", value: Number(payload.balance) }); }}
                           />
                         );
                       }}

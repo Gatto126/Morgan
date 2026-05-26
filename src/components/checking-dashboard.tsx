@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Landmark, X } from "lucide-react";
-import { Line, LineChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Line, LineChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/utils";
+import type { ActiveDotProps, ChartPoint, ChartTooltipPayload } from "@/types/chart";
 
 type TimeRange = "ALL" | "1Y" | "6M" | "3M" | "1M" | "1W";
 
@@ -14,6 +15,10 @@ type MonthBucket = {
   providers: Record<string, number>;
   providerIncome: Record<string, number>;
   providerExpenses: Record<string, number>;
+};
+
+type CheckingBucket = MonthBucket & {
+  date?: string;
 };
 
 type CheckingTransaction = {
@@ -38,7 +43,7 @@ type CheckingProviderSummary = {
 
 type CheckingData = {
   monthlyData: MonthBucket[];
-  dailyData: any[];
+  dailyData: CheckingBucket[];
   providers: CheckingProviderSummary[];
 };
 
@@ -54,13 +59,6 @@ const euroFormatter = new Intl.NumberFormat("it-IT", {
 
 function formatEuroCents(cents: number) {
   return euroFormatter.format(cents / 100);
-}
-
-function formatEuroParts(cents: number): { number: string; symbol: string } {
-  const parts = euroFormatter.formatToParts(cents / 100);
-  const symbol = parts.find(p => p.type === "currency")?.value ?? "€";
-  const number = parts.filter(p => p.type !== "currency" && p.type !== "literal").map(p => p.value).join("").trim();
-  return { number, symbol };
 }
 
 function formatSignedEuroCents(cents: number, direction: "IN" | "OUT") {
@@ -98,7 +96,7 @@ function getMonthLabel(month: string) {
   return `${monthNames[Number.parseInt(m, 10) - 1]} ${shortYear}`;
 }
 
-function filterData(data: { monthly: MonthBucket[], daily: any[] }, range: TimeRange): any[] {
+function filterData(data: { monthly: MonthBucket[], daily: CheckingBucket[] }, range: TimeRange): CheckingBucket[] {
   if (range === "ALL") {
     return data.daily;
   }
@@ -120,20 +118,20 @@ function filterData(data: { monthly: MonthBucket[], daily: any[] }, range: TimeR
   }
 
   const cutoffKey = cutoff.toISOString().split('T')[0];
-  return data.daily.filter(d => d.date >= cutoffKey);
+  return data.daily.filter(d => (d.date ?? "") >= cutoffKey);
 }
 
 type CustomTooltipProps = {
   active?: boolean;
-  payload?: { value: number; payload?: any }[];
+  payload?: ChartTooltipPayload[];
   label?: string;
-  setActivePoint: (point: any) => void;
+  setActivePoint: (point: ChartPoint | null) => void;
 };
 
 function ChartTooltip({ active, payload, label, setActivePoint }: CustomTooltipProps) {
   useEffect(() => {
     if (active && payload && payload.length > 0) {
-      setActivePoint(payload[0].payload);
+      setActivePoint(payload[0].payload ?? null);
     } else {
       setActivePoint(null);
     }
@@ -166,24 +164,25 @@ function ChartTooltip({ active, payload, label, setActivePoint }: CustomTooltipP
     >
       <div style={{ fontWeight: 700, marginBottom: 6 }}>{formattedLabel}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {[...payload].sort((a: any, b: any) => {
+        {[...payload].sort((a, b) => {
           if (a.name === "heritage" || a.name === "value") return -1;
           if (b.name === "heritage" || b.name === "value") return 1;
           return (b.value || 0) - (a.value || 0);
-        }).map((p: any, index: number) => {
+        }).map((p, index) => {
+          const name = String(p.name ?? "");
           let labelStr = "";
-          if (p.name === "value") {
+          if (name === "value") {
             labelStr = "TOTAL";
-          } else if (p.name === "heritage") {
+          } else if (name === "heritage") {
             labelStr = "HERITAGE";
-          } else if (p.name === "balance") {
+          } else if (name === "balance") {
             labelStr = "BALANCE";
-          } else if (p.name === "income") {
+          } else if (name === "income") {
             labelStr = "INCOME";
-          } else if (p.name === "expenses") {
+          } else if (name === "expenses") {
             labelStr = "EXPENSES";
           } else {
-            labelStr = formatProviderLabel(p.name);
+            labelStr = formatProviderLabel(name);
           }
           return (
             <div key={index} className="flex justify-between gap-6 items-center">
@@ -302,14 +301,14 @@ export function CheckingDashboard({
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
   const pendingImportRefreshRef = useRef(false);
   const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
-  onImportRefreshCompleteRef.current = onImportRefreshComplete;
+  const lastRefreshTransactionCountRef = useRef(transactionCount);
 
   const [activeTab, setActiveTab] = useState<string>("ALL"); // "ALL" or provider name
   const [timeRange, setTimeRange] = useState<TimeRange>("ALL");
   const [selectedPoint, setSelectedPoint] = useState<{ month: string, seriesKey: string, value: number } | null>(null);
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const [isMobile, setIsMobile] = useState(false);
-  const [activeChartPoint, setActiveChartPoint] = useState<any | null>(null);
+  const [activeChartPoint, setActiveChartPoint] = useState<ChartPoint | null>(null);
   const activePoint = activeChartPoint;
 
   const toggleSeries = (key: string) => {
@@ -325,6 +324,10 @@ export function CheckingDashboard({
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  useEffect(() => {
+    onImportRefreshCompleteRef.current = onImportRefreshComplete;
+  }, [onImportRefreshComplete]);
 
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;
@@ -376,6 +379,10 @@ export function CheckingDashboard({
   );
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
     const initialLoad = window.setTimeout(() => {
       void fetchDashboard();
     }, 0);
@@ -395,14 +402,17 @@ export function CheckingDashboard({
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [fetchDashboard]);
+  }, [fetchDashboard, isActive]);
 
   useEffect(() => {
-    if (!loading) {
-      pendingImportRefreshRef.current = true;
-      void fetchDashboard();
+    if (!isActive || loading || lastRefreshTransactionCountRef.current === transactionCount) {
+      return;
     }
-  }, [transactionCount, fetchDashboard]);
+
+    lastRefreshTransactionCountRef.current = transactionCount;
+    pendingImportRefreshRef.current = true;
+    void fetchDashboard();
+  }, [transactionCount, isActive, loading, fetchDashboard]);
 
   const chartData = useMemo(() => {
     if (!data) {
@@ -415,7 +425,7 @@ export function CheckingDashboard({
       const rawKey = bucket.date || bucket.month;
 
       if (activeTab === "ALL") {
-        const ret: any = {
+        const ret: ChartPoint = {
           month: rawKey,
           rawMonth: rawKey,
           heritage: Math.abs(bucket.total)
@@ -433,7 +443,7 @@ export function CheckingDashboard({
         const exp = bucket.providerExpenses[activeTab];
 
         const hasBalance = bal !== undefined;
-        const ret: any = {
+        const ret: ChartPoint = {
           month: rawKey,
           rawMonth: rawKey,
           balance: hasBalance ? Math.abs(bal) : null,
@@ -529,7 +539,7 @@ export function CheckingDashboard({
                   <span className={`text-right tabular-nums whitespace-nowrap ${isActive ? "" : "opacity-70"}`}>
                     {formatEuroCents(
                       activePoint
-                        ? (tab.key === "ALL" ? (activePoint.heritage ?? 0) : (activePoint[tab.key] ?? 0))
+                        ? Number(tab.key === "ALL" ? (activePoint.heritage ?? 0) : (activePoint[tab.key] ?? 0))
                         : tab.total
                     )}
                   </span>
@@ -665,7 +675,7 @@ export function CheckingDashboard({
                           isAnimationActive={false}
                           connectNulls={false}
                           hide={!!hiddenSeries['income']}
-                          activeDot={(props: any) => {
+                          activeDot={(props: ActiveDotProps) => {
                             const { cx, cy, payload } = props;
                             if (payload.income == null) return null;
                             return (
@@ -675,7 +685,7 @@ export function CheckingDashboard({
                                 style={{ cursor: "pointer", outline: "none" }}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setSelectedPoint({ month: payload.rawMonth, seriesKey: 'income', value: payload.income });
+                                  setSelectedPoint({ month: payload.rawMonth, seriesKey: 'income', value: Number(payload.income) });
                                 }}
                               />
                             );
@@ -691,7 +701,7 @@ export function CheckingDashboard({
                           isAnimationActive={false}
                           connectNulls={false}
                           hide={!!hiddenSeries['expenses']}
-                          activeDot={(props: any) => {
+                          activeDot={(props: ActiveDotProps) => {
                             const { cx, cy, payload } = props;
                             if (payload.expenses == null) return null;
                             return (
@@ -701,7 +711,7 @@ export function CheckingDashboard({
                                 style={{ cursor: "pointer", outline: "none" }}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setSelectedPoint({ month: payload.rawMonth, seriesKey: 'expenses', value: payload.expenses });
+                                  setSelectedPoint({ month: payload.rawMonth, seriesKey: 'expenses', value: Number(payload.expenses) });
                                 }}
                               />
                             );
@@ -718,7 +728,7 @@ export function CheckingDashboard({
                           isAnimationActive={false}
                           connectNulls={false}
                           hide={!!hiddenSeries['balance']}
-                          activeDot={(props: any) => {
+                          activeDot={(props: ActiveDotProps) => {
                             const { cx, cy, payload } = props;
                             if (payload.balance == null) return null;
                             return (
@@ -728,7 +738,7 @@ export function CheckingDashboard({
                                 style={{ cursor: "pointer", outline: "none" }}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setSelectedPoint({ month: payload.rawMonth, seriesKey: 'balance', value: payload.balance });
+                                  setSelectedPoint({ month: payload.rawMonth, seriesKey: 'balance', value: Number(payload.balance) });
                                 }}
                               />
                             );
@@ -754,7 +764,7 @@ export function CheckingDashboard({
                               strokeWidth={2}
                               isAnimationActive={false}
                               connectNulls={false}
-                              activeDot={(props: any) => {
+                              activeDot={(props: ActiveDotProps) => {
                                 const { cx, cy, payload } = props;
                                 if (payload[provKey] == null) return null;
                                 return (
@@ -762,7 +772,7 @@ export function CheckingDashboard({
                                     cx={cx} cy={cy} r={6}
                                     fill="#1a1a1a" stroke={strokeColor} strokeWidth={2}
                                     style={{ cursor: "pointer", outline: "none" }}
-                                    onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: provKey, value: payload[provKey] }); }}
+                                    onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: provKey, value: Number(payload[provKey]) }); }}
                                   />
                                 );
                               }}
@@ -780,7 +790,7 @@ export function CheckingDashboard({
                           strokeWidth={2.5}
                           isAnimationActive={false}
                           hide={!!hiddenSeries['heritage']}
-                            activeDot={(props: any) => {
+                            activeDot={(props: ActiveDotProps) => {
                               const { cx, cy, payload } = props;
                               if (payload.heritage == null) return null;
                               return (
@@ -788,7 +798,7 @@ export function CheckingDashboard({
                                   cx={cx} cy={cy} r={6}
                                   fill="#1a1a1a" stroke="#ffffff" strokeWidth={2}
                                   style={{ cursor: "pointer", outline: "none" }}
-                                  onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: 'heritage', value: payload.heritage }); }}
+                                  onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: 'heritage', value: Number(payload.heritage) }); }}
                                 />
                               );
                             }}

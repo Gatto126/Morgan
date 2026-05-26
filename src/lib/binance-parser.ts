@@ -25,19 +25,23 @@ async function fetchKlines(binanceSymbol: string): Promise<AssetHistoryPoint[]> 
     throw new Error(`HTTP Error ${res.status} per la coppia ${binanceSymbol}`);
   }
 
-  const data = await res.json();
+  const data = await res.json() as unknown;
   if (!Array.isArray(data)) {
     return [];
   }
 
-  return data.map((item: any) => {
+  return data.flatMap((item): AssetHistoryPoint[] => {
+    if (!Array.isArray(item) || typeof item[0] !== "number" || typeof item[4] !== "string") {
+      return [];
+    }
+
     const openTimeMs = item[0];
     const closePrice = parseFloat(item[4]);
     const date = new Date(openTimeMs).toISOString().split("T")[0];
-    return {
+    return [{
       date,
       value: closePrice
-    };
+    }];
   });
 }
 

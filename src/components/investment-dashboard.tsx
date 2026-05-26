@@ -6,6 +6,7 @@ import { ChartGantt, ChartBar, Wallet, X } from "lucide-react";
 import { Line, LineChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { globalLivePricesCache, saveLivePricesToCache } from "@/lib/live-prices";
 import { cn } from "@/lib/utils";
+import type { ActiveDotProps, ChartPoint, ChartTooltipPayload } from "@/types/chart";
 
 type TimeRange = "ALL" | "1Y" | "6M" | "3M" | "1M" | "1W";
 
@@ -14,6 +15,10 @@ type MonthBucket = {
   total: number;
   providers: Record<string, number>;
   providerProducts: Record<string, Record<string, number>>;
+};
+
+type PortfolioBucket = MonthBucket & {
+  date?: string;
 };
 
 type InvestmentTransaction = {
@@ -50,7 +55,7 @@ type InvestmentProviderSummary = {
 
 type InvestmentData = {
   monthlyData: MonthBucket[];
-  dailyData: any[];
+  dailyData: PortfolioBucket[];
   providers: InvestmentProviderSummary[];
 };
 
@@ -65,19 +70,6 @@ const euroFormatter = new Intl.NumberFormat("it-IT", {
 
 function formatEuroCents(cents: number) {
   return euroFormatter.format(cents / 100);
-}
-
-function formatEuroParts(cents: number): { number: string; symbol: string } {
-  const parts = euroFormatter.formatToParts(cents / 100);
-  const symbol = parts.find(p => p.type === "currency")?.value ?? "€";
-  const number = parts.filter(p => p.type !== "currency" && p.type !== "literal").map(p => p.value).join("").trim();
-  return { number, symbol };
-}
-
-function formatSignedEuroCents(cents: number, direction: "IN" | "OUT") {
-  if (cents === 0) return formatEuroCents(cents);
-  const sign = direction === "IN" ? "+" : "-";
-  return `${sign}${formatEuroCents(cents)}`;
 }
 
 function formatProviderLabel(source: string) {
@@ -106,7 +98,7 @@ function getMonthLabel(month: string) {
   return `${monthNames[Number.parseInt(m, 10) - 1]} ${shortYear}`;
 }
 
-function filterData(data: { monthly: any[], daily: any[] }, range: TimeRange): any[] {
+function filterData(data: { monthly: MonthBucket[], daily: PortfolioBucket[] }, range: TimeRange): PortfolioBucket[] {
   if (range === "ALL") {
     return data.daily;
   }
@@ -128,13 +120,20 @@ function filterData(data: { monthly: any[], daily: any[] }, range: TimeRange): a
   }
 
   const cutoffKey = cutoff.toISOString().split('T')[0];
-  return data.daily.filter(d => d.date >= cutoffKey);
+  return data.daily.filter(d => (d.date ?? "") >= cutoffKey);
 }
 
-function ChartTooltip({ active, payload, label, setActivePoint }: any) {
+type CustomTooltipProps = {
+  active?: boolean;
+  payload?: ChartTooltipPayload[];
+  label?: string;
+  setActivePoint: (point: ChartPoint | null) => void;
+};
+
+function ChartTooltip({ active, payload, label, setActivePoint }: CustomTooltipProps) {
   useEffect(() => {
     if (active && payload && payload.length > 0) {
-      setActivePoint(payload[0].payload);
+      setActivePoint(payload[0].payload ?? null);
     } else {
       setActivePoint(null);
     }
@@ -161,7 +160,8 @@ function ChartTooltip({ active, payload, label, setActivePoint }: any) {
           if (b.name === "heritage" || b.name === "value" || b.name === "balance") return 1;
           return (b.value || 0) - (a.value || 0);
         }).map((p, index) => {
-          let labelStr = (p.name === "value" || p.name === "balance") ? "BALANCE" : p.name === "heritage" ? "HERITAGE" : formatProviderLabel(p.name);
+          const name = String(p.name ?? "");
+          const labelStr = (name === "value" || name === "balance") ? "BALANCE" : name === "heritage" ? "HERITAGE" : formatProviderLabel(name);
           return (
             <div key={index} className="flex items-center justify-between gap-6">
               <span className="text-[10px] font-bold uppercase text-white truncate max-w-[150px]">{labelStr}</span>
@@ -243,7 +243,7 @@ export function InvestmentDashboard({
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
   const pendingImportRefreshRef = useRef(false);
   const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
-  onImportRefreshCompleteRef.current = onImportRefreshComplete;
+  const lastRefreshTransactionCountRef = useRef(transactionCount);
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [timeRange, setTimeRange] = useState<TimeRange>("ALL");
   const [selectedPoint, setSelectedPoint] = useState<{ month: string, seriesKey: string, value: number } | null>(null);
@@ -251,7 +251,7 @@ export function InvestmentDashboard({
   const [showSoldAssets, setShowSoldAssets] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [livePrices, setLivePrices] = useState<Record<string, number | null>>(globalLivePricesCache);
-  const [activeChartPoint, setActiveChartPoint] = useState<any | null>(null);
+  const [activeChartPoint, setActiveChartPoint] = useState<ChartPoint | null>(null);
   const activePoint = activeChartPoint;
 
   const toggleSeries = (key: string) => {
@@ -264,6 +264,10 @@ export function InvestmentDashboard({
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  useEffect(() => {
+    onImportRefreshCompleteRef.current = onImportRefreshComplete;
+  }, [onImportRefreshComplete]);
 
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;
@@ -286,7 +290,7 @@ export function InvestmentDashboard({
       knownProviderKeysRef.current = currentKeys;
       setData(payload);
       setError(null);
-    } catch (fetchError: any) {
+    } catch (fetchError: unknown) {
       setError(fetchError instanceof Error ? fetchError.message : "Errore nel caricamento.");
       setData(null);
     } finally {
@@ -320,42 +324,51 @@ export function InvestmentDashboard({
   }, []);
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
     void fetchDashboard();
     const interval = window.setInterval(() => { void fetchDashboard(); }, 60_000);
     const handleFocus = () => { void fetchDashboard(); };
     window.addEventListener("focus", handleFocus);
     return () => { window.clearInterval(interval); window.removeEventListener("focus", handleFocus); };
-  }, [fetchDashboard]);
+  }, [fetchDashboard, isActive]);
 
   useEffect(() => {
-    if (!loading) {
-      pendingImportRefreshRef.current = true;
-      void fetchDashboard();
+    if (!isActive || loading || lastRefreshTransactionCountRef.current === transactionCount) {
+      return;
     }
-  }, [transactionCount, fetchDashboard]);
+
+    lastRefreshTransactionCountRef.current = transactionCount;
+    pendingImportRefreshRef.current = true;
+    void fetchDashboard();
+  }, [transactionCount, isActive, loading, fetchDashboard]);
 
   // Fetch live prices whenever data changes, refresh them every 60 seconds and on window focus
   useEffect(() => {
-    if (!data?.providers) return;
+    if (!isActive || !data?.providers) return;
+    const providers = data.providers;
 
-    // Initial fetch
-    void fetchLivePrices(data.providers);
+    const initialLoad = window.setTimeout(() => {
+      void fetchLivePrices(providers);
+    }, 0);
 
-    // Continuous polling
     const interval = window.setInterval(() => {
-      void fetchLivePrices(data.providers);
+      void fetchLivePrices(providers);
     }, 60_000);
 
     const handleFocus = () => {
-      void fetchLivePrices(data.providers!);
+      void fetchLivePrices(providers);
     };
     window.addEventListener("focus", handleFocus);
 
     return () => {
+      window.clearTimeout(initialLoad);
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [data?.providers, fetchLivePrices]);
+  }, [data?.providers, fetchLivePrices, isActive]);
 
   const activeProvider = useMemo(() => {
     return data?.providers.find(p => p.sourceInstitution === activeTab) || null;
@@ -394,7 +407,7 @@ export function InvestmentDashboard({
     return filtered.map((bucket) => {
       const rawKey = bucket.date || bucket.month;
       const bucketDate = bucket.date || bucket.month || "";
-      const ret: any = { month: rawKey, rawMonth: rawKey };
+      const ret: ChartPoint = { month: rawKey, rawMonth: rawKey };
 
       if (activeTab === "ALL") {
         ret.heritage = Math.abs(bucket.total);
@@ -492,10 +505,6 @@ export function InvestmentDashboard({
   const allTotal = data.providers.reduce((sum, p) => sum + getProviderLiveTotal(p), 0);
   const tabs = [{ key: "ALL", label: "INVESTMENTS", total: allTotal }, ...data.providers.map(p => ({ key: p.sourceInstitution, label: formatProviderLabel(p.sourceInstitution), total: getProviderLiveTotal(p) }))];
 
-  const tableTransactions = activeProvider
-    ? activeProvider.transactions.filter(tx => tx.tradeType !== null)
-    : data.providers.flatMap(p => p.transactions).filter(tx => tx.tradeType !== null).sort((a,b) => b.bookingDate.localeCompare(a.bookingDate));
-
   return (
     <div className={cn("relative flex h-full flex-col gap-4 overflow-hidden w-full", !isActive && "absolute inset-0 pointer-events-none opacity-0 invisible")}>
       {tabsPortalNode && createPortal(
@@ -524,7 +533,7 @@ export function InvestmentDashboard({
                 <span className={`text-right tabular-nums whitespace-nowrap ${isActive ? "" : "opacity-70"}`}>
                   {formatEuroCents(
                     activePoint
-                      ? (tab.key === "ALL" ? (activePoint.heritage ?? 0) : (activePoint[tab.key] ?? 0))
+                      ? Number(tab.key === "ALL" ? (activePoint.heritage ?? 0) : (activePoint[tab.key] ?? 0))
                       : tab.total
                   )}
                 </span>
@@ -642,10 +651,10 @@ export function InvestmentDashboard({
                               strokeWidth={1.5}
                               isAnimationActive={false}
                               connectNulls={false}
-                              activeDot={(props: any) => {
+                              activeDot={(props: ActiveDotProps) => {
                                 const { cx, cy, payload } = props;
                                 if (payload[provKey] == null) return null;
-                                return <circle cx={cx} cy={cy} r={6} fill="#1a1a1a" stroke={strokeColor} strokeWidth={2} style={{ cursor: "pointer", outline: "none" }} onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: provKey, value: payload[provKey] }); }} />;
+                                return <circle cx={cx} cy={cy} r={6} fill="#1a1a1a" stroke={strokeColor} strokeWidth={2} style={{ cursor: "pointer", outline: "none" }} onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: provKey, value: Number(payload[provKey]) }); }} />;
                               }}
                               dot={false}
                             />
@@ -661,7 +670,7 @@ export function InvestmentDashboard({
                           isAnimationActive={false}
                           connectNulls={false}
                           hide={!!hiddenSeries['heritage']}
-                          activeDot={(props: any) => {
+                          activeDot={(props: ActiveDotProps) => {
                             const { cx, cy, payload } = props;
                             if (payload.heritage == null) return null;
                             return (
@@ -669,7 +678,7 @@ export function InvestmentDashboard({
                                 cx={cx} cy={cy} r={6}
                                 fill="#1a1a1a" stroke="#ffffff" strokeWidth={2}
                                 style={{ cursor: "pointer", outline: "none" }}
-                                onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: 'heritage', value: payload.heritage }); }}
+                                  onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: 'heritage', value: Number(payload.heritage) }); }}
                               />
                             );
                           }}
@@ -694,7 +703,7 @@ export function InvestmentDashboard({
                               strokeWidth={1.5}
                               isAnimationActive={false}
                               connectNulls={false}
-                              activeDot={(props: any) => {
+                              activeDot={(props: ActiveDotProps) => {
                                 const { cx, cy, payload } = props;
                                 if (payload[prodKey] == null) return null;
                                 return (
@@ -702,7 +711,7 @@ export function InvestmentDashboard({
                                     cx={cx} cy={cy} r={5}
                                     fill="#1a1a1a" stroke={strokeColor} strokeWidth={2}
                                     style={{ cursor: "pointer", outline: "none" }}
-                                    onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: prodKey, value: payload[prodKey] }); }}
+                                    onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: prodKey, value: Number(payload[prodKey]) }); }}
                                   />
                                 );
                               }}
@@ -720,14 +729,14 @@ export function InvestmentDashboard({
                           isAnimationActive={false}
                           connectNulls={false}
                           hide={!!hiddenSeries['balance']}
-                          activeDot={(props: any) => {
+                          activeDot={(props: ActiveDotProps) => {
                             const { cx, cy, payload } = props;
                             return (
                               <circle
                                 cx={cx} cy={cy} r={6}
                                 fill="#1a1a1a" stroke="#ffffff" strokeWidth={2}
                                 style={{ cursor: "pointer", outline: "none" }}
-                                onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: 'balance', value: payload.balance }); }}
+                                  onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: 'balance', value: Number(payload.balance) }); }}
                               />
                             );
                           }}

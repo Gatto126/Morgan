@@ -148,6 +148,10 @@ export async function GET(request: NextRequest) {
       providerTax?: Record<string, number>;
     };
 
+    type DailyBucket = MonthBucket & {
+      date: string;
+    };
+
     // Group transactions by day
     const txsByDay = new Map<string, typeof transactions>();
     for (const tx of transactions) {
@@ -236,7 +240,7 @@ export async function GET(request: NextRequest) {
 
     const lastKnownPrice = new Map<string, number>();
     const filledMonthlyData: MonthBucket[] = [];
-    const filledDailyData: any[] = [];
+    const filledDailyData: DailyBucket[] = [];
 
     let checkingVal = 0;
     let investmentVal = 0;

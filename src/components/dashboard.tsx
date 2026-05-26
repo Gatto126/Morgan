@@ -521,6 +521,10 @@ export function Dashboard({
   );
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
     const initialLoad = window.setTimeout(() => {
       void fetchDashboard();
     }, 0);
@@ -540,14 +544,16 @@ export function Dashboard({
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [fetchDashboard]);
+  }, [fetchDashboard, isActive]);
 
   useEffect(() => {
-    if (!loading) {
-      pendingImportRefreshRef.current = true;
-      void fetchDashboard();
+    if (!isActive || loading) {
+      return;
     }
-  }, [transactionCount, fetchDashboard, loading]);
+
+    pendingImportRefreshRef.current = true;
+    void fetchDashboard();
+  }, [transactionCount, fetchDashboard, isActive, loading]);
 
   const fetchLivePrices = useCallback(async (summaries: ProviderSummary[]) => {
     const allIsins = new Set<string>();
@@ -577,7 +583,7 @@ export function Dashboard({
 
   // Fetch live prices whenever data changes, refresh them every 60 seconds and on window focus
   useEffect(() => {
-    if (!data?.providerSummaries) return;
+    if (!isActive || !data?.providerSummaries) return;
     const initialLoad = window.setTimeout(() => {
       void fetchLivePrices(data.providerSummaries);
     }, 0);
@@ -593,7 +599,7 @@ export function Dashboard({
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [data?.providerSummaries, fetchLivePrices]);
+  }, [data?.providerSummaries, fetchLivePrices, isActive]);
 
   const loadBinanceBalances = useCallback(async () => {
     const res = await fetch(`/api/binance/balances?userId=${userId}`);
@@ -638,6 +644,10 @@ export function Dashboard({
   }, [loadBinanceBalances, userId]);
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
     const initialLoad = window.setTimeout(() => {
       void fetchBinanceBalances(true);
     }, 0);
@@ -646,7 +656,7 @@ export function Dashboard({
       window.clearTimeout(initialLoad);
       window.clearInterval(interval);
     };
-  }, [fetchBinanceBalances, binanceRefreshKey]);
+  }, [fetchBinanceBalances, binanceRefreshKey, isActive]);
 
   const chartData = useMemo(() => {
     if (!data) {
