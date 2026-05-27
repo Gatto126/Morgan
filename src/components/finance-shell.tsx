@@ -220,6 +220,23 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     }
   }, [notice, error, isTesting]);
 
+  useEffect(() => {
+    if (!isTesting) {
+      return;
+    }
+
+    setShowSettingsView(true);
+    setActiveSettingsSection("apiKey");
+    setShowUserSelectView(false);
+    setShowCreateUserSubmenu(false);
+  }, [
+    isTesting,
+    setActiveSettingsSection,
+    setShowCreateUserSubmenu,
+    setShowSettingsView,
+    setShowUserSelectView
+  ]);
+
   async function handleSaveApiKeys() {
     if (!activeUser) return;
 
@@ -287,10 +304,13 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
           ? `Connected! ${tokenCount} token${tokenCount !== 1 ? "s" : ""} found.`
           : "Connected! Empty wallet."
       );
+      keepApiSettingsOpen();
       setBinanceRefreshKey((k) => k + 1);
     } catch (err) {
+      keepApiSettingsOpen();
       setError(err instanceof Error ? err.message : "Error saving API keys.");
     } finally {
+      keepApiSettingsOpen();
       setIsTesting(false);
     }
   }
@@ -1160,24 +1180,10 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                           userId={activeUser.id}
                           binanceRefreshKey={binanceRefreshKey}
                           onImportRefreshComplete={stage === "dashboard" ? handleImportRefreshComplete : undefined}
-                          showUploadView={showUploadView}
-                          isClosingUpload={isClosingUpload}
-                          onCloseUpload={handleCloseUpload}
-                          uploadElement={renderUploadState()}
-                          reviewElement={renderReviewState()}
-                          previewTransactionsCount={previewTransactions.length}
                           checkingCount={activeUser.checkingCount}
                           investmentCount={activeUser.investmentCount}
                           cryptoCount={activeUser.cryptoCount}
                           transactionCount={activeUser.transactionCount}
-                          showSettingsView={showSettingsView}
-                          isClosingSettings={isClosingSettings}
-                          onCloseSettings={handleCloseSettings}
-                          settingsElement={renderSettingsState()}
-                          showUserSelectView={showUserSelectView}
-                          isClosingUserSelect={isClosingUserSelect}
-                          onCloseUserSelect={handleCloseUserSelect}
-                          userSelectElement={renderUserSelectState()}
                         />
                         {activeUser.checkingCount > 0 && (
                           <CheckingDashboard
@@ -1186,21 +1192,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                             key={`checking-${activeUser.id}`}
                             userId={activeUser.id}
                             onImportRefreshComplete={stage === "checking" ? handleImportRefreshComplete : undefined}
-                            showUploadView={showUploadView}
-                            isClosingUpload={isClosingUpload}
-                            onCloseUpload={handleCloseUpload}
-                            uploadElement={renderUploadState()}
-                            reviewElement={renderReviewState()}
-                            previewTransactionsCount={previewTransactions.length}
                             transactionCount={activeUser.transactionCount}
-                            showSettingsView={showSettingsView}
-                            isClosingSettings={isClosingSettings}
-                            onCloseSettings={handleCloseSettings}
-                            settingsElement={renderSettingsState()}
-                            showUserSelectView={showUserSelectView}
-                            isClosingUserSelect={isClosingUserSelect}
-                            onCloseUserSelect={handleCloseUserSelect}
-                            userSelectElement={renderUserSelectState()}
                           />
                         )}
                         {activeUser.investmentCount > 0 && (
@@ -1210,21 +1202,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                             key={`investment-${activeUser.id}`}
                             userId={activeUser.id}
                             onImportRefreshComplete={stage === "investment" ? handleImportRefreshComplete : undefined}
-                            showUploadView={showUploadView}
-                            isClosingUpload={isClosingUpload}
-                            onCloseUpload={handleCloseUpload}
-                            uploadElement={renderUploadState()}
-                            reviewElement={renderReviewState()}
-                            previewTransactionsCount={previewTransactions.length}
                             transactionCount={activeUser.transactionCount}
-                            showSettingsView={showSettingsView}
-                            isClosingSettings={isClosingSettings}
-                            onCloseSettings={handleCloseSettings}
-                            settingsElement={renderSettingsState()}
-                            showUserSelectView={showUserSelectView}
-                            isClosingUserSelect={isClosingUserSelect}
-                            onCloseUserSelect={handleCloseUserSelect}
-                            userSelectElement={renderUserSelectState()}
                           />
                         )}
                         {activeUser.cryptoCount > 0 && (
@@ -1234,21 +1212,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                             key={`crypto-${activeUser.id}`}
                             userId={activeUser.id}
                             onImportRefreshComplete={stage === "crypto" ? handleImportRefreshComplete : undefined}
-                            showUploadView={showUploadView}
-                            isClosingUpload={isClosingUpload}
-                            onCloseUpload={handleCloseUpload}
-                            uploadElement={renderUploadState()}
-                            reviewElement={renderReviewState()}
-                            previewTransactionsCount={previewTransactions.length}
                             transactionCount={activeUser.transactionCount}
-                            showSettingsView={showSettingsView}
-                            isClosingSettings={isClosingSettings}
-                            onCloseSettings={handleCloseSettings}
-                            settingsElement={renderSettingsState()}
-                            showUserSelectView={showUserSelectView}
-                            isClosingUserSelect={isClosingUserSelect}
-                            onCloseUserSelect={handleCloseUserSelect}
-                            userSelectElement={renderUserSelectState()}
                           />
                         )}
                         {activeUser.hasBinanceCredentials && (
@@ -1257,21 +1221,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                             shouldLoad
                             key={`binance-${activeUser.id}`}
                             userId={activeUser.id}
-                            showUploadView={showUploadView}
-                            isClosingUpload={isClosingUpload}
-                            onCloseUpload={handleCloseUpload}
-                            uploadElement={renderUploadState()}
-                            reviewElement={renderReviewState()}
-                            previewTransactionsCount={previewTransactions.length}
                             transactionCount={activeUser.transactionCount}
-                            showSettingsView={showSettingsView}
-                            isClosingSettings={isClosingSettings}
-                            onCloseSettings={handleCloseSettings}
-                            settingsElement={renderSettingsState()}
-                            showUserSelectView={showUserSelectView}
-                            isClosingUserSelect={isClosingUserSelect}
-                            onCloseUserSelect={handleCloseUserSelect}
-                            userSelectElement={renderUserSelectState()}
                           />
                         )}
                       </div>
