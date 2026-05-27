@@ -77,7 +77,10 @@ const user = { id: "user-1" };
 function makeRequest(path: string, body: unknown = { userId: "user-1" }) {
   return new Request(`http://localhost${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "http://localhost"
+    },
     body: JSON.stringify(body),
   });
 }
@@ -114,13 +117,30 @@ describe("binance API routes", () => {
         const response = await route.post(
           new Request(`http://localhost${route.path}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              Origin: "http://localhost"
+            },
             body: "{",
           })
         );
 
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toEqual({ error: "Invalid request body." });
+        expect(mocks.syncBinanceBalances).not.toHaveBeenCalled();
+      });
+
+      it("rejects requests without a same-origin signal", async () => {
+        const response = await route.post(
+          new Request(`http://localhost${route.path}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: "user-1" }),
+          })
+        );
+
+        expect(response.status).toBe(403);
+        await expect(response.json()).resolves.toEqual({ error: "Request origin not allowed." });
         expect(mocks.syncBinanceBalances).not.toHaveBeenCalled();
       });
 

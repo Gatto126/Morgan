@@ -59,6 +59,7 @@ MORGAN_ENCRYPTION_KEY=
 BETTER_AUTH_SECRET=
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.*.*:3000
+BETTER_AUTH_IP_HEADERS=
 ```
 
 Recommended secret generation:
@@ -68,6 +69,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 Use separate values for `MORGAN_ENCRYPTION_KEY` and `BETTER_AUTH_SECRET`.
+
+For a public deployment, set `BETTER_AUTH_URL` to the final HTTPS origin and keep
+`BETTER_AUTH_TRUSTED_ORIGINS` to exact origins you control. Configure
+`BETTER_AUTH_IP_HEADERS` for the proxy that terminates traffic before the app:
+use `cf-connecting-ip` on Cloudflare, or the sanitized `x-forwarded-for` header
+only when your host/proxy guarantees clients cannot spoof it.
 
 ### Database Setup
 
@@ -91,6 +98,8 @@ pnpm run dev              # Start the local development server
 pnpm run build            # Create a production build
 pnpm run start            # Start the production server
 pnpm run lint             # Run ESLint
+pnpm run test:run         # Run unit tests
+pnpm run smoke:upload-panel # Run the upload-panel navigation smoke test
 pnpm run prisma:generate  # Generate the Prisma client
 pnpm run db:push          # Apply the Prisma schema to the SQLite database
 ```

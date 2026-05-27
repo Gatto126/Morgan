@@ -24,6 +24,7 @@ Aggiornamento post-fix del 2026-05-27:
 - le voci Settings/API/Danger, New Profile e il toggle secret sono controlli `button` semantici; la modale delete account e' stata estratta in componente dedicato.
 - l'upload panel non resta aperto quando si naviga verso Settings/Profile e il pulsante upload non rimane attivo fuori dagli stage contenuto.
 - i campi plaintext legacy Binance sono rimossi dallo schema e dalla lettura applicativa; `scripts/migrate-binance-plaintext.mjs` conserva un percorso di migrazione per DB preesistenti.
+- online readiness avanzata: header HTTP difensivi in `next.config.ts`, same-origin check su tutte le mutazioni app, cookie Better Auth sicuri quando `BETTER_AUTH_URL` e' HTTPS, warning produzione per origin/proxy IP non configurati.
 
 ## Scope Eseguito
 
@@ -164,7 +165,7 @@ Non era evidente nel codice un rate limit applicativo o lockout dedicato per sig
 - `src/components/auth-shell.tsx` parla di password, non PIN, e rimuove l'auto-login temporizzato.
 - `src/lib/local-auth.test.ts` copre policy password, username e compatibilita' input legacy.
 
-**Nota deploy:** prima di esposizione pubblica reale, configurare `BETTER_AUTH_IP_HEADERS` / `TRUSTED_IP_HEADERS` in base al provider. In locale il fallback `x-forwarded-for` e' sufficiente per test; con Cloudflare usare `cf-connecting-ip`.
+**Nota deploy:** prima di esposizione pubblica reale, configurare `BETTER_AUTH_IP_HEADERS` / `TRUSTED_IP_HEADERS` in base al provider. In locale il fallback `x-forwarded-for` e' sufficiente per test; con Cloudflare usare `cf-connecting-ip`. `src/lib/auth-config.ts` ora emette warning in produzione se `BETTER_AUTH_URL` non e' HTTPS pubblico, se gli origin trusted usano wildcard pubbliche o se gli header IP proxy non sono espliciti.
 
 ### P3 - Campi legacy plaintext per Binance restano nel modello - RISOLTO
 
@@ -228,12 +229,21 @@ Inoltre solo `sync` aggiorna `binance_sync_${userId}`:
 - SQLite configurato con WAL e timeout:
   - `src/lib/db.ts:31`
   - `src/lib/db.ts:40-41`
+- Header di sicurezza applicati via Next:
+  - `next.config.ts`
+- Same-origin check centralizzato per mutazioni:
+  - `src/lib/request-security.ts`
+  - `src/app/api/users/route.ts`
+  - `src/app/api/users/[id]/route.ts`
+  - `src/app/api/transactions/preview/route.ts`
+  - `src/app/api/transactions/import/route.ts`
+  - `src/app/api/binance/route-handler.ts`
 
 ## Copertura Test
 
-Attuale: 15 file test, 63 test totali.
+Attuale: 17 file test, 74 test totali.
 
-Copre parser, preview, price request validation, logica chart/time-series, servizio Binance, route Binance, cancellazione account, policy auth locale, helper UI auth/delete account e segreti cifrati. Mancano ancora test su:
+Copre parser, preview, price request validation, logica chart/time-series, servizio Binance, route Binance, cancellazione account, policy auth locale, helper UI auth/delete account, segreti cifrati, auth deployment config e request security. Mancano ancora test su:
 
 - flusso import end-to-end con saldo negativo;
 - UI responsive mobile;
@@ -251,7 +261,7 @@ Priorita' prossima:
 Poi:
 
 1. Aggiungere MFA/passkeys prima dell'esposizione pubblica reale.
-2. Configurare header IP affidabili per il provider di deploy (`cf-connecting-ip` con Cloudflare, altrimenti header del proxy scelto).
+2. Configurare e verificare header IP affidabili sul provider reale (`cf-connecting-ip` con Cloudflare, altrimenti header del proxy scelto e sanitizzato).
 3. Pianificare upgrade major dipendenze in branch separati.
 4. Aggiungere test route/API restanti e smoke e2e.
 

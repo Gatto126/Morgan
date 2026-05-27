@@ -4,6 +4,10 @@ import { authGuardResponse, requireOwnedProfile } from "@/lib/auth-guard";
 import { BinanceApiError, syncBinanceBalances } from "@/lib/binance-service";
 import { prisma } from "@/lib/db";
 import type { apiLogger } from "@/lib/logger";
+import {
+  requestSecurityResponse,
+  requireSameOriginMutation
+} from "@/lib/request-security";
 import { decryptBinanceCredentials } from "@/lib/secrets";
 
 type BinanceRouteLogger = ReturnType<typeof apiLogger>;
@@ -21,6 +25,14 @@ export async function handleBinanceSyncRoute(
 ) {
   const { endpoint, genericError, log, logBinanceApiError = false } = options;
   let userId: string | undefined;
+
+  try {
+    requireSameOriginMutation(request);
+  } catch (error) {
+    const securityResponse = requestSecurityResponse(error);
+    if (securityResponse) return securityResponse;
+    throw error;
+  }
 
   try {
     const body = (await request.json()) as { userId?: string };
@@ -56,6 +68,9 @@ export async function handleBinanceSyncRoute(
   } catch (error) {
     const response = authGuardResponse(error);
     if (response) return response;
+
+    const securityResponse = requestSecurityResponse(error);
+    if (securityResponse) return securityResponse;
 
     if (error instanceof BinanceApiError) {
       if (logBinanceApiError) {

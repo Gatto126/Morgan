@@ -108,18 +108,32 @@ async function stopProcessTree(child) {
   child.kill("SIGTERM");
 }
 
-async function readRateLimitIds() {
+async function snapshotAndClearRateLimits() {
   const prisma = new PrismaClient();
 
   try {
-    const rows = await prisma.rateLimit.findMany({ select: { id: true } });
-    return rows.map((row) => row.id);
+    const rows = await prisma.rateLimit.findMany();
+    await prisma.rateLimit.deleteMany();
+    return rows;
   } finally {
     await prisma.$disconnect();
   }
 }
 
-async function cleanupSmokeData(username, initialRateLimitIds) {
+async function restoreRateLimits(rows) {
+  const prisma = new PrismaClient();
+
+  try {
+    await prisma.rateLimit.deleteMany();
+    if (rows.length > 0) {
+      await prisma.rateLimit.createMany({ data: rows });
+    }
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+async function cleanupSmokeData(username) {
   const prisma = new PrismaClient();
 
   try {
@@ -140,12 +154,6 @@ async function cleanupSmokeData(username, initialRateLimitIds) {
       await prisma.authAccount.deleteMany({ where: { userId: { in: ownerIds } } });
       await prisma.user.deleteMany({ where: { ownerId: { in: ownerIds } } });
       await prisma.authUser.deleteMany({ where: { id: { in: ownerIds } } });
-    }
-
-    if (initialRateLimitIds) {
-      await prisma.rateLimit.deleteMany({
-        where: { id: { notIn: initialRateLimitIds } }
-      });
     }
 
     return ownerIds.length;
@@ -179,6 +187,17 @@ async function expectButtonActive(locator, expected, label) {
   );
 }
 
+function expectSecurityHeaders(response) {
+  assert(response, "Expected a page response.");
+  const headers = response.headers();
+  assert(headers["x-content-type-options"] === "nosniff", "Missing X-Content-Type-Options security header.");
+  assert(headers["x-frame-options"] === "DENY", "Missing X-Frame-Options security header.");
+  assert(
+    headers["content-security-policy"]?.includes("frame-ancestors 'none'"),
+    "Missing frame-ancestors Content-Security-Policy directive."
+  );
+}
+
 async function clickUntilVisible(trigger, target, label) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     await trigger.click();
@@ -198,7 +217,7 @@ async function runSmoke() {
   const port = await findAvailablePort();
   const baseUrl = `http://${host}:${port}`;
   const username = `smokeupload${Date.now().toString(36)}`;
-  const initialRateLimitIds = await readRateLimitIds();
+  const initialRateLimits = await snapshotAndClearRateLimits();
   const { child, getLogs } = startNextDev(port);
   let browser;
   let page;
@@ -209,7 +228,8 @@ async function runSmoke() {
     browser = await chromium.launch({ headless: true });
     page = await browser.newPage({ viewport: { width: 1572, height: 1270 } });
 
-    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    const initialResponse = await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    expectSecurityHeaders(initialResponse);
     const usernameInput = page.getByPlaceholder("Username", { exact: true });
     await clickUntilVisible(
       page.getByRole("button", { name: "Register New local account", exact: true }),
@@ -274,9 +294,13 @@ async function runSmoke() {
       await browser.close();
     }
     await stopProcessTree(child);
-    const removedUsers = await cleanupSmokeData(username, initialRateLimitIds);
-    if (removedUsers > 0) {
-      console.log(JSON.stringify({ cleanedSmokeUsers: removedUsers }, null, 2));
+    try {
+      const removedUsers = await cleanupSmokeData(username);
+      if (removedUsers > 0) {
+        console.log(JSON.stringify({ cleanedSmokeUsers: removedUsers }, null, 2));
+      }
+    } finally {
+      await restoreRateLimits(initialRateLimits);
     }
   }
 }

@@ -4,6 +4,10 @@ import { z } from "zod";
 import { authGuardResponse, requireOwnedProfile } from "@/lib/auth-guard";
 import { assertUserExists, importPreviewTransactions, previewTransactionSchema } from "@/lib/transaction-import";
 import { apiLogger } from "@/lib/logger";
+import {
+  requestSecurityResponse,
+  requireSameOriginMutation
+} from "@/lib/request-security";
 
 const log = apiLogger("Import");
 
@@ -15,6 +19,7 @@ const importTransactionsSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    requireSameOriginMutation(request);
     const payload = importTransactionsSchema.parse(await request.json());
 
     log.request("POST", "/api/transactions/import", {
@@ -38,6 +43,9 @@ export async function POST(request: Request) {
   } catch (error) {
     const response = authGuardResponse(error);
     if (response) return response;
+
+    const securityResponse = requestSecurityResponse(error);
+    if (securityResponse) return securityResponse;
 
     if (error instanceof z.ZodError) {
       log.response("POST", "/api/transactions/import", 400, { validation: error.issues[0]?.message });

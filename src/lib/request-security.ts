@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { getTrustedOrigins } from "@/lib/auth-config";
+
 export class RequestSecurityError extends Error {
   constructor(
     public status: 403 | 429,
@@ -25,13 +27,7 @@ export function requestSecurityResponse(error: unknown) {
 }
 
 export function requireSameOriginMutation(request: Request) {
-  const requestOrigin = getOrigin(request.url);
-  const allowedOrigins = new Set([requestOrigin]);
-  const configuredOrigin = getConfiguredOrigin();
-
-  if (configuredOrigin) {
-    allowedOrigins.add(configuredOrigin);
-  }
+  const allowedOrigins = new Set(getAllowedMutationOrigins(request));
 
   const originHeader = request.headers.get("origin");
   const refererHeader = request.headers.get("referer");
@@ -42,9 +38,17 @@ export function requireSameOriginMutation(request: Request) {
   }
 }
 
-function getConfiguredOrigin() {
-  const configuredUrl = process.env.BETTER_AUTH_URL;
-  return configuredUrl ? getOrigin(configuredUrl) : null;
+export function getAllowedMutationOrigins(request: Request) {
+  const origins = new Set([getOrigin(request.url)]);
+
+  for (const origin of getTrustedOrigins()) {
+    if (!origin.includes("*")) {
+      origins.add(getOrigin(origin));
+    }
+  }
+
+  origins.delete("");
+  return Array.from(origins);
 }
 
 function getOrigin(value: string) {

@@ -5,6 +5,10 @@ import { assertUserExists, getExistingFingerprints, markPreviewTransactions } fr
 import { parseTradeRepublicCsv } from "@/lib/trade-republic-csv-parser";
 import { parseBbvaXlsxStatement } from "@/lib/bbva-xlsx-parser";
 import { apiLogger } from "@/lib/logger";
+import {
+  requestSecurityResponse,
+  requireSameOriginMutation
+} from "@/lib/request-security";
 
 const log = apiLogger("Preview");
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
@@ -19,6 +23,7 @@ function getSupportedExtension(fileName: string) {
 
 export async function POST(request: Request) {
   try {
+    requireSameOriginMutation(request);
     const formData = await request.formData();
     const userId = formData.get("userId");
     const file = formData.get("file");
@@ -106,6 +111,9 @@ export async function POST(request: Request) {
   } catch (error) {
     const response = authGuardResponse(error);
     if (response) return response;
+
+    const securityResponse = requestSecurityResponse(error);
+    if (securityResponse) return securityResponse;
 
     log.error("POST", "/api/transactions/preview", error);
     return NextResponse.json(

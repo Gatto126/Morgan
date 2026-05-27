@@ -4,6 +4,10 @@ import { z } from "zod";
 import { authGuardResponse, requireAuth } from "@/lib/auth-guard";
 import { prisma } from "@/lib/db";
 import { apiLogger } from "@/lib/logger";
+import {
+  requestSecurityResponse,
+  requireSameOriginMutation
+} from "@/lib/request-security";
 import { toSafeUser, toSafeUserSummary } from "@/lib/user-response";
 
 const log = apiLogger("Users");
@@ -54,6 +58,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    requireSameOriginMutation(request);
     const session = await requireAuth(request);
     const json = await request.json();
     log.request("POST", "/api/users", { name: json.name, authUserId: session.user.id });
@@ -120,6 +125,9 @@ export async function POST(request: Request) {
 
     const response = authGuardResponse(error);
     if (response) return response;
+
+    const securityResponse = requestSecurityResponse(error);
+    if (securityResponse) return securityResponse;
 
     log.error("POST", "/api/users", error);
     return NextResponse.json({ error: "Internal error while creating profile." }, { status: 500 });

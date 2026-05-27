@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { authGuardResponse, requireAuth, requireOwnedProfile } from "@/lib/auth-guard";
 import { prisma } from "@/lib/db";
 import { apiLogger } from "@/lib/logger";
+import {
+  requestSecurityResponse,
+  requireSameOriginMutation
+} from "@/lib/request-security";
 import { encryptSecret, makeBinanceApiKeyPreview } from "@/lib/secrets";
 import { toSafeUser } from "@/lib/user-response";
 import { z } from "zod";
@@ -53,6 +57,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   log.request("DELETE", `/api/users/${id}`);
 
   try {
+    requireSameOriginMutation(_request);
     await requireOwnedProfile(_request, id);
 
     // Clean global ETF/stock assets when no other profile still holds them.
@@ -185,6 +190,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const response = authGuardResponse(error);
     if (response) return response;
 
+    const securityResponse = requestSecurityResponse(error);
+    if (securityResponse) return securityResponse;
+
     log.error("DELETE", `/api/users/${id}`, error);
     return NextResponse.json({ error: "Error while deleting profile." }, { status: 500 });
   }
@@ -195,6 +203,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   log.request("PATCH", `/api/users/${id}`);
 
   try {
+    requireSameOriginMutation(request);
     await requireOwnedProfile(request, id);
     const json = patchUserSchema.parse(await request.json());
     const hasApiKeyField = json.apiKey !== undefined;
@@ -246,6 +255,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   } catch (error) {
     const response = authGuardResponse(error);
     if (response) return response;
+
+    const securityResponse = requestSecurityResponse(error);
+    if (securityResponse) return securityResponse;
 
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0]?.message ?? "Invalid payload." }, { status: 400 });

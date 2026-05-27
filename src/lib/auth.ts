@@ -8,6 +8,12 @@ import { username } from "better-auth/plugins";
 
 import { prisma } from "@/lib/db";
 import {
+  getAuthDeploymentWarnings,
+  getIpAddressHeaders,
+  getTrustedOrigins,
+  shouldUseSecureCookies
+} from "@/lib/auth-config";
+import {
   LOCAL_PASSWORD_MAX_LENGTH,
   LOCAL_PASSWORD_MIN_LENGTH,
   hasLocalPasswordInput,
@@ -16,6 +22,20 @@ import {
   localUsernameToEmail,
   normalizeLocalUsername
 } from "@/lib/local-auth";
+
+const authConfigWarningState = globalThis as typeof globalThis & {
+  __morganAuthConfigWarningsEmitted?: boolean;
+};
+const isNextProductionBuild =
+  process.env.NEXT_PHASE === "phase-production-build" ||
+  process.env.NEXT_PRIVATE_BUILD_WORKER === "1";
+
+if (!isNextProductionBuild && !authConfigWarningState.__morganAuthConfigWarningsEmitted) {
+  authConfigWarningState.__morganAuthConfigWarningsEmitted = true;
+  for (const warning of getAuthDeploymentWarnings()) {
+    console.warn(`[auth-config] ${warning}`);
+  }
+}
 
 function assertPassword(password: unknown, path: string) {
   if (typeof password !== "string") {
@@ -80,45 +100,13 @@ function normalizeAuthBody(body: unknown, path: string) {
   }
 }
 
-function getTrustedOrigins() {
-  const configuredOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-  const origins = new Set<string>([
-    process.env.BETTER_AUTH_URL,
-    ...configuredOrigins
-  ].filter((origin): origin is string => Boolean(origin)));
-
-  if (process.env.NODE_ENV !== "production") {
-    origins.add("http://localhost:3000");
-    origins.add("http://127.0.0.1:3000");
-    origins.add("http://192.168.*.*:3000");
-  }
-
-  return Array.from(origins);
-}
-
-function getIpAddressHeaders() {
-  const configuredHeaders = (
-    process.env.BETTER_AUTH_IP_HEADERS ??
-    process.env.TRUSTED_IP_HEADERS ??
-    ""
-  )
-    .split(",")
-    .map((header) => header.trim().toLowerCase())
-    .filter(Boolean);
-
-  return configuredHeaders.length > 0 ? configuredHeaders : ["x-forwarded-for"];
-}
-
 export const auth = betterAuth({
   appName: "Morgan",
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
   trustedOrigins: getTrustedOrigins(),
   advanced: {
+    useSecureCookies: shouldUseSecureCookies(),
     ipAddress: {
       ipAddressHeaders: getIpAddressHeaders()
     }
