@@ -223,7 +223,15 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
   async function handleSaveApiKeys() {
     if (!activeUser) return;
 
+    const keepApiSettingsOpen = () => {
+      setShowSettingsView(true);
+      setActiveSettingsSection("apiKey");
+      setShowUserSelectView(false);
+      setShowCreateUserSubmenu(false);
+    };
+
     try {
+      keepApiSettingsOpen();
       setError(null);
       setNotice(null);
 
@@ -257,6 +265,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
       );
 
       // Phase 2: sync all wallets against Binance (Spot + Funding + Earn)
+      keepApiSettingsOpen();
       setIsTesting(true);
       setNotice("Testing endpoint...");
 
