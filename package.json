@@ -17,6 +17,7 @@
     "lint": "eslint . --ignore-pattern .next --ignore-pattern next-env.d.ts --ignore-pattern prisma/*.db --ignore-pattern prisma/*.db-journal",
     "test": "vitest",
     "test:run": "vitest run",
+    "smoke:upload-panel": "node scripts/smoke-upload-panel.mjs",
     "migrate:binance-secrets": "node scripts/migrate-binance-plaintext.mjs",
     "prisma:generate": "prisma generate",
     "db:push": "prisma db push"
