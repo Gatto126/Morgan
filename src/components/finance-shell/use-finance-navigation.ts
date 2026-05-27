@@ -246,11 +246,11 @@ export function useFinanceNavigation({
 
   const toggleSettingsSection = useCallback((section: SettingsSection) => {
     clearPanelFeedback();
-    if (section === "apiKey") {
+    if (section === "apiKey" && activeSettingsSection !== "apiKey") {
       clearApiKeyDraft();
     }
-    setActiveSettingsSection((prev) => (prev === section ? null : section));
-  }, [clearApiKeyDraft, clearPanelFeedback]);
+    setActiveSettingsSection(section);
+  }, [activeSettingsSection, clearApiKeyDraft, clearPanelFeedback]);
 
   return {
     stage,
