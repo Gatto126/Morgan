@@ -129,6 +129,11 @@ src/
     *-parser.ts          Statement, market data, and integration parsers
 ```
 
+## Architecture Notes
+
+- [Runtime targets and storage decision](docs/architecture/targets.md)
+- [Repository structure and duplication rules](docs/architecture/repo-structure.md)
+
 ## Data and Security Notes
 
 - `.env` files, local databases, build outputs, and generated caches are intentionally ignored by Git.
