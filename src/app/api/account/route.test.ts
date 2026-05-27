@@ -160,22 +160,22 @@ describe("DELETE /api/account", () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
-  it("requires a PIN field", async () => {
+  it("requires a password field", async () => {
     const response = await DELETE(makeRequest({}));
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "PIN is required." });
+    await expect(response.json()).resolves.toEqual({ error: "Password is required." });
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
-  it("rejects invalid PINs without deleting anything", async () => {
+  it("rejects invalid passwords without deleting anything", async () => {
     mocks.verifyPassword.mockResolvedValueOnce(false);
 
     const response = await DELETE(makeRequest({ password: "Wrong1" }));
 
     expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
-      error: "PIN confirmation is invalid.",
+      error: "Password confirmation is invalid.",
     });
     expect(mocks.authAccountFindFirst).toHaveBeenCalledWith({
       where: {
@@ -199,13 +199,13 @@ describe("DELETE /api/account", () => {
 
     expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
-      error: "PIN confirmation is invalid.",
+      error: "Password confirmation is invalid.",
     });
     expect(mocks.verifyPassword).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
-  it("rate limits repeated failed PIN confirmations", async () => {
+  it("rate limits repeated failed password confirmations", async () => {
     mocks.requireAuth.mockResolvedValue({ user: { id: "owner-rate", name: "Luca" } });
     mocks.verifyPassword.mockResolvedValue(false);
 
@@ -224,7 +224,7 @@ describe("DELETE /api/account", () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
-  it("accepts a valid PIN and runs the deletion transaction", async () => {
+  it("accepts a valid password and runs the deletion transaction", async () => {
     const response = await DELETE(makeRequest({ password: "Secret1" }));
 
     expect(response.status).toBe(200);

@@ -3,6 +3,7 @@ import { verifyPassword } from "better-auth/crypto";
 
 import { authGuardResponse, requireAuth } from "@/lib/auth-guard";
 import { prisma } from "@/lib/db";
+import { hasLocalPasswordInput } from "@/lib/local-auth";
 import { apiLogger } from "@/lib/logger";
 import {
   requestSecurityResponse,
@@ -37,12 +38,12 @@ async function parseAccountDeletePassword(request: Request) {
   }
 
   if (!body || typeof body !== "object") {
-    throw new AccountDeleteValidationError(400, "PIN is required.");
+    throw new AccountDeleteValidationError(400, "Password is required.");
   }
 
   const password = (body as { password?: unknown }).password;
-  if (typeof password !== "string" || password.length === 0) {
-    throw new AccountDeleteValidationError(400, "PIN is required.");
+  if (typeof password !== "string" || !hasLocalPasswordInput(password)) {
+    throw new AccountDeleteValidationError(400, "Password is required.");
   }
 
   return password;
@@ -116,7 +117,7 @@ export async function DELETE(request: Request) {
       const password = await parseAccountDeletePassword(request);
       const isPasswordValid = await verifyAccountDeletePassword(ownerId, password);
       if (!isPasswordValid) {
-        throw new AccountDeleteValidationError(422, "PIN confirmation is invalid.");
+        throw new AccountDeleteValidationError(422, "Password confirmation is invalid.");
       }
     } catch (error) {
       if (error instanceof AccountDeleteValidationError) {

@@ -21,7 +21,7 @@ import UserIcon from "./ui/user-icon";
 
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import { isValidLocalPin } from "@/lib/local-auth";
+import { hasLocalPasswordInput } from "@/lib/local-auth";
 import { cn, getInitials } from "@/lib/utils";
 
 const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
@@ -905,7 +905,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
       return null;
     }
 
-    const canSubmitDeleteAccount = isValidLocalPin(deleteAccountPassword);
+    const canSubmitDeleteAccount = hasLocalPasswordInput(deleteAccountPassword);
 
     return (
       <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
@@ -936,7 +936,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
 
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
-              PIN
+              Password
             </label>
             <Input
               autoFocus
@@ -945,7 +945,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
               disabled={isDeletingAccount}
               className="w-full border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-white focus:border-white focus:ring-0"
               autoComplete="current-password"
-              placeholder="Enter your PIN"
+              placeholder="Enter your password"
               type="password"
             />
           </div>

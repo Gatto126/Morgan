@@ -8,16 +8,31 @@ import { username } from "better-auth/plugins";
 
 import { prisma } from "@/lib/db";
 import {
-  isValidLocalPin,
+  LOCAL_PASSWORD_MAX_LENGTH,
+  LOCAL_PASSWORD_MIN_LENGTH,
+  hasLocalPasswordInput,
+  isValidLocalPassword,
   isValidLocalUsername,
   localUsernameToEmail,
   normalizeLocalUsername
 } from "@/lib/local-auth";
 
-function assertPin(pin: unknown) {
-  if (typeof pin !== "string" || !isValidLocalPin(pin)) {
+function assertPassword(password: unknown, path: string) {
+  if (typeof password !== "string") {
     throw new APIError("BAD_REQUEST", {
-      message: "PIN must be 6 to 16 letters or numbers."
+      message: "Password is required."
+    });
+  }
+
+  if (path === "/sign-in/username" && !hasLocalPasswordInput(password)) {
+    throw new APIError("BAD_REQUEST", {
+      message: `Password must be between 1 and ${LOCAL_PASSWORD_MAX_LENGTH} characters.`
+    });
+  }
+
+  if (path === "/sign-up/email" && !isValidLocalPassword(password)) {
+    throw new APIError("BAD_REQUEST", {
+      message: `Password must be between ${LOCAL_PASSWORD_MIN_LENGTH} and ${LOCAL_PASSWORD_MAX_LENGTH} characters.`
     });
   }
 }
@@ -33,7 +48,7 @@ function normalizeAuthBody(body: unknown, path: string) {
     password?: unknown;
   };
 
-  assertPin(payload.password);
+  assertPassword(payload.password, path);
 
   if (path === "/sign-up/email" && typeof payload.username !== "string") {
     throw new APIError("BAD_REQUEST", {
@@ -85,11 +100,29 @@ function getTrustedOrigins() {
   return Array.from(origins);
 }
 
+function getIpAddressHeaders() {
+  const configuredHeaders = (
+    process.env.BETTER_AUTH_IP_HEADERS ??
+    process.env.TRUSTED_IP_HEADERS ??
+    ""
+  )
+    .split(",")
+    .map((header) => header.trim().toLowerCase())
+    .filter(Boolean);
+
+  return configuredHeaders.length > 0 ? configuredHeaders : ["x-forwarded-for"];
+}
+
 export const auth = betterAuth({
   appName: "Morgan",
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
   trustedOrigins: getTrustedOrigins(),
+  advanced: {
+    ipAddress: {
+      ipAddressHeaders: getIpAddressHeaders()
+    }
+  },
   database: prismaAdapter(prisma, {
     provider: "sqlite"
   }),
@@ -107,9 +140,33 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    minPasswordLength: 6,
-    maxPasswordLength: 16,
+    minPasswordLength: LOCAL_PASSWORD_MIN_LENGTH,
+    maxPasswordLength: LOCAL_PASSWORD_MAX_LENGTH,
     requireEmailVerification: false
+  },
+  rateLimit: {
+    enabled: true,
+    storage: "database",
+    window: 60,
+    max: 120,
+    customRules: {
+      "/sign-in/username": {
+        window: 5 * 60,
+        max: 5
+      },
+      "/sign-up/email": {
+        window: 10 * 60,
+        max: 3
+      },
+      "/verify-password": {
+        window: 5 * 60,
+        max: 5
+      },
+      "/change-password": {
+        window: 5 * 60,
+        max: 5
+      }
+    }
   },
   hooks: {
     before: createAuthMiddleware(async (context) => {

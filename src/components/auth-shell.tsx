@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Eye, EyeOff, House, Send, UserRound } from "lucide-react";
+import { ArrowLeft, House, Send, UserRound } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import {
-  isValidLocalPin,
+  getLocalPasswordPolicyHint,
+  hasLocalPasswordInput,
+  isValidLocalPassword,
   isValidLocalUsername,
   localUsernameToEmail,
   normalizeLocalUsername
@@ -64,7 +66,7 @@ function authErrorMessage(message: string) {
   const normalized = message.toLowerCase();
 
   if (normalized.includes("invalid") || normalized.includes("unauthorized")) {
-    return "Invalid username or PIN.";
+    return "Invalid username or password.";
   }
 
   if (normalized.includes("already") || normalized.includes("taken") || normalized.includes("exists") || normalized.includes("esiste")) {
@@ -78,18 +80,19 @@ export function AuthShell() {
   const router = useRouter();
   const [view, setView] = useState<AuthView>("landing");
   const [username, setUsername] = useState("");
-  const [pin, setPin] = useState("");
-  const [showPin, setShowPin] = useState(false);
+  const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loginWelcome, setLoginWelcome] = useState(LOGIN_WELCOME_MESSAGES[1]);
   const [loginWelcomeKey, setLoginWelcomeKey] = useState(0);
-  const lastSubmittedRef = useRef<string | null>(null);
 
   const normalizedUsername = useMemo(() => normalizeLocalUsername(username), [username]);
   const isAuthForm = view === "signIn" || view === "signUp";
-  const hasValidAuthInput = isAuthForm && isValidLocalUsername(normalizedUsername) && isValidLocalPin(pin);
+  const hasValidPassword = view === "signUp"
+    ? isValidLocalPassword(password)
+    : hasLocalPasswordInput(password);
+  const hasValidAuthInput = isAuthForm && isValidLocalUsername(normalizedUsername) && hasValidPassword;
   const canSubmit = hasValidAuthInput && !isSubmitting;
 
   function openAuthView(nextView: Exclude<AuthView, "landing">) {
@@ -97,11 +100,9 @@ export function AuthShell() {
 
     setView(nextView);
     setUsername("");
-    setPin("");
-    setShowPin(false);
+    setPassword("");
     setError(null);
     setSuccessMessage(null);
-    lastSubmittedRef.current = null;
 
     if (nextView === "signIn") {
       setLoginWelcome(getRandomLoginWelcome());
@@ -121,12 +122,12 @@ export function AuthShell() {
         view === "signIn"
           ? await authClient.signIn.username({
               username: normalizedUsername,
-              password: pin,
+              password,
               rememberMe: true
             })
           : await authClient.signUp.email({
               email: localUsernameToEmail(normalizedUsername),
-              password: pin,
+              password,
               name: username.trim() || normalizedUsername,
               username: normalizedUsername,
               displayUsername: username.trim() || normalizedUsername
@@ -149,27 +150,11 @@ export function AuthShell() {
       setSuccessMessage(null);
       setError(submitError instanceof Error ? submitError.message : "Access failed.");
       if (view === "signIn") {
-        setPin("");
-        setShowPin(false);
-        lastSubmittedRef.current = null;
+        setPassword("");
       }
       setIsSubmitting(false);
     }
-  }, [canSubmit, normalizedUsername, pin, router, username, view]);
-
-  useEffect(() => {
-    if (view !== "signIn" || !canSubmit) return;
-
-    const submissionKey = `${view}:${normalizedUsername}:${pin}`;
-    if (lastSubmittedRef.current === submissionKey) return;
-
-    const loginTimer = window.setTimeout(() => {
-      lastSubmittedRef.current = submissionKey;
-      void submitCredentials();
-    }, 700);
-
-    return () => window.clearTimeout(loginTimer);
-  }, [canSubmit, normalizedUsername, pin, submitCredentials, view]);
+  }, [canSubmit, normalizedUsername, password, router, username, view]);
 
   function renderLanding() {
     return (
@@ -319,9 +304,8 @@ export function AuthShell() {
                     setUsername(event.target.value);
                     setError(null);
                     setSuccessMessage(null);
-                    lastSubmittedRef.current = null;
                     if (view === "signIn" && error) {
-                      setPin("");
+                      setPassword("");
                     }
                   }}
                   placeholder="Username"
@@ -330,65 +314,52 @@ export function AuthShell() {
                 <UserRound className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2" />
               </div>
 
-              <div className="relative">
+              <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2 sm:grid-cols-[minmax(0,1fr)_48px]">
                 <Input
                   autoComplete={isSignUp ? "new-password" : "current-password"}
-                  className="h-11 pr-12 text-lg sm:h-12 sm:text-xl"
+                  className="h-11 text-lg sm:h-12 sm:text-xl"
                   disabled={isSubmitting}
-                  maxLength={16}
+                  maxLength={128}
                   name="password"
                   onChange={(event) => {
-                    const nextPin = event.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
-                    setPin(nextPin);
+                    const nextPassword = event.target.value;
+                    setPassword(nextPassword);
                     setError(null);
                     setSuccessMessage(null);
-                    if (!isValidLocalPin(nextPin)) {
-                      lastSubmittedRef.current = null;
-                    }
                   }}
-                  pattern="[a-zA-Z0-9]{6,16}"
-                  placeholder="PIN"
-                  type={showPin ? "text" : "password"}
-                  value={pin}
+                  placeholder="Password"
+                  type="password"
+                  value={password}
                 />
                 <button
-                  aria-label={showPin ? "Hide PIN" : "Show PIN"}
-                  className="icon-plain absolute right-4 top-1/2 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
-                  onClick={() => setShowPin((value) => !value)}
-                  type="button"
+                  aria-label={isSignUp ? "Create account" : "Log in"}
+                  className={cn(
+                    "flex h-11 w-11 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] p-0 transition-[background-color,border-color,color,transform,opacity] duration-200 sm:h-12 sm:w-12 has-lucide",
+                    canSubmit
+                      ? "cursor-pointer border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-white hover:bg-[color:var(--surface-elevated)] hover:text-white active:scale-[0.985]"
+                      : "cursor-not-allowed border-[color:var(--line-strong)] text-[color:var(--text-dim)]/35 opacity-60"
+                  )}
+                  disabled={!canSubmit}
+                  title={isSignUp ? "Create account" : "Log in"}
+                  type="submit"
                 >
-                  {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <Send className={cn("h-4 w-4", isSubmitting && "animate-pulse")} strokeWidth={2.3} />
                 </button>
               </div>
 
               {isSignUp ? (
                 <p className="text-center text-[10px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-dim)]/50 md:absolute md:left-0 md:top-[calc(100%+0.45rem)] md:w-full">
-                  6-16 letters or numbers
+                  {getLocalPasswordPolicyHint()}
                 </p>
               ) : null}
 
-              {isSignUp ? (
-                <div className="flex min-h-11 justify-center pt-1 md:absolute md:left-0 md:top-[calc(100%+1.65rem)] md:w-full md:pt-0">
-                  {hasValidAuthInput ? (
-                    <button
-                      aria-label="Create account"
-                      className="relative flex h-12 w-12 cursor-pointer items-center justify-center rounded-[16px] border border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] p-0 text-[color:var(--text-dim)] transition-[background-color,border-color,color,transform,opacity] duration-200 hover:border-[color:var(--text-dim)] hover:bg-[color:var(--surface-elevated)] active:scale-[0.985] disabled:pointer-events-none disabled:opacity-40 has-lucide"
-                      disabled={isSubmitting}
-                      title="Create account"
-                      type="submit"
-                    >
-                      <Send className={cn("pointer-events-none absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2", isSubmitting && "animate-pulse")} strokeWidth={2.3} />
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
 
             <p
               className={cn(
                 "min-h-4 text-xs font-semibold",
                 "text-center md:absolute md:left-0 md:w-full",
-                isSignUp ? "md:top-[calc(100%+5.1rem)]" : "md:top-[calc(100%+1.85rem)]",
+                isSignUp ? "md:top-[calc(100%+2rem)]" : "md:top-[calc(100%+1.2rem)]",
                 error ? "text-[color:var(--danger)]" : successMessage ? "text-emerald-300" : "text-transparent"
               )}
             >
