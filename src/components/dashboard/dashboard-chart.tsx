@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChartBar, ChartGantt, X } from "lucide-react";
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
 import { cn } from "@/lib/utils";
 import { TIME_RANGES } from "./constants";
 import { formatEuroCents, formatProviderLabel, getMonthLabel } from "./formatters";
@@ -69,6 +70,7 @@ type DashboardChartProps = {
   setSelectedMonth: (month: string | null) => void;
   setSelectedSeriesKey: (seriesKey: string | null) => void;
   transactionCount: number;
+  onChartReadyChange: (ready: boolean) => void;
 };
 
 function ChartTooltip({ active, payload, label, setActivePoint }: CustomTooltipProps) {
@@ -229,50 +231,59 @@ export function DashboardChart({
   selectedValue,
   setSelectedMonth,
   setSelectedSeriesKey,
-  transactionCount
+  transactionCount,
+  onChartReadyChange
 }: DashboardChartProps) {
+  const { chartContainerRef, chartReady, chartSize } = useChartContainerReady();
+  const isChartVisible = !showSettingsView && !showUserSelectView && !shouldShowUploadPanel;
+
+  useEffect(() => {
+    onChartReadyChange(isChartVisible && chartReady);
+  }, [chartReady, isChartVisible, onChartReadyChange]);
+
+  const panelOverlay = showSettingsView ? (
+    <div className={cn("absolute inset-0 z-20 flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)]", isClosingSettings ? "upload-panel-exit pointer-events-none" : "upload-panel-enter")}>
+      <div
+        role="button"
+        onClick={onCloseSettings}
+        className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
+        title="Esci dalle impostazioni"
+      >
+        <X className="h-5 w-5" strokeWidth={2.3} />
+      </div>
+      {settingsElement}
+    </div>
+  ) : showUserSelectView ? (
+    <div className={cn("absolute inset-0 z-20 flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)]", isClosingUserSelect ? "upload-panel-exit pointer-events-none" : "upload-panel-enter")}>
+      <div
+        role="button"
+        onClick={onCloseUserSelect}
+        className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
+        title="Esci dalla selezione utente"
+      >
+        <X className="h-5 w-5" strokeWidth={2.3} />
+      </div>
+      {userSelectElement}
+    </div>
+  ) : shouldShowUploadPanel ? (
+    <div className={cn("absolute inset-0 z-20 flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)]", isClosingUpload ? "upload-panel-exit pointer-events-none" : "upload-panel-enter")}>
+      {!requiresInitialUpload ? (
+        <div
+          role="button"
+          onClick={onCloseUpload}
+          className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
+          title="Esci dall'importazione"
+        >
+          <X className="h-5 w-5" strokeWidth={2.3} />
+        </div>
+      ) : null}
+      {previewTransactionsCount > 0 ? reviewElement : uploadElement}
+    </div>
+  ) : null;
+
   return (
-    <div className="flex-1 min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px] relative w-full flex flex-col justify-center">
-      {showSettingsView ? (
-        <div className={cn("relative w-full h-full flex flex-col justify-center", isClosingSettings ? "upload-panel-exit" : "upload-panel-enter")}>
-          <div
-            role="button"
-            onClick={onCloseSettings}
-            className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
-            title="Esci dalle impostazioni"
-          >
-            <X className="h-5 w-5" strokeWidth={2.3} />
-          </div>
-          {settingsElement}
-        </div>
-      ) : showUserSelectView ? (
-        <div className={cn("relative w-full h-full flex flex-col justify-center", isClosingUserSelect ? "upload-panel-exit" : "upload-panel-enter")}>
-          <div
-            role="button"
-            onClick={onCloseUserSelect}
-            className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
-            title="Esci dalla selezione utente"
-          >
-            <X className="h-5 w-5" strokeWidth={2.3} />
-          </div>
-          {userSelectElement}
-        </div>
-      ) : shouldShowUploadPanel ? (
-        <div className={cn("relative w-full h-full flex flex-col justify-center", isClosingUpload ? "upload-panel-exit" : "upload-panel-enter")}>
-          {!requiresInitialUpload ? (
-            <div
-              role="button"
-              onClick={onCloseUpload}
-              className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
-              title="Esci dall'importazione"
-            >
-              <X className="h-5 w-5" strokeWidth={2.3} />
-            </div>
-          ) : null}
-          {previewTransactionsCount > 0 ? reviewElement : uploadElement}
-        </div>
-      ) : (
-        <>
+    <div className="relative flex w-full flex-1 flex-col justify-center overflow-hidden rounded-[18px] min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px]">
+      <div className={cn("absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", !isChartVisible && "pointer-events-none")}>
           <div className="absolute top-0 right-0 z-10 flex items-center justify-end gap-0.5">
             {activeTab === "investment" && (
               <button
@@ -306,7 +317,7 @@ export function DashboardChart({
           </div>
 
           <div className="flex-1 min-h-0 w-full pt-10 focus:outline-none outline-none">
-            <div className="relative w-full h-full" onClick={() => { setSelectedMonth(null); setSelectedSeriesKey(null); }}>
+            <div ref={chartContainerRef} className="relative w-full h-full" onClick={() => { setSelectedMonth(null); setSelectedSeriesKey(null); }}>
               <div id="chart-reference-overlay" className="absolute inset-0 pointer-events-none z-10" />
               <style dangerouslySetInnerHTML={{ __html: `
                 .recharts-wrapper, .recharts-wrapper *, .recharts-surface, .recharts-surface *, .recharts-container, .recharts-container * {
@@ -314,8 +325,10 @@ export function DashboardChart({
                   box-shadow: none !important;
                 }
               `}} />
-              <ResponsiveContainer width="100%" height="100%">
+              {chartReady ? (
                 <LineChart
+                  width={chartSize.width}
+                  height={chartSize.height}
                   data={processedChartData}
                   margin={{
                     top: 8,
@@ -455,8 +468,8 @@ export function DashboardChart({
                       label={<CustomReferenceLabel selectedValue={selectedValue} />}
                     />
                   )}
-                </LineChart>
-              </ResponsiveContainer>
+              </LineChart>
+              ) : null}
             </div>
           </div>
 
@@ -508,8 +521,8 @@ export function DashboardChart({
               </div>
             );
           })()}
-        </>
-      )}
+      </div>
+      {panelOverlay}
     </div>
   );
 }

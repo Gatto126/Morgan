@@ -218,11 +218,11 @@ button:active *,
 }
 
 .upload-panel-enter {
-  animation: uploadSlideDown 0.25s ease-out both;
+  animation: uploadSlideDown 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .upload-panel-exit {
-  animation: uploadSlideUp 0.25s ease-in both;
+  animation: uploadSlideUp 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes submenuFadeIn {
@@ -268,15 +268,6 @@ button:active *,
   to { transform: rotate(360deg); }
 }
 
-@keyframes cardEnter {
-  from { opacity: 0; transform: translateY(18px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.card-enter {
-  animation: cardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
 @keyframes deleteConfirmSlideIn {
   from { opacity: 0; transform: translateX(24px); }
   to   { opacity: 1; transform: translateX(0); }
@@ -284,15 +275,6 @@ button:active *,
 
 .animate-delete-confirm-in {
   animation: deleteConfirmSlideIn 0.22s ease-out forwards;
-}
-
-@keyframes valueFlash {
-  from { opacity: 0; transform: translateY(5px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.value-flash {
-  animation: valueFlash 0.32s ease-out both;
 }
 
 /* Hide duplicate native browser password reveal and autofill controls */

@@ -11,7 +11,7 @@ type DashboardLoadingOverlayProps = {
 
 export function DashboardErrorState({ error, isActive }: DashboardStatusProps & { error: string }) {
   return (
-    <div className={cn("flex h-full items-center justify-center", !isActive && "absolute inset-0 pointer-events-none opacity-0 invisible")}>
+    <div className={cn("absolute inset-0 flex h-full items-center justify-center", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
       <p className="text-sm text-[color:var(--danger)]">{error}</p>
     </div>
   );
@@ -27,9 +27,8 @@ export function DashboardLoadingOverlay({
 
   return (
     <div
-      className="absolute inset-0 z-[60] flex items-center justify-center"
+      className="absolute -inset-3 z-[60] flex items-center justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)] sm:-inset-5"
       style={{
-        background: "var(--surface-canvas)",
         opacity: loadingOverlayFadingOut ? 0 : 1,
         transition: loadingOverlayFadingOut ? "opacity 550ms cubic-bezier(0.4,0,0.2,1)" : "none",
         pointerEvents: loadingOverlayFadingOut ? "none" : "all"
@@ -55,7 +54,7 @@ export function DashboardLoadingState({
   loadingOverlayFadingOut
 }: DashboardStatusProps & DashboardLoadingOverlayProps) {
   return (
-    <div className={cn("flex h-full flex-col gap-4 overflow-hidden relative w-full", !isActive && "absolute inset-0 pointer-events-none opacity-0 invisible")}>
+    <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
       <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} loadingOverlayFadingOut={loadingOverlayFadingOut} />
     </div>
   );

@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Bitcoin, X } from "lucide-react";
-import { Line, LineChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Line, LineChart, CartesianGrid, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
 import { cn } from "@/lib/utils";
 import type { ActiveDotProps, ChartPoint, ChartTooltipPayload } from "@/types/chart";
 
@@ -125,6 +126,7 @@ interface BinanceDashboardProps {
   previewTransactionsCount?: number;
   transactionCount?: number;
   isActive?: boolean;
+  shouldLoad?: boolean;
   showSettingsView?: boolean;
   isClosingSettings?: boolean;
   onCloseSettings?: () => void;
@@ -144,6 +146,7 @@ export function BinanceDashboard({
   reviewElement,
   previewTransactionsCount = 0,
   isActive = true,
+  shouldLoad = isActive,
   showSettingsView = false,
   isClosingSettings = false,
   onCloseSettings,
@@ -165,21 +168,21 @@ export function BinanceDashboard({
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Fetch balances when becoming active or on first mount
   useEffect(() => {
-    if (!isActive) return;
+    if (!shouldLoad) return;
     fetch(`/api/binance/balances?userId=${userId}`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data.balances)) setBalances(data.balances);
       })
       .catch(() => {});
-  }, [isActive, userId]);
+  }, [shouldLoad, userId]);
 
   const totalEur = useMemo(() => balances.reduce((sum, b) => sum + b.eurValue, 0), [balances]);
 
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;
+  const { chartContainerRef, chartReady, chartSize } = useChartContainerReady();
   const tabsPortalNode = typeof document === "undefined" ? null : document.getElementById("dashboard-tabs-portal");
 
   // Empty chart data (historical tracking not yet implemented)
@@ -211,9 +214,32 @@ export function BinanceDashboard({
     });
     return ticks;
   }, [chartData]);
+  const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
+  const panelOverlay = showUploadView ? (
+    <div className={cn("absolute inset-0 z-20 flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)]", isClosingUpload ? "upload-panel-exit pointer-events-none" : "upload-panel-enter")}>
+      <div role="button" onClick={onCloseUpload} className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white" title="Esci dall'importazione">
+        <X className="h-5 w-5" strokeWidth={2.3} />
+      </div>
+      {previewTransactionsCount > 0 ? reviewElement : uploadElement}
+    </div>
+  ) : showSettingsView ? (
+    <div className={cn("absolute inset-0 z-20 flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)]", isClosingSettings ? "upload-panel-exit pointer-events-none" : "upload-panel-enter")}>
+      <div role="button" onClick={onCloseSettings} className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white" title="Esci dalle impostazioni">
+        <X className="h-5 w-5" strokeWidth={2.3} />
+      </div>
+      {settingsElement}
+    </div>
+  ) : showUserSelectView ? (
+    <div className={cn("absolute inset-0 z-20 flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)]", isClosingUserSelect ? "upload-panel-exit pointer-events-none" : "upload-panel-enter")}>
+      <div role="button" onClick={onCloseUserSelect} className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white" title="Esci dalla selezione utente">
+        <X className="h-5 w-5" strokeWidth={2.3} />
+      </div>
+      {userSelectElement}
+    </div>
+  ) : null;
 
   return (
-    <div className={cn("relative flex h-full flex-col gap-4 overflow-hidden w-full", !isActive && "absolute inset-0 pointer-events-none opacity-0 invisible")}>
+    <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4 overflow-hidden", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
       {/* Tabs Portal */}
       {tabsPortalNode &&
         createPortal(
@@ -231,30 +257,8 @@ export function BinanceDashboard({
         )}
 
       {/* Chart Area */}
-      <div className="relative flex w-full flex-1 flex-col min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px] justify-center">
-        {showUploadView ? (
-          <div className={cn("relative w-full h-full flex flex-col justify-center", isClosingUpload ? "upload-panel-exit" : "upload-panel-enter")}>
-            <div role="button" onClick={onCloseUpload} className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white" title="Esci dall'importazione">
-              <X className="h-5 w-5" strokeWidth={2.3} />
-            </div>
-            {previewTransactionsCount > 0 ? reviewElement : uploadElement}
-          </div>
-        ) : showSettingsView ? (
-          <div className={cn("relative w-full h-full flex flex-col justify-center", isClosingSettings ? "upload-panel-exit" : "upload-panel-enter")}>
-            <div role="button" onClick={onCloseSettings} className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white" title="Esci dalle impostazioni">
-              <X className="h-5 w-5" strokeWidth={2.3} />
-            </div>
-            {settingsElement}
-          </div>
-        ) : showUserSelectView ? (
-          <div className={cn("relative w-full h-full flex flex-col justify-center", isClosingUserSelect ? "upload-panel-exit" : "upload-panel-enter")}>
-            <div role="button" onClick={onCloseUserSelect} className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white" title="Esci dalla selezione utente">
-              <X className="h-5 w-5" strokeWidth={2.3} />
-            </div>
-            {userSelectElement}
-          </div>
-        ) : (
-          <>
+      <div className="relative flex w-full flex-1 flex-col justify-center overflow-hidden rounded-[18px] min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px]">
+        <div className={cn("absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", isPanelOpen && "pointer-events-none")}>
             <div className="absolute right-0 top-0 z-10 flex items-center justify-end gap-0.5">
               {TIME_RANGES.map((range) => (
                 <button
@@ -273,11 +277,11 @@ export function BinanceDashboard({
             </div>
 
             <div className="mt-10 flex-1 min-h-0 w-full outline-none" onClick={() => setSelectedPoint(null)}>
-              <div className="relative h-full w-full">
+              <div ref={chartContainerRef} className="relative h-full w-full">
                 <style dangerouslySetInnerHTML={{ __html: `.recharts-wrapper, .recharts-wrapper *, .recharts-surface, .recharts-surface *, .recharts-container, .recharts-container * { outline: none !important; box-shadow: none !important; }` }} />
                 <div id="chart-reference-overlay" className="pointer-events-none absolute inset-0 z-10" />
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 8, right: baseMargin, bottom: 0, left: baseMargin }} accessibilityLayer={false}>
+                {chartReady ? (
+                  <LineChart width={chartSize.width} height={chartSize.height} data={chartData} margin={{ top: 8, right: baseMargin, bottom: 0, left: baseMargin }} accessibilityLayer={false}>
                     <XAxis
                       dataKey="rawMonth"
                       axisLine={false}
@@ -319,7 +323,7 @@ export function BinanceDashboard({
                     />
                     {selectedPoint && <ReferenceLine y={selectedPoint.value} stroke="rgba(254,254,254,0.5)" strokeWidth={1.5} strokeDasharray="6 4" label={<CustomReferenceLabel selectedValue={selectedPoint.value} />} />}
                   </LineChart>
-                </ResponsiveContainer>
+                ) : null}
               </div>
             </div>
 
@@ -331,8 +335,8 @@ export function BinanceDashboard({
                 </div>
               </div>
             </div>
-          </>
-        )}
+        </div>
+        {panelOverlay}
       </div>
 
     </div>

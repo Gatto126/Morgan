@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { globalLivePricesCache, saveLivePricesToCache } from "@/lib/live-prices";
 
@@ -8,14 +8,17 @@ type UsePortfolioLivePricesOptions = {
   providers: PortfolioProviderSummary[] | undefined;
   priceQueryParam: PortfolioDashboardConfig["priceQueryParam"];
   isActive: boolean;
+  shouldLoad: boolean;
 };
 
 export function usePortfolioLivePrices({
   providers,
   priceQueryParam,
-  isActive
+  isActive,
+  shouldLoad
 }: UsePortfolioLivePricesOptions) {
   const [livePrices, setLivePrices] = useState<Record<string, number | null>>(globalLivePricesCache);
+  const lastPreloadKeyRef = useRef("");
 
   const fetchLivePrices = useCallback(async (currentProviders: PortfolioProviderSummary[]) => {
     const allIsins = new Set<string>();
@@ -37,6 +40,24 @@ export function usePortfolioLivePrices({
       // Live prices are opportunistic; cached or invested values remain visible on failure.
     }
   }, [priceQueryParam]);
+
+  useEffect(() => {
+    if (!shouldLoad || !providers) return;
+
+    const requestKey = providers
+      .flatMap((provider) => provider.products)
+      .filter((product) => product.isin && product.quantity > 0.000001)
+      .map((product) => product.isin)
+      .sort()
+      .join(",");
+
+    if (!requestKey || lastPreloadKeyRef.current === requestKey) {
+      return;
+    }
+
+    lastPreloadKeyRef.current = requestKey;
+    void fetchLivePrices(providers);
+  }, [providers, fetchLivePrices, shouldLoad]);
 
   useEffect(() => {
     if (!isActive || !providers) return;

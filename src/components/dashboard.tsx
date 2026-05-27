@@ -26,6 +26,7 @@ interface DashboardProps {
   cryptoCount?: number;
   transactionCount?: number;
   isActive?: boolean;
+  shouldLoad?: boolean;
   showSettingsView?: boolean;
   isClosingSettings?: boolean;
   onCloseSettings?: () => void;
@@ -51,6 +52,7 @@ export function Dashboard({
   cryptoCount = 0,
   transactionCount = 0,
   isActive = true,
+  shouldLoad = isActive,
   showSettingsView = false,
   isClosingSettings = false,
   onCloseSettings,
@@ -64,7 +66,6 @@ export function Dashboard({
 }: DashboardProps) {
   const {
     binanceBalances,
-    isBinanceNew,
     isBinanceSyncing,
     filterSmallBinance,
     setFilterSmallBinance,
@@ -72,30 +73,38 @@ export function Dashboard({
   } = useBinanceBalances({
     userId,
     isActive,
+    shouldLoad,
     binanceRefreshKey
   });
-  const { data, loading, error, newProviderKeys } = useDashboardData({
+  const { data, loading, error, importRefreshVersion } = useDashboardData({
     userId,
     isActive,
-    transactionCount,
-    onImportRefreshComplete
+    shouldLoad,
+    transactionCount
   });
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
   const [loadingOverlayFadingOut, setLoadingOverlayFadingOut] = useState(false);
   const [contentVisible, setContentVisible] = useState(false);
+  const [chartReady, setChartReady] = useState(false);
   const firstLoadCompletedRef = useRef(false);
+  const completedImportRefreshVersionRef = useRef(0);
+  const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
   const [activeTab, setActiveTab] = useState<AccountTab>("heritage");
   const [timeRange, setTimeRange] = useState<TimeRange>("ALL");
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [selectedSeriesKey, setSelectedSeriesKey] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const livePrices = useDashboardLivePrices(data?.providerSummaries, isActive);
+  const livePrices = useDashboardLivePrices(data?.providerSummaries, { isActive, shouldLoad: shouldLoad && !!data });
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const [prevActiveTab, setPrevActiveTab] = useState<AccountTab>(activeTab);
   const [showSoldAssets, setShowSoldAssets] = useState(false);
   const [activeChartPoint, setActiveChartPoint] = useState<DashboardChartPoint | null>(null);
   const requiresInitialUpload = transactionCount === 0;
   const shouldShowUploadPanel = (showUploadView || requiresInitialUpload) && !showSettingsView && !showUserSelectView;
+
+  useEffect(() => {
+    onImportRefreshCompleteRef.current = onImportRefreshComplete;
+  }, [onImportRefreshComplete]);
 
   const visibleTabs = useMemo(() => {
     return ACCOUNT_TABS.filter((tab) => {
@@ -177,19 +186,6 @@ export function Dashboard({
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
-
-  useEffect(() => {
-    if (!loading && !firstLoadCompletedRef.current) {
-      firstLoadCompletedRef.current = true;
-      setLoadingOverlayFadingOut(true);
-      setContentVisible(true);
-      const t = setTimeout(() => {
-        setShowLoadingOverlay(false);
-        setLoadingOverlayFadingOut(false);
-      }, 550);
-      return () => clearTimeout(t);
-    }
-  }, [loading]);
 
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;
@@ -445,6 +441,56 @@ export function Dashboard({
     }
   }, [activeTab, checkingCount, checkingProviders, cryptoCount, cryptoInstitutions, binanceBalances, investmentCount, investmentProducts, showSoldAssets, data?.providerSummaries]);
 
+  const hasRenderableChartData = useMemo(() => {
+    const seriesKeys = ["value", ...chartConfig.subLines.map((series) => series.key)];
+
+    return chartData.some((point) =>
+      seriesKeys.some((key) => {
+        const value = point[key];
+        return typeof value === "number" && Number.isFinite(value);
+      })
+    );
+  }, [chartData, chartConfig]);
+
+  const initialDashboardVisualReady =
+    !!data && !loading && (shouldShowUploadPanel || transactionCount === 0 || chartReady);
+  const importDashboardVisualReady =
+    !!data && !loading && (shouldShowUploadPanel || transactionCount === 0 || (chartReady && hasRenderableChartData));
+  const importRefreshSettled = !loading && (error !== null || importDashboardVisualReady);
+
+  useEffect(() => {
+    if (!initialDashboardVisualReady || firstLoadCompletedRef.current) {
+      return;
+    }
+
+    firstLoadCompletedRef.current = true;
+    setLoadingOverlayFadingOut(true);
+    setContentVisible(true);
+    const timer = window.setTimeout(() => {
+      setShowLoadingOverlay(false);
+      setLoadingOverlayFadingOut(false);
+    }, 550);
+    return () => window.clearTimeout(timer);
+  }, [initialDashboardVisualReady]);
+
+  useEffect(() => {
+    if (
+      importRefreshVersion === 0 ||
+      completedImportRefreshVersionRef.current >= importRefreshVersion ||
+      !importRefreshSettled ||
+      !onImportRefreshCompleteRef.current
+    ) {
+      return;
+    }
+
+    completedImportRefreshVersionRef.current = importRefreshVersion;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        onImportRefreshCompleteRef.current?.();
+      });
+    });
+  }, [importRefreshSettled, importRefreshVersion]);
+
   if (!loading && error) {
     return <DashboardErrorState error={error} isActive={isActive} />;
   }
@@ -498,7 +544,7 @@ export function Dashboard({
   };
 
   return (
-    <div className={cn("flex h-full flex-col gap-4 overflow-hidden relative w-full", !isActive && "absolute inset-0 pointer-events-none opacity-0 invisible")}>
+    <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
       <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} loadingOverlayFadingOut={loadingOverlayFadingOut} />
       <DashboardTabs
         portalNode={portalNode}
@@ -548,6 +594,7 @@ export function Dashboard({
         setSelectedMonth={setSelectedMonth}
         setSelectedSeriesKey={setSelectedSeriesKey}
         transactionCount={transactionCount}
+        onChartReadyChange={setChartReady}
       />
       <DashboardCards
         cardsPortalNode={cardsPortalNode}
@@ -555,10 +602,8 @@ export function Dashboard({
         contentVisible={contentVisible}
         data={data}
         timeRange={timeRange}
-        newProviderKeys={newProviderKeys}
         livePrices={livePrices}
         binanceBalances={binanceBalances}
-        isBinanceNew={isBinanceNew}
         isBinanceSyncing={isBinanceSyncing}
         filterSmallBinance={filterSmallBinance}
         setFilterSmallBinance={setFilterSmallBinance}

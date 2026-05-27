@@ -211,6 +211,9 @@ export function useTransactionImport({
 
       resetPreview();
       onSuccess?.();
+      if (insertedCount === 0) {
+        handleImportRefreshComplete();
+      }
     } catch (approvalError) {
       setError(approvalError instanceof Error ? approvalError.message : "Salvataggio delle transazioni non riuscito.");
       if (!importOverlayDismissedRef.current) {

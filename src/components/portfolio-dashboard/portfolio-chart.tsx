@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChartBar, ChartGantt } from "lucide-react";
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 
+import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
 import { cn } from "@/lib/utils";
 import type { ActiveDotProps, ChartPoint, ChartTooltipPayload } from "@/types/chart";
 
@@ -98,6 +99,7 @@ type PortfolioChartProps = {
   onToggleSeries: (key: string) => void;
   onToggleSoldAssets: () => void;
   onSetActiveChartPoint: (point: ChartPoint | null) => void;
+  onChartReadyChange: (ready: boolean) => void;
 };
 
 export function PortfolioChart({
@@ -116,10 +118,16 @@ export function PortfolioChart({
   onSelectPoint,
   onToggleSeries,
   onToggleSoldAssets,
-  onSetActiveChartPoint
+  onSetActiveChartPoint,
+  onChartReadyChange
 }: PortfolioChartProps) {
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;
+  const { chartContainerRef, chartReady, chartSize } = useChartContainerReady();
+
+  useEffect(() => {
+    onChartReadyChange(chartReady);
+  }, [chartReady, onChartReadyChange]);
 
   return (
     <>
@@ -143,7 +151,7 @@ export function PortfolioChart({
       </div>
 
       <div className="mt-10 flex-1 min-h-0 w-full outline-none" onClick={() => onSelectPoint(null)}>
-        <div className="relative h-full w-full">
+        <div ref={chartContainerRef} className="relative h-full w-full">
           <style dangerouslySetInnerHTML={{ __html: `
             .recharts-wrapper, .recharts-wrapper *, .recharts-surface, .recharts-surface *, .recharts-container, .recharts-container * {
               outline: none !important;
@@ -151,8 +159,8 @@ export function PortfolioChart({
             }
           `}} />
           <div id="chart-reference-overlay" className="pointer-events-none absolute inset-0 z-10" />
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 8, right: baseMargin, bottom: 0, left: baseMargin }} accessibilityLayer={false}>
+          {chartReady ? (
+            <LineChart width={chartSize.width} height={chartSize.height} data={chartData} margin={{ top: 8, right: baseMargin, bottom: 0, left: baseMargin }} accessibilityLayer={false}>
               <XAxis
                 dataKey="rawMonth"
                 axisLine={false}
@@ -286,7 +294,7 @@ export function PortfolioChart({
               )}
               {selectedPoint && <ReferenceLine y={selectedPoint.value} stroke="rgba(254, 254, 254, 0.5)" strokeWidth={1.5} strokeDasharray="6 4" label={<CustomReferenceLabel selectedValue={selectedPoint.value} />} />}
             </LineChart>
-          </ResponsiveContainer>
+          ) : null}
         </div>
       </div>
 

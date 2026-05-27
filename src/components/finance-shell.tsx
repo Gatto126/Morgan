@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { cn, getInitials } from "@/lib/utils";
 
+const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
 const restorableStages = new Set<Stage>(["welcome", "select", "create", "dashboard", "checking", "investment", "settings", "binance", "crypto"]);
 
 function isRestorableStage(value: string | null): value is Stage {
@@ -153,6 +154,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     clearApiKeyDraft,
     clearPanelFeedback
   });
+  const isDashboardStage = dashboardStages.has(stage);
 
   useEffect(() => {
     if (showCreateUserSubmenu && createUserInputRef.current) {
@@ -576,6 +578,68 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         onPreviousPage={goToPreviousPage}
         onNextPage={goToNextPage}
       />
+    );
+  }
+
+  function renderDashboardFrameOverlay() {
+    if (!isDashboardStage || !activeUser) {
+      return null;
+    }
+
+    const showUploadPanel = showUploadView;
+    const showSettingsPanel = !showUploadPanel && showSettingsView;
+    const showUserSelectPanel = !showUploadPanel && !showSettingsPanel && showUserSelectView;
+
+    if (!showUploadPanel && !showSettingsPanel && !showUserSelectPanel) {
+      return null;
+    }
+
+    const isClosingPanel = showUploadPanel
+      ? isClosingUpload
+      : showSettingsPanel
+        ? isClosingSettings
+        : isClosingUserSelect;
+
+    const closeTitle = showUploadPanel
+      ? "Esci dall'importazione"
+      : showSettingsPanel
+        ? "Esci dalle impostazioni"
+        : "Esci dalla selezione utente";
+
+    const handleClosePanel = showUploadPanel
+      ? handleCloseUpload
+      : showSettingsPanel
+        ? handleCloseSettings
+        : handleCloseUserSelect;
+
+    const shouldShowClose = !showUploadPanel || activeUser.transactionCount !== 0;
+    const panelContent = showUploadPanel
+      ? (previewTransactions.length > 0 ? renderReviewState() : renderUploadState())
+      : showSettingsPanel
+        ? renderSettingsState()
+        : renderUserSelectState();
+
+    return (
+      <div
+        className={cn(
+          "absolute inset-0 z-[55] flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)]",
+          isClosingPanel ? "upload-panel-exit pointer-events-none" : "upload-panel-enter"
+        )}
+      >
+        {shouldShowClose ? (
+          <div
+            role="button"
+            onClick={handleClosePanel}
+            className="absolute right-4 top-4 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
+            title={closeTitle}
+          >
+            <XIcon className="h-5 w-5" strokeWidth={2.3} />
+          </div>
+        ) : null}
+        <div className="relative flex h-full w-full flex-col justify-center px-3 py-3 sm:px-5 sm:py-5">
+          {panelContent}
+        </div>
+      </div>
     );
   }
 
@@ -1045,9 +1109,8 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
             <div className="relative flex min-h-0 w-full overflow-hidden rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)]">
               {importOverlayVisible && (
                 <div
-                  className="absolute inset-0 z-[60] flex flex-col items-center justify-center rounded-[20px]"
+                  className="absolute inset-0 z-[60] flex h-full w-full flex-col items-center justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)]"
                   style={{
-                    background: "var(--surface-canvas)",
                     opacity: importOverlayFadingOut ? 0 : 1,
                     transition: importOverlayFadingOut ? "opacity 550ms cubic-bezier(0.4,0,0.2,1)" : "opacity 180ms ease",
                     pointerEvents: importOverlayFadingOut ? "none" : "all"
@@ -1075,13 +1138,15 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                 type="file"
               />
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.015),transparent_22%)]" />
+              {renderDashboardFrameOverlay()}
               <div className="relative flex w-full min-h-0 items-center justify-center p-3 sm:p-5">
                 <div className="h-full w-full max-w-none">
-                  <div className="flex h-full min-h-0 flex-col justify-center">
+                  <div className="relative flex h-full min-h-0 flex-col justify-center">
                     {activeUser ? (
-                      <>
+                      <div className={cn("absolute inset-0", isDashboardStage ? "z-10" : "z-0 pointer-events-none opacity-0 invisible")}>
                         <Dashboard
                           isActive={stage === "dashboard"}
+                          shouldLoad={activeUser.transactionCount > 0 || stage === "dashboard"}
                           key={`dashboard-${activeUser.id}`}
                           userId={activeUser.id}
                           binanceRefreshKey={binanceRefreshKey}
@@ -1108,6 +1173,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                         {activeUser.checkingCount > 0 && (
                           <CheckingDashboard
                             isActive={stage === "checking"}
+                            shouldLoad
                             key={`checking-${activeUser.id}`}
                             userId={activeUser.id}
                             onImportRefreshComplete={stage === "checking" ? handleImportRefreshComplete : undefined}
@@ -1131,6 +1197,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                         {activeUser.investmentCount > 0 && (
                           <InvestmentDashboard
                             isActive={stage === "investment"}
+                            shouldLoad
                             key={`investment-${activeUser.id}`}
                             userId={activeUser.id}
                             onImportRefreshComplete={stage === "investment" ? handleImportRefreshComplete : undefined}
@@ -1154,6 +1221,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                         {activeUser.cryptoCount > 0 && (
                           <CryptoDashboard
                             isActive={stage === "crypto"}
+                            shouldLoad
                             key={`crypto-${activeUser.id}`}
                             userId={activeUser.id}
                             onImportRefreshComplete={stage === "crypto" ? handleImportRefreshComplete : undefined}
@@ -1177,6 +1245,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                         {activeUser.hasBinanceCredentials && (
                           <BinanceDashboard
                             isActive={stage === "binance"}
+                            shouldLoad
                             key={`binance-${activeUser.id}`}
                             userId={activeUser.id}
                             showUploadView={showUploadView}
@@ -1196,10 +1265,10 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                             userSelectElement={renderUserSelectState()}
                           />
                         )}
-                      </>
+                      </div>
                     ) : null}
 
-                    {!["dashboard", "checking", "investment", "binance", "crypto"].includes(stage) ? (
+                    {!isDashboardStage ? (
                       <>
                         {renderStageContent()}
                         {error ? <p className="text-sm text-[color:var(--danger)]">{error}</p> : null}

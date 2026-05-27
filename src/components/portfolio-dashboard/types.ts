@@ -86,6 +86,7 @@ export interface PortfolioDashboardProps {
   previewTransactionsCount?: number;
   transactionCount?: number;
   isActive?: boolean;
+  shouldLoad?: boolean;
   showSettingsView?: boolean;
   isClosingSettings?: boolean;
   onCloseSettings?: () => void;

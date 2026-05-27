@@ -8,7 +8,7 @@ type UsePortfolioDashboardDataOptions = {
   userId: string;
   transactionCount: number;
   isActive: boolean;
-  onImportRefreshComplete?: () => void;
+  shouldLoad: boolean;
 };
 
 export function usePortfolioDashboardData({
@@ -17,21 +17,18 @@ export function usePortfolioDashboardData({
   userId,
   transactionCount,
   isActive,
-  onImportRefreshComplete
+  shouldLoad
 }: UsePortfolioDashboardDataOptions) {
   const [data, setData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+  const [importRefreshVersion, setImportRefreshVersion] = useState(0);
   const [newProviderKeys, setNewProviderKeys] = useState<Set<string>>(new Set());
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
   const pendingImportRefreshRef = useRef(false);
-  const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
   const lastRefreshTransactionCountRef = useRef(transactionCount);
-
-  useEffect(() => {
-    onImportRefreshCompleteRef.current = onImportRefreshComplete;
-  }, [onImportRefreshComplete]);
+  const hasLoadedRef = useRef(false);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -59,19 +56,29 @@ export function usePortfolioDashboardData({
       if (pendingImportRefreshRef.current) {
         pendingImportRefreshRef.current = false;
         setDataVersion(version => version + 1);
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          onImportRefreshCompleteRef.current?.();
-        }));
+        setImportRefreshVersion(version => version + 1);
       }
     }
   }, [endpoint, fetchErrorMessage, userId]);
+
+  useEffect(() => {
+    if (!shouldLoad || hasLoadedRef.current) {
+      return;
+    }
+
+    hasLoadedRef.current = true;
+    void fetchDashboard();
+  }, [fetchDashboard, shouldLoad]);
 
   useEffect(() => {
     if (!isActive) {
       return;
     }
 
-    void fetchDashboard();
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      void fetchDashboard();
+    }
     const interval = window.setInterval(() => { void fetchDashboard(); }, 60_000);
     const handleFocus = () => { void fetchDashboard(); };
     window.addEventListener("focus", handleFocus);
@@ -82,20 +89,21 @@ export function usePortfolioDashboardData({
   }, [fetchDashboard, isActive]);
 
   useEffect(() => {
-    if (!isActive || loading || lastRefreshTransactionCountRef.current === transactionCount) {
+    if (!shouldLoad || loading || lastRefreshTransactionCountRef.current === transactionCount) {
       return;
     }
 
     lastRefreshTransactionCountRef.current = transactionCount;
     pendingImportRefreshRef.current = true;
     void fetchDashboard();
-  }, [transactionCount, isActive, loading, fetchDashboard]);
+  }, [transactionCount, shouldLoad, loading, fetchDashboard]);
 
   return {
     data,
     loading,
     error,
     dataVersion,
+    importRefreshVersion,
     newProviderKeys
   };
 }

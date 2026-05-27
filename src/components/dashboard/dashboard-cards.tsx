@@ -11,10 +11,8 @@ type DashboardCardsProps = {
   contentVisible: boolean;
   data: DashboardData;
   timeRange: TimeRange;
-  newProviderKeys: Set<string>;
   livePrices: Record<string, number | null>;
   binanceBalances: BinanceBalanceRow[];
-  isBinanceNew: boolean;
   isBinanceSyncing: boolean;
   filterSmallBinance: boolean;
   setFilterSmallBinance: Dispatch<SetStateAction<boolean>>;
@@ -29,10 +27,8 @@ export function DashboardCards({
   contentVisible,
   data,
   timeRange,
-  newProviderKeys,
   livePrices,
   binanceBalances,
-  isBinanceNew,
   isBinanceSyncing,
   filterSmallBinance,
   setFilterSmallBinance,
@@ -73,10 +69,8 @@ export function DashboardCards({
             const providerTaxPeriod = timeRange === "ALL"
               ? provider.checking.tax
               : filteredTimeData.reduce((sum, bucket) => sum + (bucket.providerTax?.[provider.sourceInstitution] || 0), 0);
-            const isNew = newProviderKeys.has(`checking-${provider.sourceInstitution}`);
-
             return (
-              <div key={`checking-${provider.sourceInstitution}`} className={cn("flex flex-col gap-4 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4", isNew && "card-enter")}>
+              <div key={`checking-${provider.sourceInstitution}`} className="flex flex-col gap-4 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[color:var(--text-main)]">
                     {formatProviderLabel(provider.sourceInstitution)}
@@ -144,7 +138,7 @@ export function DashboardCards({
             .map((provider) => ({ ...provider, investmentProducts: provider.investmentProducts.filter((product) => Math.abs(product.quantity) > 0.000001) }))
             .filter((provider) => provider.investmentProducts.length > 0)
             .map((provider) => (
-              <div key={`investment-${provider.sourceInstitution}`} className={cn("flex flex-col gap-4 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4", newProviderKeys.has(`investment-${provider.sourceInstitution}`) && "card-enter")}>
+              <div key={`investment-${provider.sourceInstitution}`} className="flex flex-col gap-4 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[color:var(--text-main)]">
                     {formatProviderLabel(provider.sourceInstitution)}
@@ -155,9 +149,8 @@ export function DashboardCards({
                 </div>
                 <div className="space-y-4">
                   {provider.investmentProducts.map((product) => {
-                    const isInvNew = newProviderKeys.has(`investment-${provider.sourceInstitution}`);
                     return (
-                      <div key={product.productName} className={isInvNew ? "card-enter" : undefined}>
+                      <div key={product.productName}>
                         <hr className="mb-3 border-[color:var(--line-strong)] opacity-50" />
                         <div className="mb-1.5 flex items-start justify-between min-w-0">
                           <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--text-main)] break-words w-0 flex-1 pr-3">
@@ -235,7 +228,7 @@ export function DashboardCards({
             .map((provider) => ({ ...provider, cryptoTokens: provider.cryptoTokens.filter((token) => Math.abs(token.quantity) > 0.000001) }))
             .filter((provider) => provider.cryptoTokens.length > 0)
             .map((provider) => (
-              <div key={`crypto-${provider.sourceInstitution}`} className={cn("flex flex-col gap-4 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4", newProviderKeys.has(`crypto-${provider.sourceInstitution}`) && "card-enter")}>
+              <div key={`crypto-${provider.sourceInstitution}`} className="flex flex-col gap-4 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[color:var(--text-main)]">
@@ -248,9 +241,8 @@ export function DashboardCards({
                 </div>
                 <div className="space-y-4">
                   {provider.cryptoTokens.map((token) => {
-                    const isCryptoNew = newProviderKeys.has(`crypto-${provider.sourceInstitution}`);
                     return (
-                      <div key={token.tokenName} className={isCryptoNew ? "card-enter" : undefined}>
+                      <div key={token.tokenName}>
                         <hr className="mb-3 border-[color:var(--line-strong)] opacity-50" />
                         <div className="mb-1.5 flex items-center justify-between">
                           <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--text-main)]">
@@ -309,7 +301,7 @@ export function DashboardCards({
               : binanceBalances;
 
             return (
-              <div className={cn("flex flex-col gap-4 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4", isBinanceNew && "card-enter")}>
+              <div className="flex flex-col gap-4 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4">
                 <div className="flex items-center justify-between select-none">
                   <div
                     className="flex items-center gap-2 cursor-pointer"

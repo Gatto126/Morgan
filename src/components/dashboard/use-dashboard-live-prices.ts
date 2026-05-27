@@ -1,9 +1,42 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { globalLivePricesCache, saveLivePricesToCache } from "@/lib/live-prices";
 import type { ProviderSummary } from "./types";
 
-export function useDashboardLivePrices(providerSummaries: ProviderSummary[] | undefined, isActive: boolean) {
+type UseDashboardLivePricesOptions = {
+  isActive: boolean;
+  shouldLoad: boolean;
+};
+
+function getPriceRequestKey(summaries: ProviderSummary[] | undefined) {
+  if (!summaries) {
+    return "";
+  }
+
+  const isins = new Set<string>();
+  const cryptos = new Set<string>();
+
+  for (const provider of summaries) {
+    for (const product of provider.investmentProducts) {
+      if (product.isin && Math.abs(product.quantity) > 0.000001) {
+        isins.add(product.isin);
+      }
+    }
+    for (const token of provider.cryptoTokens) {
+      if (token.tokenSymbol && Math.abs(token.quantity) > 0.000001) {
+        cryptos.add(token.tokenSymbol);
+      }
+    }
+  }
+
+  return `${[...isins].sort().join(",")}|${[...cryptos].sort().join(",")}`;
+}
+
+export function useDashboardLivePrices(
+  providerSummaries: ProviderSummary[] | undefined,
+  { isActive, shouldLoad }: UseDashboardLivePricesOptions
+) {
   const [livePrices, setLivePrices] = useState<Record<string, number | null>>(globalLivePricesCache);
+  const lastPreloadKeyRef = useRef("");
 
   const fetchLivePrices = useCallback(async (summaries: ProviderSummary[]) => {
     const allIsins = new Set<string>();
@@ -45,6 +78,20 @@ export function useDashboardLivePrices(providerSummaries: ProviderSummary[] | un
       // Price updates are opportunistic; cached/dashboard values remain usable.
     }
   }, []);
+
+  useEffect(() => {
+    if (!shouldLoad || !providerSummaries) {
+      return;
+    }
+
+    const requestKey = getPriceRequestKey(providerSummaries);
+    if (!requestKey || lastPreloadKeyRef.current === requestKey) {
+      return;
+    }
+
+    lastPreloadKeyRef.current = requestKey;
+    void fetchLivePrices(providerSummaries);
+  }, [providerSummaries, fetchLivePrices, shouldLoad]);
 
   useEffect(() => {
     if (!isActive || !providerSummaries) {

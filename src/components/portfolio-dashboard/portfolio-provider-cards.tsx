@@ -10,8 +10,6 @@ type PortfolioProviderCardsProps = {
   providers: PortfolioProviderSummary[];
   config: Pick<PortfolioDashboardConfig, "identifierLabel" | "showCashback" | "transactionFilter">;
   livePrices: Record<string, number | null>;
-  dataVersion: number;
-  newProviderKeys: Set<string>;
   isActive: boolean;
   getProviderLiveTotal: (provider: PortfolioProviderSummary) => number;
 };
@@ -21,8 +19,6 @@ export function PortfolioProviderCards({
   providers,
   config,
   livePrices,
-  dataVersion,
-  newProviderKeys,
   isActive,
   getProviderLiveTotal
 }: PortfolioProviderCardsProps) {
@@ -30,14 +26,8 @@ export function PortfolioProviderCards({
 
   return createPortal(
     <div className={cn("flex flex-col gap-5 w-full pb-6 lg:pb-0", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
-      {providers.map((provider, index) => {
-        const isNew = newProviderKeys.has(provider.sourceInstitution);
-        return (
-          <div
-            key={provider.sourceInstitution}
-            className={cn("grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4", isNew && "card-enter")}
-            style={isNew ? { animationDelay: `${index * 80}ms` } : undefined}
-          >
+      {providers.map((provider) => (
+          <div key={provider.sourceInstitution} className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
             <div className="flex flex-col rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4 h-full">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[color:var(--text-main)]">
@@ -50,7 +40,7 @@ export function PortfolioProviderCards({
 
               <div className="mt-4 space-y-4 max-h-[400px] overflow-y-auto hide-scrollbar pr-1">
                 {provider.products.filter(product => Math.abs(product.quantity) > 0.000001).map((product) => (
-                  <div key={product.productName} className={isNew ? "card-enter" : undefined}>
+                  <div key={product.productName}>
                     <hr className="mb-3 border-[color:var(--line-strong)] opacity-50" />
                     <div className="mb-1.5 flex items-start justify-between min-w-0">
                       <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--text-main)] break-words w-0 flex-1 pr-3">
@@ -64,7 +54,7 @@ export function PortfolioProviderCards({
                       </span>
                     </div>
 
-                    <div key={`product-vals-${product.productName}-${isNew ? "s" : dataVersion}`} className={cn("space-y-1.5 text-sm", !isNew && dataVersion > 0 && "value-flash")}>
+                    <div className="space-y-1.5 text-sm">
                       <div className="flex justify-between">
                         <span className="pl-3 text-[color:var(--text-dim)] font-medium">{config.identifierLabel}</span>
                         <span className="font-semibold text-[color:var(--text-main)]">
@@ -132,7 +122,7 @@ export function PortfolioProviderCards({
                       .filter(config.transactionFilter)
                       .slice(0, 50)
                       .map((transaction) => (
-                        <tr key={transaction.id} className={cn("border-b border-[color:rgba(255,255,255,0.08)] align-middle last:border-b-0 hover:bg-[color:rgba(255,255,255,0.03)] transition-colors duration-150", isNew && "card-enter")}>
+                        <tr key={transaction.id} className="border-b border-[color:rgba(255,255,255,0.08)] align-middle last:border-b-0 hover:bg-[color:rgba(255,255,255,0.03)] transition-colors duration-150">
                           <td className="px-1.5 py-2 text-[color:var(--text-main)] sm:px-4">
                             <div className="font-semibold whitespace-nowrap">{new Date(transaction.bookingDate).toISOString().split("T")[0]}</div>
                           </td>
@@ -153,8 +143,7 @@ export function PortfolioProviderCards({
               </div>
             </div>
           </div>
-        );
-      })}
+      ))}
     </div>,
     portalNode
   );

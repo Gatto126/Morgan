@@ -4,12 +4,14 @@ import type { BinanceBalanceRow } from "./types";
 type UseBinanceBalancesOptions = {
   userId: string;
   isActive: boolean;
+  shouldLoad: boolean;
   binanceRefreshKey: number;
 };
 
 export function useBinanceBalances({
   userId,
   isActive,
+  shouldLoad,
   binanceRefreshKey
 }: UseBinanceBalancesOptions) {
   const [binanceBalances, setBinanceBalances] = useState<BinanceBalanceRow[]>([]);
@@ -18,6 +20,7 @@ export function useBinanceBalances({
   const [filterSmallBinance, setFilterSmallBinance] = useState(false);
   const prevBinanceCountRef = useRef(0);
   const binanceListRef = useRef<HTMLDivElement>(null);
+  const lastPreloadKeyRef = useRef("");
 
   const loadBinanceBalances = useCallback(async () => {
     const response = await fetch(`/api/binance/balances?userId=${userId}`);
@@ -65,6 +68,20 @@ export function useBinanceBalances({
       // Network errors leave the current Binance state untouched.
     }
   }, [loadBinanceBalances, userId]);
+
+  useEffect(() => {
+    if (!shouldLoad) {
+      return;
+    }
+
+    const preloadKey = `${userId}:${binanceRefreshKey}`;
+    if (lastPreloadKeyRef.current === preloadKey) {
+      return;
+    }
+
+    lastPreloadKeyRef.current = preloadKey;
+    void fetchBinanceBalances(true);
+  }, [fetchBinanceBalances, binanceRefreshKey, shouldLoad, userId]);
 
   useEffect(() => {
     if (!isActive) {

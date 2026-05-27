@@ -4,8 +4,8 @@ import type { DashboardData } from "./types";
 type UseDashboardDataOptions = {
   userId: string;
   isActive: boolean;
+  shouldLoad: boolean;
   transactionCount: number;
-  onImportRefreshComplete?: () => void;
 };
 
 type ProviderKeySource = {
@@ -36,20 +36,19 @@ function getProviderKeys(providerSummaries: ProviderKeySource[]) {
 export function useDashboardData({
   userId,
   isActive,
-  transactionCount,
-  onImportRefreshComplete
+  shouldLoad,
+  transactionCount
 }: UseDashboardDataOptions) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dataVersion, setDataVersion] = useState(0);
+  const [importRefreshVersion, setImportRefreshVersion] = useState(0);
   const [newProviderKeys, setNewProviderKeys] = useState<Set<string>>(new Set());
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
   const pendingImportRefreshRef = useRef(false);
-  const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
-
-  useEffect(() => {
-    onImportRefreshCompleteRef.current = onImportRefreshComplete;
-  }, [onImportRefreshComplete]);
+  const lastRefreshTransactionCountRef = useRef(transactionCount);
+  const hasLoadedRef = useRef(false);
 
   const fetchDashboard = useCallback(
     async () => {
@@ -74,6 +73,7 @@ export function useDashboardData({
         knownProviderKeysRef.current = currentKeys;
 
         setData(payload);
+        setDataVersion((version) => version + 1);
         setError(null);
       } catch (fetchError: unknown) {
         setError(fetchError instanceof Error ? fetchError.message : "Errore nel caricamento.");
@@ -82,9 +82,7 @@ export function useDashboardData({
         setLoading(false);
         if (pendingImportRefreshRef.current) {
           pendingImportRefreshRef.current = false;
-          requestAnimationFrame(() => requestAnimationFrame(() => {
-            onImportRefreshCompleteRef.current?.();
-          }));
+          setImportRefreshVersion((version) => version + 1);
         }
       }
     },
@@ -92,11 +90,24 @@ export function useDashboardData({
   );
 
   useEffect(() => {
+    if (!shouldLoad || hasLoadedRef.current) {
+      return;
+    }
+
+    hasLoadedRef.current = true;
+    void fetchDashboard();
+  }, [fetchDashboard, shouldLoad]);
+
+  useEffect(() => {
     if (!isActive) {
       return;
     }
 
     const initialLoad = window.setTimeout(() => {
+      if (hasLoadedRef.current) {
+        return;
+      }
+      hasLoadedRef.current = true;
       void fetchDashboard();
     }, 0);
 
@@ -118,16 +129,19 @@ export function useDashboardData({
   }, [fetchDashboard, isActive]);
 
   useEffect(() => {
-    if (!isActive || loading) {
+    if (!shouldLoad || loading || lastRefreshTransactionCountRef.current === transactionCount) {
       return;
     }
 
+    lastRefreshTransactionCountRef.current = transactionCount;
     pendingImportRefreshRef.current = true;
     void fetchDashboard();
-  }, [transactionCount, fetchDashboard, isActive, loading]);
+  }, [transactionCount, fetchDashboard, shouldLoad, loading]);
 
   return {
     data,
+    dataVersion,
+    importRefreshVersion,
     loading,
     error,
     newProviderKeys
