@@ -10,6 +10,10 @@ import { InvestmentDashboard } from "./investment-dashboard";
 import { BinanceDashboard } from "./binance-dashboard";
 import { CryptoDashboard } from "./crypto-dashboard";
 import { ReviewPanel } from "./finance-shell/review-panel";
+import {
+  canSubmitDeleteAccountDialog,
+  getDeleteAccountDialogResetState
+} from "./finance-shell/delete-account-dialog";
 import { SettingsPanel, type SettingsSection } from "./finance-shell/settings-panel";
 import type { UserRecord } from "./finance-shell/types";
 import { UploadPanel } from "./finance-shell/upload-panel";
@@ -21,7 +25,6 @@ import UserIcon from "./ui/user-icon";
 
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import { hasLocalPasswordInput } from "@/lib/local-auth";
 import { cn, getInitials } from "@/lib/utils";
 
 const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
@@ -94,9 +97,10 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
   const [showDeleteApiConfirm, setShowDeleteApiConfirm] = useState(false);
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
   const [deleteAccountPassword, setDeleteAccountPassword] = useState("");
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [binanceFading, setBinanceFading] = useState(false);
-  const [pinApiSettingsSection, setPinApiSettingsSection] = useState(false);
+  const [forceApiSettingsSection, setForceApiSettingsSection] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const createUserInputRef = useRef<HTMLInputElement | null>(null);
   const {
@@ -246,7 +250,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     if (!activeUser) return;
 
     const keepApiSettingsOpen = () => {
-      setPinApiSettingsSection(true);
+      setForceApiSettingsSection(true);
       setShowSettingsView(true);
       setActiveSettingsSection("apiKey");
       setShowUserSelectView(false);
@@ -491,7 +495,10 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
   }
 
   function openDeleteAccountConfirm() {
-    setDeleteAccountPassword("");
+    const resetState = getDeleteAccountDialogResetState();
+
+    setDeleteAccountPassword(resetState.password);
+    setDeleteAccountError(resetState.error);
     setShowDeleteAccountConfirm(true);
     setError(null);
     setNotice(null);
@@ -501,7 +508,9 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     if (isDeletingAccount) return;
 
     setShowDeleteAccountConfirm(false);
-    setDeleteAccountPassword("");
+    const resetState = getDeleteAccountDialogResetState();
+    setDeleteAccountPassword(resetState.password);
+    setDeleteAccountError(resetState.error);
   }
 
   async function handleDeleteAccount() {
@@ -509,7 +518,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
 
     try {
       setIsDeletingAccount(true);
-      setError(null);
+      setDeleteAccountError(null);
       const response = await fetch("/api/account", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -533,10 +542,12 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
       setActiveUser(null);
       setIsSignedOut(true);
       setShowDeleteAccountConfirm(false);
-      setDeleteAccountPassword("");
+      const resetState = getDeleteAccountDialogResetState();
+      setDeleteAccountPassword(resetState.password);
+      setDeleteAccountError(resetState.error);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error during account deletion.");
+      setDeleteAccountError(err instanceof Error ? err.message : "Error during account deletion.");
     } finally {
       setIsDeletingAccount(false);
     }
@@ -579,25 +590,25 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
 
   function handleSettingsSectionSelect(section: SettingsSection) {
     if (section !== "apiKey") {
-      setPinApiSettingsSection(false);
+      setForceApiSettingsSection(false);
     }
     toggleSettingsSection(section);
   }
 
   function handleSettingsPanelClose() {
-    setPinApiSettingsSection(false);
+    setForceApiSettingsSection(false);
     handleCloseSettings();
   }
 
   function handleSettingsNavClick() {
-    setPinApiSettingsSection(false);
+    setForceApiSettingsSection(false);
     handleSettingsClick();
   }
 
   function renderSettingsState() {
     const isApiKeySaved = !!activeUser?.hasBinanceCredentials;
     const visibleSettingsSection =
-      pinApiSettingsSection && showSettingsView ? "apiKey" : activeSettingsSection;
+      forceApiSettingsSection && showSettingsView ? "apiKey" : activeSettingsSection;
 
     return (
       <SettingsPanel
@@ -615,7 +626,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         notice={notice}
         onSelectSection={handleSettingsSectionSelect}
         onBackToMenu={() => {
-          setPinApiSettingsSection(false);
+          setForceApiSettingsSection(false);
           clearPanelFeedback();
           setActiveSettingsSection(null);
         }}
@@ -905,7 +916,10 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
       return null;
     }
 
-    const canSubmitDeleteAccount = hasLocalPasswordInput(deleteAccountPassword);
+    const canSubmitDeleteAccount = canSubmitDeleteAccountDialog(
+      deleteAccountPassword,
+      isDeletingAccount
+    );
 
     return (
       <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
@@ -934,44 +948,53 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
             </p>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
-              Password
-            </label>
-            <Input
-              autoFocus
-              value={deleteAccountPassword}
-              onChange={(event) => setDeleteAccountPassword(event.target.value)}
-              disabled={isDeletingAccount}
-              className="w-full border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-white focus:border-white focus:ring-0"
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              type="password"
-            />
-          </div>
+          <form
+            className="space-y-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (canSubmitDeleteAccount) {
+                void handleDeleteAccount();
+              }
+            }}
+          >
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
+                Password
+              </label>
+              <Input
+                autoFocus
+                value={deleteAccountPassword}
+                onChange={(event) => setDeleteAccountPassword(event.target.value)}
+                disabled={isDeletingAccount}
+                className="w-full border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-white focus:border-white focus:ring-0"
+                autoComplete="current-password"
+                placeholder="Enter your password"
+                type="password"
+              />
+            </div>
 
-          {error ? (
-            <div className="text-xs font-semibold text-[color:var(--danger)]">{error}</div>
-          ) : null}
+            {deleteAccountError ? (
+              <div className="text-xs font-semibold text-[color:var(--danger)]">{deleteAccountError}</div>
+            ) : null}
 
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={closeDeleteAccountConfirm}
-              disabled={isDeletingAccount}
-              className="flex h-11 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] px-5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--text-dim)] transition-colors hover:border-white hover:bg-[color:var(--surface-elevated)] hover:text-white disabled:pointer-events-none disabled:opacity-40"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDeleteAccount()}
-              disabled={!canSubmitDeleteAccount || isDeletingAccount}
-              className="flex h-11 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] px-5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--danger)] transition-colors hover:border-red-400 hover:bg-[color:var(--surface-elevated)] hover:text-red-400 disabled:pointer-events-none disabled:opacity-40"
-            >
-              {isDeletingAccount ? "Deleting..." : "Delete account"}
-            </button>
-          </div>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeDeleteAccountConfirm}
+                disabled={isDeletingAccount}
+                className="flex h-11 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] px-5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--text-dim)] transition-colors hover:border-white hover:bg-[color:var(--surface-elevated)] hover:text-white disabled:pointer-events-none disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!canSubmitDeleteAccount}
+                className="flex h-11 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] px-5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--danger)] transition-colors hover:border-red-400 hover:bg-[color:var(--surface-elevated)] hover:text-red-400 disabled:pointer-events-none disabled:opacity-40"
+              >
+                {isDeletingAccount ? "Deleting..." : "Delete account"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     );

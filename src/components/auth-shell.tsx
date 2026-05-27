@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, House, Send, UserRound } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { getAuthLandingResetState, getAuthSubmitButtonClass } from "@/components/auth-shell-helpers";
 import { authClient } from "@/lib/auth-client";
 import {
   getLocalPasswordPolicyHint,
@@ -108,6 +109,15 @@ export function AuthShell() {
       setLoginWelcome(getRandomLoginWelcome());
       setLoginWelcomeKey((value) => value + 1);
     }
+  }
+
+  function returnToLanding() {
+    const resetState = getAuthLandingResetState();
+
+    setView(resetState.view);
+    setPassword(resetState.password);
+    setError(resetState.error);
+    setSuccessMessage(resetState.successMessage);
   }
 
   const submitCredentials = useCallback(async () => {
@@ -250,7 +260,7 @@ export function AuthShell() {
               <button
                 aria-label="Back"
                 className="icon-plain -ml-1 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
-                onClick={() => setView("landing")}
+                onClick={returnToLanding}
                 type="button"
               >
                 <ArrowLeft className="h-5 w-5" strokeWidth={2.3} />
@@ -284,7 +294,7 @@ export function AuthShell() {
           <button
             aria-label="Back"
             className="icon-plain mb-4 flex h-10 w-10 cursor-pointer items-center justify-center self-start text-[color:var(--text-dim)] transition-colors hover:text-white md:hidden"
-            onClick={() => setView("landing")}
+            onClick={returnToLanding}
             type="button"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -333,12 +343,7 @@ export function AuthShell() {
                 />
                 <button
                   aria-label={isSignUp ? "Create account" : "Log in"}
-                  className={cn(
-                    "flex h-11 w-11 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] p-0 transition-[background-color,border-color,color,transform,opacity] duration-200 sm:h-12 sm:w-12 has-lucide",
-                    canSubmit
-                      ? "cursor-pointer border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-white hover:bg-[color:var(--surface-elevated)] hover:text-white active:scale-[0.985]"
-                      : "cursor-not-allowed border-[color:var(--line-strong)] text-[color:var(--text-dim)]/35 opacity-60"
-                  )}
+                  className={getAuthSubmitButtonClass(canSubmit)}
                   disabled={!canSubmit}
                   title={isSignUp ? "Create account" : "Log in"}
                   type="submit"
@@ -394,7 +399,7 @@ export function AuthShell() {
                     ? "border-white text-white"
                     : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
                 )}
-                onClick={() => setView("landing")}
+                onClick={returnToLanding}
                 type="button"
               >
                 <House className="h-5 w-5" strokeWidth={2.3} />

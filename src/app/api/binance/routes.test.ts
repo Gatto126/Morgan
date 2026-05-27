@@ -186,6 +186,19 @@ describe("binance API routes", () => {
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toEqual({ error: "Invalid API-key" });
       });
+
+      it("preserves route-specific generic errors for unexpected failures", async () => {
+        mocks.syncBinanceBalances.mockRejectedValueOnce(new Error("network down"));
+
+        const response = await route.post(makeRequest(route.path));
+
+        expect(response.status).toBe(500);
+        await expect(response.json()).resolves.toEqual({
+          error: route.name === "connect"
+            ? "Errore di connessione a Binance."
+            : "Errore di sincronizzazione Binance.",
+        });
+      });
     });
   }
 });
