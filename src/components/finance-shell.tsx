@@ -10,7 +10,7 @@ import { InvestmentDashboard } from "./investment-dashboard";
 import { BinanceDashboard } from "./binance-dashboard";
 import { CryptoDashboard } from "./crypto-dashboard";
 import { ReviewPanel } from "./finance-shell/review-panel";
-import { SettingsPanel } from "./finance-shell/settings-panel";
+import { SettingsPanel, type SettingsSection } from "./finance-shell/settings-panel";
 import type { UserRecord } from "./finance-shell/types";
 import { UploadPanel } from "./finance-shell/upload-panel";
 import { useFinanceNavigation, type Stage } from "./finance-shell/use-finance-navigation";
@@ -92,6 +92,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
   const [binanceRefreshKey, setBinanceRefreshKey] = useState(0);
   const [showDeleteApiConfirm, setShowDeleteApiConfirm] = useState(false);
   const [binanceFading, setBinanceFading] = useState(false);
+  const [pinApiSettingsSection, setPinApiSettingsSection] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const createUserInputRef = useRef<HTMLInputElement | null>(null);
   const {
@@ -241,6 +242,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     if (!activeUser) return;
 
     const keepApiSettingsOpen = () => {
+      setPinApiSettingsSection(true);
       setShowSettingsView(true);
       setActiveSettingsSection("apiKey");
       setShowUserSelectView(false);
@@ -552,13 +554,32 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     );
   }
 
+  function handleSettingsSectionSelect(section: SettingsSection) {
+    if (section !== "apiKey") {
+      setPinApiSettingsSection(false);
+    }
+    toggleSettingsSection(section);
+  }
+
+  function handleSettingsPanelClose() {
+    setPinApiSettingsSection(false);
+    handleCloseSettings();
+  }
+
+  function handleSettingsNavClick() {
+    setPinApiSettingsSection(false);
+    handleSettingsClick();
+  }
+
   function renderSettingsState() {
     const isApiKeySaved = !!activeUser?.hasBinanceCredentials;
+    const visibleSettingsSection =
+      pinApiSettingsSection && showSettingsView ? "apiKey" : activeSettingsSection;
 
     return (
       <SettingsPanel
         accountName={accountName}
-        activeSection={activeSettingsSection}
+        activeSection={visibleSettingsSection}
         hasActiveUser={!!activeUser}
         isApiKeySaved={isApiKeySaved}
         binanceApiKeyPreview={activeUser?.binanceApiKeyPreview ?? null}
@@ -569,8 +590,9 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         showDeleteApiConfirm={showDeleteApiConfirm}
         error={error}
         notice={notice}
-        onSelectSection={toggleSettingsSection}
+        onSelectSection={handleSettingsSectionSelect}
         onBackToMenu={() => {
+          setPinApiSettingsSection(false);
           clearPanelFeedback();
           setActiveSettingsSection(null);
         }}
@@ -638,7 +660,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     const handleClosePanel = showUploadPanel
       ? handleCloseUpload
       : showSettingsPanel
-        ? handleCloseSettings
+        ? handleSettingsPanelClose
         : handleCloseUserSelect;
 
     const shouldShowClose = !showUploadPanel || activeUser.transactionCount !== 0;
@@ -692,7 +714,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         <div className={cn("relative h-full w-full flex flex-col justify-center", isClosingSettings ? "upload-panel-exit" : "upload-panel-enter")}>
           <div
             role="button"
-            onClick={handleCloseSettings}
+            onClick={handleSettingsPanelClose}
             className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
             title="Close settings"
           >
@@ -1100,7 +1122,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                       ? "border-white text-white"
                       : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
                   )}
-                  onClick={handleSettingsClick}
+                  onClick={handleSettingsNavClick}
                   data-active={showSettingsView}
                   type="button"
                 >
