@@ -1,0 +1,161 @@
+import { createPortal } from "react-dom";
+
+import { cn } from "@/lib/utils";
+
+import { formatEuroCents, formatProviderLabel } from "./formatters";
+import type { PortfolioDashboardConfig, PortfolioProviderSummary } from "./types";
+
+type PortfolioProviderCardsProps = {
+  portalNode: HTMLElement | null;
+  providers: PortfolioProviderSummary[];
+  config: Pick<PortfolioDashboardConfig, "identifierLabel" | "showCashback" | "transactionFilter">;
+  livePrices: Record<string, number | null>;
+  dataVersion: number;
+  newProviderKeys: Set<string>;
+  isActive: boolean;
+  getProviderLiveTotal: (provider: PortfolioProviderSummary) => number;
+};
+
+export function PortfolioProviderCards({
+  portalNode,
+  providers,
+  config,
+  livePrices,
+  dataVersion,
+  newProviderKeys,
+  isActive,
+  getProviderLiveTotal
+}: PortfolioProviderCardsProps) {
+  if (!portalNode) return null;
+
+  return createPortal(
+    <div className={cn("flex flex-col gap-5 w-full pb-6 lg:pb-0", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
+      {providers.map((provider, index) => {
+        const isNew = newProviderKeys.has(provider.sourceInstitution);
+        return (
+          <div
+            key={provider.sourceInstitution}
+            className={cn("grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4", isNew && "card-enter")}
+            style={isNew ? { animationDelay: `${index * 80}ms` } : undefined}
+          >
+            <div className="flex flex-col rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4 h-full">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[color:var(--text-main)]">
+                  {formatProviderLabel(provider.sourceInstitution)}
+                </span>
+                <span className="text-sm font-bold text-[color:var(--text-main)]">
+                  {formatEuroCents(getProviderLiveTotal(provider))}
+                </span>
+              </div>
+
+              <div className="mt-4 space-y-4 max-h-[400px] overflow-y-auto hide-scrollbar pr-1">
+                {provider.products.filter(product => Math.abs(product.quantity) > 0.000001).map((product) => (
+                  <div key={product.productName} className={isNew ? "card-enter" : undefined}>
+                    <hr className="mb-3 border-[color:var(--line-strong)] opacity-50" />
+                    <div className="mb-1.5 flex items-start justify-between min-w-0">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--text-main)] break-words w-0 flex-1 pr-3">
+                        {product.productName}
+                      </span>
+                      <span className="text-xs font-bold text-[color:var(--text-main)] flex-shrink-0 pt-[1px]">
+                        {(() => {
+                          const price = product.isin ? livePrices[product.isin] : null;
+                          return price != null ? formatEuroCents(Math.round(price * 100)) : "-";
+                        })()}
+                      </span>
+                    </div>
+
+                    <div key={`product-vals-${product.productName}-${isNew ? "s" : dataVersion}`} className={cn("space-y-1.5 text-sm", !isNew && dataVersion > 0 && "value-flash")}>
+                      <div className="flex justify-between">
+                        <span className="pl-3 text-[color:var(--text-dim)] font-medium">{config.identifierLabel}</span>
+                        <span className="font-semibold text-[color:var(--text-main)]">
+                          {product.isin}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="pl-3 text-[color:var(--text-dim)] font-medium">Quantity</span>
+                        <span className="font-semibold text-[color:var(--text-main)]">
+                          {product.quantity.toLocaleString("it-IT", { maximumFractionDigits: 6 })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="pl-3 text-[color:var(--text-dim)] font-medium">Invested Value</span>
+                        <span className="font-semibold text-[color:var(--text-main)]">
+                          {formatEuroCents(product.investedValue)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="pl-3 text-[color:var(--text-dim)] font-medium">Current Value</span>
+                        {(() => {
+                          const price = product.isin ? livePrices[product.isin] : null;
+                          if (price == null) {
+                            return (
+                              <span className="font-semibold text-[color:var(--text-dim)] underline decoration-dotted decoration-[color:var(--text-dim)]">
+                                {formatEuroCents(0)}
+                              </span>
+                            );
+                          }
+                          const currentValueCents = Math.round(product.quantity * price * 100);
+                          return (
+                            <span className="font-semibold text-[color:var(--text-main)]">
+                              {formatEuroCents(currentValueCents)}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      {config.showCashback && product.cashback !== 0 && (
+                        <div className="flex justify-between">
+                          <span className="pl-3 text-[color:var(--text-dim)] font-medium">Cashback</span>
+                          <span className="font-semibold text-[color:var(--text-main)]">
+                            {formatEuroCents(product.cashback)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col min-h-[280px] lg:h-[400px] flex-1 overflow-hidden rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[#1f1f1f]">
+              <div className="h-full overflow-auto rounded-[20px] hide-scrollbar">
+                <table className="min-w-full border-separate border-spacing-0 text-[11px] sm:text-sm">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-[0.12em] text-[#D9D9D9] sm:text-[11px] sm:tracking-[0.18em]">
+                      <th className="sticky top-0 z-20 rounded-tl-[18px] border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-1.5 py-2 font-medium sm:px-4 sm:py-3">Date</th>
+                      <th className="sticky top-0 z-20 border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-4 py-2 font-medium hidden md:table-cell sm:py-3 text-center">Type</th>
+                      <th className="sticky top-0 z-20 border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-1.5 py-2 font-medium sm:px-4 sm:py-3 text-left w-full">Asset</th>
+                      <th className="sticky top-0 z-20 rounded-tr-[18px] border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-1.5 py-2 text-right font-medium sm:px-4 sm:py-3">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {provider.transactions
+                      .filter(config.transactionFilter)
+                      .slice(0, 50)
+                      .map((transaction) => (
+                        <tr key={transaction.id} className={cn("border-b border-[color:rgba(255,255,255,0.08)] align-middle last:border-b-0 hover:bg-[color:rgba(255,255,255,0.03)] transition-colors duration-150", isNew && "card-enter")}>
+                          <td className="px-1.5 py-2 text-[color:var(--text-main)] sm:px-4">
+                            <div className="font-semibold whitespace-nowrap">{new Date(transaction.bookingDate).toISOString().split("T")[0]}</div>
+                          </td>
+                          <td className="px-4 py-2 text-[color:var(--text-main)] hidden md:table-cell whitespace-nowrap text-center opacity-70">{transaction.typeLabel}</td>
+                          <td className="px-1.5 py-2 text-[color:var(--text-main)] sm:px-4 w-full max-w-0">
+                            <div className="leading-5 truncate capitalize font-medium">
+                              {transaction.productName || transaction.description}
+                              {transaction.isin && <span className="ml-1"> - {transaction.isin}</span>}
+                            </div>
+                          </td>
+                          <td className="px-1.5 py-2 text-right font-bold whitespace-nowrap sm:px-4 text-white">
+                            {(transaction.tradeType?.toUpperCase() === "SELL" || transaction.typeLabel?.toUpperCase() === "SELL") ? "-" : "+"}{formatEuroCents(transaction.amountCents)}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>,
+    portalNode
+  );
+}
