@@ -21,6 +21,7 @@ import UserIcon from "./ui/user-icon";
 
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { isValidLocalPin } from "@/lib/local-auth";
 import { cn, getInitials } from "@/lib/utils";
 
 const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
@@ -91,6 +92,9 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
   const [isTesting, setIsTesting] = useState(false);
   const [binanceRefreshKey, setBinanceRefreshKey] = useState(0);
   const [showDeleteApiConfirm, setShowDeleteApiConfirm] = useState(false);
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [binanceFading, setBinanceFading] = useState(false);
   const [pinApiSettingsSection, setPinApiSettingsSection] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -486,15 +490,30 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     }
   }
 
+  function openDeleteAccountConfirm() {
+    setDeleteAccountPassword("");
+    setShowDeleteAccountConfirm(true);
+    setError(null);
+    setNotice(null);
+  }
+
+  function closeDeleteAccountConfirm() {
+    if (isDeletingAccount) return;
+
+    setShowDeleteAccountConfirm(false);
+    setDeleteAccountPassword("");
+  }
+
   async function handleDeleteAccount() {
-    if (!confirm("Delete this account and every profile connected to it? All local data, transactions, assets, Binance balances and cached prices tied to this account will be removed permanently.")) {
-      return;
-    }
+    if (isDeletingAccount) return;
 
     try {
+      setIsDeletingAccount(true);
       setError(null);
       const response = await fetch("/api/account", {
-        method: "DELETE"
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deleteAccountPassword })
       });
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
 
@@ -513,9 +532,13 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
       setUsers([]);
       setActiveUser(null);
       setIsSignedOut(true);
+      setShowDeleteAccountConfirm(false);
+      setDeleteAccountPassword("");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error during account deletion.");
+    } finally {
+      setIsDeletingAccount(false);
     }
   }
 
@@ -603,7 +626,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         onToggleDeleteApiConfirm={() => setShowDeleteApiConfirm((value) => !value)}
         onDeleteApiKeys={(deleteData) => void handleDeleteApiKeys(deleteData)}
         onSaveApiKeys={() => void handleSaveApiKeys()}
-        onDeleteAccount={() => void handleDeleteAccount()}
+        onDeleteAccount={openDeleteAccountConfirm}
       />
     );
   }
@@ -875,6 +898,83 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     }
 
     return null;
+  }
+
+  function renderDeleteAccountDialog() {
+    if (!showDeleteAccountConfirm) {
+      return null;
+    }
+
+    const canSubmitDeleteAccount = isValidLocalPin(deleteAccountPassword);
+
+    return (
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-title"
+          className="relative flex w-full max-w-[460px] flex-col gap-5 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-shell)] p-5 shadow-2xl sm:p-6"
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={closeDeleteAccountConfirm}
+            disabled={isDeletingAccount}
+            className="absolute right-4 top-4 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white disabled:pointer-events-none disabled:opacity-40"
+          >
+            <XIcon className="h-5 w-5" strokeWidth={2.3} />
+          </button>
+
+          <div className="space-y-2 pr-8">
+            <h2 id="delete-account-title" className="text-xl font-bold uppercase tracking-[-0.04em] text-[color:var(--danger)]">
+              Delete account
+            </h2>
+            <p className="text-sm font-medium leading-relaxed text-[color:var(--text-dim)]">
+              This permanently removes every profile, transaction, Binance balance and cached price tied to this account.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
+              PIN
+            </label>
+            <Input
+              autoFocus
+              value={deleteAccountPassword}
+              onChange={(event) => setDeleteAccountPassword(event.target.value)}
+              disabled={isDeletingAccount}
+              className="w-full border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-white focus:border-white focus:ring-0"
+              autoComplete="current-password"
+              placeholder="Enter your PIN"
+              type="password"
+            />
+          </div>
+
+          {error ? (
+            <div className="text-xs font-semibold text-[color:var(--danger)]">{error}</div>
+          ) : null}
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={closeDeleteAccountConfirm}
+              disabled={isDeletingAccount}
+              className="flex h-11 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] px-5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--text-dim)] transition-colors hover:border-white hover:bg-[color:var(--surface-elevated)] hover:text-white disabled:pointer-events-none disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteAccount()}
+              disabled={!canSubmitDeleteAccount || isDeletingAccount}
+              className="flex h-11 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] px-5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--danger)] transition-colors hover:border-red-400 hover:bg-[color:var(--surface-elevated)] hover:text-red-400 disabled:pointer-events-none disabled:opacity-40"
+            >
+              {isDeletingAccount ? "Deleting..." : "Delete account"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (isSignedOut) {
@@ -1277,6 +1377,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
           <div id="dashboard-cards-portal" className="order-4 md:col-start-2 md:row-start-3" />
         </section>
       </div>
+      {renderDeleteAccountDialog()}
     </main>
   );
 }

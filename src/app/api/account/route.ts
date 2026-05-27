@@ -1,13 +1,107 @@
 import { NextResponse } from "next/server";
+import { verifyPassword } from "better-auth/crypto";
 
 import { authGuardResponse, requireAuth } from "@/lib/auth-guard";
 import { prisma } from "@/lib/db";
 import { apiLogger } from "@/lib/logger";
+import {
+  requestSecurityResponse,
+  requireSameOriginMutation
+} from "@/lib/request-security";
 
 const log = apiLogger("Account");
+const DELETE_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const DELETE_RATE_LIMIT_MAX_FAILURES = 5;
+const deleteFailureBuckets = new Map<string, number[]>();
+
+class AccountDeleteValidationError extends Error {
+  constructor(
+    public status: 400 | 422,
+    message: string
+  ) {
+    super(message);
+    this.name = "AccountDeleteValidationError";
+  }
+}
 
 function uniqueStrings(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter((value): value is string => typeof value === "string" && value.length > 0)));
+}
+
+async function parseAccountDeletePassword(request: Request) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw new AccountDeleteValidationError(400, "Invalid request body.");
+  }
+
+  if (!body || typeof body !== "object") {
+    throw new AccountDeleteValidationError(400, "PIN is required.");
+  }
+
+  const password = (body as { password?: unknown }).password;
+  if (typeof password !== "string" || password.length === 0) {
+    throw new AccountDeleteValidationError(400, "PIN is required.");
+  }
+
+  return password;
+}
+
+async function verifyAccountDeletePassword(ownerId: string, password: string) {
+  const credentialAccount = await prisma.authAccount.findFirst({
+    where: {
+      userId: ownerId,
+      providerId: "credential",
+      password: { not: null }
+    },
+    select: { password: true }
+  });
+
+  if (!credentialAccount?.password) {
+    return false;
+  }
+
+  return verifyPassword({
+    hash: credentialAccount.password,
+    password
+  });
+}
+
+function getAccountDeleteRetryAfterMs(userId: string) {
+  const now = Date.now();
+  const bucket = (deleteFailureBuckets.get(userId) ?? []).filter(
+    (timestamp) => now - timestamp < DELETE_RATE_LIMIT_WINDOW_MS
+  );
+
+  if (bucket.length >= DELETE_RATE_LIMIT_MAX_FAILURES) {
+    deleteFailureBuckets.set(userId, bucket);
+    return DELETE_RATE_LIMIT_WINDOW_MS - (now - bucket[0]);
+  }
+
+  bucket.push(now);
+  deleteFailureBuckets.set(userId, bucket);
+  return null;
+}
+
+function clearAccountDeleteFailures(userId: string) {
+  deleteFailureBuckets.delete(userId);
+}
+
+function validationResponse(error: AccountDeleteValidationError, ownerId: string) {
+  const retryAfterMs = getAccountDeleteRetryAfterMs(ownerId);
+  if (retryAfterMs !== null) {
+    const retryAfterSeconds = Math.ceil(retryAfterMs / 1000);
+    return NextResponse.json(
+      { error: "Too many failed account deletion attempts." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(retryAfterSeconds) }
+      }
+    );
+  }
+
+  return NextResponse.json({ error: error.message }, { status: error.status });
 }
 
 export async function DELETE(request: Request) {
@@ -16,6 +110,24 @@ export async function DELETE(request: Request) {
   try {
     const session = await requireAuth(request);
     const ownerId = session.user.id;
+    requireSameOriginMutation(request);
+
+    try {
+      const password = await parseAccountDeletePassword(request);
+      const isPasswordValid = await verifyAccountDeletePassword(ownerId, password);
+      if (!isPasswordValid) {
+        throw new AccountDeleteValidationError(422, "PIN confirmation is invalid.");
+      }
+    } catch (error) {
+      if (error instanceof AccountDeleteValidationError) {
+        return validationResponse(error, ownerId);
+      }
+
+      throw error;
+    }
+
+    clearAccountDeleteFailures(ownerId);
+
     const profiles = await prisma.user.findMany({
       where: { ownerId },
       select: { id: true }
@@ -162,6 +274,9 @@ export async function DELETE(request: Request) {
   } catch (error) {
     const response = authGuardResponse(error);
     if (response) return response;
+
+    const securityResponse = requestSecurityResponse(error);
+    if (securityResponse) return securityResponse;
 
     log.error("DELETE", "/api/account", error);
     return NextResponse.json({ error: "Errore durante l'eliminazione dell'account." }, { status: 500 });
