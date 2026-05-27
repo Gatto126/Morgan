@@ -169,12 +169,6 @@ export function CheckingChart({
       <div className="flex-1 min-h-0 w-full pt-10 focus:outline-none outline-none">
         <div ref={chartContainerRef} className="relative w-full h-full" onClick={() => onSelectPoint(null)}>
           <div id="chart-reference-overlay" className="absolute inset-0 pointer-events-none z-10" />
-          <style dangerouslySetInnerHTML={{ __html: `
-            .recharts-wrapper, .recharts-wrapper *, .recharts-surface, .recharts-surface *, .recharts-container, .recharts-container * {
-              outline: none !important;
-              box-shadow: none !important;
-            }
-          `}} />
           {chartReady ? (
           <LineChart
             width={chartSize.width}

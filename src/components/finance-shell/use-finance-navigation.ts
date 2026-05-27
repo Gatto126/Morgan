@@ -24,6 +24,10 @@ function clearTimer(timerRef: MutableRefObject<ReturnType<typeof setTimeout> | n
   }
 }
 
+export function shouldAutoOpenUpload(transactionCount: number | null, stage: Stage) {
+  return transactionCount === 0 && stage !== "settings" && stage !== "select" && stage !== "create";
+}
+
 export function useFinanceNavigation({
   initialStage,
   initialShowUploadView,

@@ -6,8 +6,6 @@ const SECRET_PREFIX = "v1";
 const KEY_LENGTH_BYTES = 32;
 
 type BinanceCredentialFields = {
-  binanceApiKey?: string | null;
-  binanceApiSecret?: string | null;
   binanceApiKeyEncrypted?: string | null;
   binanceApiSecretEncrypted?: string | null;
   binanceApiKeyPreview?: string | null;
@@ -84,27 +82,22 @@ export function makeBinanceApiKeyPreview(apiKey: string | null | undefined) {
 export function hasBinanceCredentials(user: BinanceCredentialFields | null | undefined) {
   if (!user) return false;
 
-  return !!(
-    (user.binanceApiKeyEncrypted && user.binanceApiSecretEncrypted) ||
-    (user.binanceApiKey && user.binanceApiSecret)
-  );
+  return !!(user.binanceApiKeyEncrypted && user.binanceApiSecretEncrypted);
 }
 
 export function getBinanceApiKeyPreview(user: BinanceCredentialFields | null | undefined) {
   if (!user) return null;
 
-  return user.binanceApiKeyPreview ?? makeBinanceApiKeyPreview(user.binanceApiKey);
+  return user.binanceApiKeyPreview ?? null;
 }
 
 export function decryptBinanceCredentials(user: BinanceCredentialFields | null | undefined): BinanceCredentials | null {
   if (!user) return null;
 
-  const apiKey = user.binanceApiKeyEncrypted
-    ? decryptSecret(user.binanceApiKeyEncrypted)
-    : user.binanceApiKey ?? null;
-  const secret = user.binanceApiSecretEncrypted
-    ? decryptSecret(user.binanceApiSecretEncrypted)
-    : user.binanceApiSecret ?? null;
+  if (!user.binanceApiKeyEncrypted || !user.binanceApiSecretEncrypted) return null;
+
+  const apiKey = decryptSecret(user.binanceApiKeyEncrypted);
+  const secret = decryptSecret(user.binanceApiSecretEncrypted);
 
   if (!apiKey || !secret) return null;
 

@@ -173,52 +173,23 @@ export async function getEurPrice(
 
   if (EUR_STABLES.has(normalizedSymbol)) return 1;
 
-  try {
-    const eurPairRes = await fetcher(
-      `${BINANCE_BASE_URL}/api/v3/ticker/price?symbol=${normalizedSymbol}EUR`,
-      { signal: AbortSignal.timeout(PRICE_TIMEOUT_MS) }
-    );
-    if (eurPairRes.ok) {
-      const data = (await eurPairRes.json()) as { price?: string };
-      const price = parsePositiveNumber(data.price);
-      if (price !== null) return price;
-    }
-  } catch {}
+  const directEurPrice = await fetchTickerPrice(fetcher, `${normalizedSymbol}EUR`);
+  if (directEurPrice !== null) return directEurPrice;
 
   if (USD_STABLES.has(normalizedSymbol)) {
-    try {
-      const res = await fetcher(`${BINANCE_BASE_URL}/api/v3/ticker/price?symbol=EURUSDT`, {
-        signal: AbortSignal.timeout(PRICE_TIMEOUT_MS),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { price?: string };
-        const eurUsdtPrice = parsePositiveNumber(data.price);
-        if (eurUsdtPrice !== null) return 1 / eurUsdtPrice;
-      }
-    } catch {}
+    const eurUsdtPrice = await fetchTickerPrice(fetcher, "EURUSDT");
+    if (eurUsdtPrice !== null) return 1 / eurUsdtPrice;
 
     return 1 / 1.08;
   }
 
-  try {
-    const [tokenRes, eurRes] = await Promise.all([
-      fetcher(`${BINANCE_BASE_URL}/api/v3/ticker/price?symbol=${normalizedSymbol}USDT`, {
-        signal: AbortSignal.timeout(PRICE_TIMEOUT_MS),
-      }),
-      fetcher(`${BINANCE_BASE_URL}/api/v3/ticker/price?symbol=EURUSDT`, {
-        signal: AbortSignal.timeout(PRICE_TIMEOUT_MS),
-      }),
-    ]);
-    if (tokenRes.ok && eurRes.ok) {
-      const tokenData = (await tokenRes.json()) as { price?: string };
-      const eurData = (await eurRes.json()) as { price?: string };
-      const tokenPrice = parsePositiveNumber(tokenData.price);
-      const eurUsdtPrice = parsePositiveNumber(eurData.price);
-      if (tokenPrice !== null && eurUsdtPrice !== null) {
-        return tokenPrice / eurUsdtPrice;
-      }
-    }
-  } catch {}
+  const [tokenPrice, eurUsdtPrice] = await Promise.all([
+    fetchTickerPrice(fetcher, `${normalizedSymbol}USDT`),
+    fetchTickerPrice(fetcher, "EURUSDT"),
+  ]);
+  if (tokenPrice !== null && eurUsdtPrice !== null) {
+    return tokenPrice / eurUsdtPrice;
+  }
 
   return 0;
 }
@@ -459,6 +430,21 @@ async function readBinanceError(response: Response, fallback: string) {
     return data.msg ?? fallback;
   } catch {
     return fallback;
+  }
+}
+
+async function fetchTickerPrice(fetcher: BinanceFetch, pairSymbol: string) {
+  try {
+    const response = await fetcher(
+      `${BINANCE_BASE_URL}/api/v3/ticker/price?symbol=${pairSymbol}`,
+      { signal: AbortSignal.timeout(PRICE_TIMEOUT_MS) }
+    );
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as { price?: string };
+    return parsePositiveNumber(data.price);
+  } catch {
+    return null;
   }
 }
 

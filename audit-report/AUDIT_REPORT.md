@@ -12,8 +12,7 @@ Le aree ancora aperte piu' urgenti riguardano:
 
 1. layout mobile con overflow orizzontale e controlli parzialmente fuori viewport;
 2. schema di import che rifiuta saldi conto negativi anche se il parser BBVA li puo' produrre;
-3. accessibilita' e isolamento dei pannelli overlay/settings;
-4. campi legacy per segreti Binance.
+3. isolamento completo dei pannelli overlay/settings dal contenuto sottostante.
 
 Aggiornamento post-fix del 2026-05-27:
 
@@ -22,6 +21,9 @@ Aggiornamento post-fix del 2026-05-27:
 - la cancellazione account richiede password verificata server-side, origin check e rate limit sui tentativi falliti.
 - l'autenticazione locale non usa piu' un PIN breve per nuovi account: registrazione con password/passphrase 15-128 caratteri, spazi/simboli ammessi, rate limit Better Auth database-backed.
 - il submit auth e' esplicito: rimosso auto-login temporizzato; il bottone resta visibile/disabilitato finche' i campi non sono validi.
+- le voci Settings/API/Danger, New Profile e il toggle secret sono controlli `button` semantici; la modale delete account e' stata estratta in componente dedicato.
+- l'upload panel non resta aperto quando si naviga verso Settings/Profile e il pulsante upload non rimane attivo fuori dagli stage contenuto.
+- i campi plaintext legacy Binance sono rimossi dallo schema e dalla lettura applicativa; `scripts/migrate-binance-plaintext.mjs` conserva un percorso di migrazione per DB preesistenti.
 
 ## Scope Eseguito
 
@@ -56,7 +58,7 @@ Screenshot salvati in `test-results/audit/`, in particolare:
 | `pnpm audit --prod` | OK, nessuna vulnerabilita' nota |
 | `pnpm outdated` | Warning: diverse major disponibili |
 | `pnpm run lint` | OK |
-| `pnpm run test:run` | OK, 11 file / 51 test |
+| `pnpm run test:run` | OK, 15 file / 63 test |
 | `pnpm exec tsc --noEmit` | OK |
 | `pnpm run build` | OK, Next build completato |
 
@@ -100,7 +102,7 @@ Se un conto va in scoperto o il foglio contiene un saldo negativo, la preview pu
 **Raccomandazione:** permettere `balanceCents` signed, mantenendo `amountCents` non negativo. Aggiungere un test BBVA/import per saldo negativo.
 
 
-### P2 - Settings/Upload overlay non isola il contenuto sottostante
+### P2 - Settings/Upload overlay non isola il contenuto sottostante - PARZIALMENTE RISOLTO
 
 **Evidenza browser:** quando Settings o Upload sono aperti, il DOM espone ancora bottoni, grafici e card dashboard sottostanti. I controlli di sfondo restano nella navigazione assistiva e in parte interagibili.
 
@@ -111,17 +113,17 @@ Se un conto va in scoperto o il foglio contiene un saldo negativo, la preview pu
 - `src/components/finance-shell/settings-panel.tsx:85`
 - `src/components/finance-shell/settings-panel.tsx:105`
 
-Inoltre le voci Settings/API/Danger sono `div` cliccabili, non `button`/tab semantici; il toggle visibilita' secret usa `role="button"`:
+**Stato attuale:** la parte semantica dei controlli e' risolta; resta aperto l'isolamento completo dello sfondo quando Settings/Upload sono aperti.
 
-- `src/components/finance-shell/settings-panel.tsx:213`
+- `src/components/finance-shell/settings-panel.tsx` usa `button` per Settings/API/Danger e per il toggle visibilita' secret con `aria-label`.
+- `src/components/finance-shell/user-select-panel.tsx` usa un `button` per New Profile.
+- `src/components/finance-shell/delete-account-dialog.tsx` isola la modale delete account in un componente con `role="dialog"` e form dedicato.
 
-**Impatto:** tastiera e screen reader hanno un'esperienza incoerente; aumenta anche il rischio di click accidentali sullo sfondo.
+**Impatto residuo:** senza isolamento/focus trap completo, il contenuto sottostante puo' restare raggiungibile nella navigazione assistiva o in tab order.
 
 **Raccomandazione:**
 
-- usare `button` o tablist/tab per le sezioni settings;
 - aggiungere focus management e `aria-modal`/`inert` o `aria-hidden` sul background quando un panel e' aperto;
-- rendere il toggle secret un vero `button` con `aria-label`;
 - verificare tab order con tastiera.
 
 ### P2 - Cancellazione account protetta solo da `window.confirm` - RISOLTO
@@ -164,19 +166,22 @@ Non era evidente nel codice un rate limit applicativo o lockout dedicato per sig
 
 **Nota deploy:** prima di esposizione pubblica reale, configurare `BETTER_AUTH_IP_HEADERS` / `TRUSTED_IP_HEADERS` in base al provider. In locale il fallback `x-forwarded-for` e' sufficiente per test; con Cloudflare usare `cf-connecting-ip`.
 
-### P3 - Campi legacy plaintext per Binance restano nel modello
+### P3 - Campi legacy plaintext per Binance restano nel modello - RISOLTO
 
-**Evidenza:** lo schema contiene sia campi plaintext sia encrypted:
+**Evidenza originaria:** lo schema conteneva sia campi plaintext sia encrypted:
 
 - `prisma/schema.prisma:16-19`
 
-la lettura supporta ancora fallback plaintext:
+la lettura supportava ancora fallback plaintext:
 
 - `src/lib/secrets.ts:102-107`
 
-**Impatto:** anche se i nuovi salvataggi impostano i plaintext a `null`, il modello continua a permettere segreti non cifrati e rende piu' facile regressione o dati legacy residui.
+**Stato attuale:** risolto.
 
-**Raccomandazione:** creare migrazione/utility che migra o cancella i plaintext residui, poi rimuovere i campi legacy dallo schema.
+- `prisma/schema.prisma` espone solo `binanceApiKeyEncrypted`, `binanceApiSecretEncrypted` e `binanceApiKeyPreview`.
+- `src/lib/secrets.ts` non fa piu' fallback su plaintext.
+- `src/app/api/users/[id]/route.ts` salva e cancella solo i campi cifrati.
+- `scripts/migrate-binance-plaintext.mjs` migra o pulisce eventuali valori plaintext in DB legacy prima del drop colonne.
 
 ### P3 - Duplicazione logica Binance connect/sync - RISOLTO
 
@@ -226,13 +231,13 @@ Inoltre solo `sync` aggiorna `binance_sync_${userId}`:
 
 ## Copertura Test
 
-Attuale: 11 file test, 51 test totali.
+Attuale: 15 file test, 63 test totali.
 
-Copre parser, preview, price request validation, logica chart/time-series, servizio Binance, route Binance, cancellazione account e policy auth locale. Mancano ancora test su:
+Copre parser, preview, price request validation, logica chart/time-series, servizio Binance, route Binance, cancellazione account, policy auth locale, helper UI auth/delete account e segreti cifrati. Mancano ancora test su:
 
 - flusso import end-to-end con saldo negativo;
 - UI responsive mobile;
-- settings/danger zone/accessibilita';
+- isolamento completo Settings/Upload e tab order keyboard;
 - route handler API restanti con auth/profile ownership.
 
 ## Raccomandazioni Operative
@@ -241,8 +246,7 @@ Priorita' prossima:
 
 1. Fix mobile overflow e aggiungere visual regression minima.
 2. Consentire `balanceCents` signed e aggiungere test.
-3. Rendere Settings/Upload accessibili e isolati dallo sfondo.
-4. Migrare/rimuovere campi plaintext Binance.
+3. Isolare Settings/Upload dallo sfondo con focus management/inert e smoke keyboard completo.
 
 Poi:
 

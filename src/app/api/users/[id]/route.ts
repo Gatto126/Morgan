@@ -12,8 +12,6 @@ const log = apiLogger("Users");
 const patchUserSchema = z.object({
   apiKey: z.string().trim().min(1).max(512).nullable().optional(),
   apiSecret: z.string().trim().min(1).max(512).nullable().optional(),
-  binanceApiKey: z.string().trim().min(1).max(512).nullable().optional(),
-  binanceApiSecret: z.string().trim().min(1).max(512).nullable().optional(),
   deleteBalances: z.boolean().optional()
 });
 
@@ -199,10 +197,10 @@ export async function PATCH(request: Request, context: RouteContext) {
   try {
     await requireOwnedProfile(request, id);
     const json = patchUserSchema.parse(await request.json());
-    const hasApiKeyField = json.apiKey !== undefined || json.binanceApiKey !== undefined;
-    const hasApiSecretField = json.apiSecret !== undefined || json.binanceApiSecret !== undefined;
-    const apiKey = json.apiKey !== undefined ? json.apiKey : json.binanceApiKey;
-    const apiSecret = json.apiSecret !== undefined ? json.apiSecret : json.binanceApiSecret;
+    const hasApiKeyField = json.apiKey !== undefined;
+    const hasApiSecretField = json.apiSecret !== undefined;
+    const apiKey = json.apiKey;
+    const apiSecret = json.apiSecret;
     const { deleteBalances } = json;
 
     if (hasApiKeyField !== hasApiSecretField) {
@@ -210,8 +208,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const data: {
-      binanceApiKey?: string | null;
-      binanceApiSecret?: string | null;
       binanceApiKeyEncrypted?: string | null;
       binanceApiSecretEncrypted?: string | null;
       binanceApiKeyPreview?: string | null;
@@ -219,14 +215,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (hasApiKeyField && hasApiSecretField) {
       if (apiKey === null && apiSecret === null) {
-        data.binanceApiKey = null;
-        data.binanceApiSecret = null;
         data.binanceApiKeyEncrypted = null;
         data.binanceApiSecretEncrypted = null;
         data.binanceApiKeyPreview = null;
       } else if (typeof apiKey === "string" && typeof apiSecret === "string") {
-        data.binanceApiKey = null;
-        data.binanceApiSecret = null;
         data.binanceApiKeyEncrypted = encryptSecret(apiKey);
         data.binanceApiSecretEncrypted = encryptSecret(apiSecret);
         data.binanceApiKeyPreview = makeBinanceApiKeyPreview(apiKey);

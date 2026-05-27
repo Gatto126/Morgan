@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canSubmitDeleteAccountDialog,
   getDeleteAccountDialogResetState,
-} from "@/components/finance-shell/delete-account-dialog";
+} from "@/components/finance-shell/delete-account-dialog-helpers";
 
 describe("delete account dialog helpers", () => {
   it("allows submit only with password input while not deleting", () => {

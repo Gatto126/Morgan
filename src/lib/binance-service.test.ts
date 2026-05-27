@@ -4,6 +4,7 @@ vi.mock("@/lib/db", () => ({ prisma: {} }));
 
 import {
   fetchBalances,
+  getEurPrice,
   makeSignedQuery,
   mergeBalances,
   persistBalances,
@@ -146,6 +147,20 @@ describe("binance service", () => {
     expect(bySymbol.BTC.eurValue).toBe(3_000);
     expect(bySymbol.ADA.eurValue).toBe(75);
     expect(bySymbol.UNKNOWN.eurValue).toBe(0);
+  });
+
+  it("falls back to USDT pricing when the direct EUR ticker request fails", async () => {
+    const fetcher = (async (input) => {
+      const url = String(input);
+
+      if (url.endsWith("SOLEUR")) throw new Error("direct pair unavailable");
+      if (url.endsWith("SOLUSDT")) return jsonResponse({ price: "120" });
+      if (url.endsWith("EURUSDT")) return jsonResponse({ price: "1.2" });
+
+      throw new Error(`Unexpected URL: ${url}`);
+    }) as BinanceFetch;
+
+    await expect(getEurPrice("SOL", { fetcher })).resolves.toBe(100);
   });
 
   it("persists balances, removes inactive tokens and records the sync timestamp", async () => {

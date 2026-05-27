@@ -268,6 +268,25 @@ button:active *,
   to { transform: rotate(360deg); }
 }
 
+.import-spinner {
+  width: 36px;
+  height: 36px;
+  border: 2.5px solid rgba(255,255,255,0.07);
+  border-top-color: rgba(255,255,255,0.5);
+  border-radius: 50%;
+  animation: dashboardSpinner 0.85s linear infinite;
+}
+
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.recharts-surface *,
+.recharts-container,
+.recharts-container * {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 @keyframes deleteConfirmSlideIn {
   from { opacity: 0; transform: translateX(24px); }
   to   { opacity: 1; transform: translateX(0); }

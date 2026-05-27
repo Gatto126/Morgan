@@ -87,24 +87,29 @@ export function UserSelectPanel<TUser extends ProfileOption>({
           </div>
 
           <div className="space-y-5 pt-2">
-            <div onClick={onToggleCreate} className="group cursor-pointer select-none space-y-1">
-              <div
+            <button
+              aria-pressed={isCreateOpen}
+              className="group block w-full cursor-pointer select-none space-y-1 bg-transparent p-0 text-left"
+              onClick={onToggleCreate}
+              type="button"
+            >
+              <span
                 className={cn(
-                  "text-2xl md:text-3xl font-bold tracking-[-0.06em] transition-colors duration-200 sm:text-[2.2rem]",
+                  "block text-2xl font-bold tracking-[-0.06em] transition-colors duration-200 md:text-3xl sm:text-[2.2rem]",
                   isCreateOpen ? "text-white" : "text-[color:var(--text-dim)] group-hover:text-white"
                 )}
               >
                 New Profile
-              </div>
-              <div
+              </span>
+              <span
                 className={cn(
-                  "text-[10px] font-bold uppercase tracking-[0.18em] transition-colors duration-200",
+                  "block text-[10px] font-bold uppercase tracking-[0.18em] transition-colors duration-200",
                   isCreateOpen ? "text-[color:var(--text-dim)]" : "text-[color:var(--text-dim)]/50 group-hover:text-[color:var(--text-dim)]"
                 )}
               >
                 Create new profile
-              </div>
-            </div>
+              </span>
+            </button>
 
             <button type="button" onClick={onSignOut} className="group block cursor-pointer select-none space-y-1 text-left">
               <div className="text-xl md:text-2xl font-bold tracking-[-0.06em] text-[color:var(--text-dim)] transition-colors duration-200 group-hover:text-white">

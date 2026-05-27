@@ -278,7 +278,6 @@ export function BinanceDashboard({
 
             <div className="mt-10 flex-1 min-h-0 w-full outline-none" onClick={() => setSelectedPoint(null)}>
               <div ref={chartContainerRef} className="relative h-full w-full">
-                <style dangerouslySetInnerHTML={{ __html: `.recharts-wrapper, .recharts-wrapper *, .recharts-surface, .recharts-surface *, .recharts-container, .recharts-container * { outline: none !important; box-shadow: none !important; }` }} />
                 <div id="chart-reference-overlay" className="pointer-events-none absolute inset-0 z-10" />
                 {chartReady ? (
                   <LineChart width={chartSize.width} height={chartSize.height} data={chartData} margin={{ top: 8, right: baseMargin, bottom: 0, left: baseMargin }} accessibilityLayer={false}>

@@ -7,6 +7,14 @@ import { cn } from "@/lib/utils";
 
 export type SettingsSection = "general" | "apiKey" | "dangerZone";
 
+type SettingsNavButtonProps = {
+  eyebrow: string;
+  isActive: boolean;
+  isDanger?: boolean;
+  label: string;
+  onClick: () => void;
+};
+
 type SettingsPanelProps = {
   accountName: string;
   activeSection: SettingsSection | null;
@@ -31,6 +39,48 @@ type SettingsPanelProps = {
   onSaveApiKeys: () => void;
   onDeleteAccount: () => void;
 };
+
+function SettingsNavButton({
+  eyebrow,
+  isActive,
+  isDanger = false,
+  label,
+  onClick,
+}: SettingsNavButtonProps) {
+  return (
+    <button
+      aria-pressed={isActive}
+      className="group block w-full cursor-pointer select-none space-y-1 bg-transparent p-0 text-left"
+      onClick={onClick}
+      type="button"
+    >
+      <span
+        className={cn(
+          "block text-2xl font-bold tracking-[-0.06em] transition-colors duration-200 md:text-3xl sm:text-[2.2rem]",
+          isActive
+            ? isDanger ? "text-[color:var(--danger)]" : "text-white"
+            : isDanger
+              ? "text-[color:var(--text-dim)] group-hover:text-[color:var(--danger)]"
+              : "text-[color:var(--text-dim)] group-hover:text-white"
+        )}
+      >
+        {label}
+      </span>
+      <span
+        className={cn(
+          "block text-[10px] font-bold uppercase tracking-[0.18em] transition-colors duration-200",
+          isActive
+            ? isDanger ? "text-[color:var(--danger)]/80" : "text-[color:var(--text-dim)]"
+            : isDanger
+              ? "text-[color:var(--text-dim)]/50 group-hover:text-[color:var(--danger)]/80"
+              : "text-[color:var(--text-dim)]/50 group-hover:text-[color:var(--text-dim)]"
+        )}
+      >
+        {eyebrow}
+      </span>
+    </button>
+  );
+}
 
 export function SettingsPanel({
   accountName,
@@ -63,63 +113,28 @@ export function SettingsPanel({
       <div className={cn("w-full md:w-[380px] shrink-0 flex flex-col justify-between py-1 md:py-2 h-full", isOpen && "hidden md:flex")}>
         <div className="space-y-4 md:space-y-8">
           <div className="space-y-4 md:space-y-6">
-            <div onClick={() => onSelectSection("general")} className="group cursor-pointer select-none space-y-1">
-              <div
-                className={cn(
-                  "text-2xl md:text-3xl font-bold tracking-[-0.06em] transition-colors duration-200 sm:text-[2.2rem]",
-                  activeSection === "general" ? "text-white" : "text-[color:var(--text-dim)] group-hover:text-white"
-                )}
-              >
-                Settings
-              </div>
-              <div
-                className={cn(
-                  "text-[10px] font-bold uppercase tracking-[0.18em] transition-colors duration-200",
-                  activeSection === "general" ? "text-[color:var(--text-dim)]" : "text-[color:var(--text-dim)]/50 group-hover:text-[color:var(--text-dim)]"
-                )}
-              >
-                General Settings
-              </div>
-            </div>
+            <SettingsNavButton
+              eyebrow="General Settings"
+              isActive={activeSection === "general"}
+              label="Settings"
+              onClick={() => onSelectSection("general")}
+            />
 
-            <div onClick={() => onSelectSection("apiKey")} className="group cursor-pointer select-none space-y-1">
-              <div
-                className={cn(
-                  "text-2xl md:text-3xl font-bold tracking-[-0.06em] transition-colors duration-200 sm:text-[2.2rem]",
-                  activeSection === "apiKey" ? "text-white" : "text-[color:var(--text-dim)] group-hover:text-white"
-                )}
-              >
-                API Key
-              </div>
-              <div
-                className={cn(
-                  "text-[10px] font-bold uppercase tracking-[0.18em] transition-colors duration-200",
-                  activeSection === "apiKey" ? "text-[color:var(--text-dim)]" : "text-[color:var(--text-dim)]/50 group-hover:text-[color:var(--text-dim)]"
-                )}
-              >
-                MANAGE API
-              </div>
-            </div>
+            <SettingsNavButton
+              eyebrow="Manage API"
+              isActive={activeSection === "apiKey"}
+              label="API Key"
+              onClick={() => onSelectSection("apiKey")}
+            />
 
             {hasActiveUser ? (
-              <div onClick={() => onSelectSection("dangerZone")} className="group cursor-pointer select-none space-y-1">
-                <div
-                  className={cn(
-                    "text-2xl md:text-3xl font-bold tracking-[-0.06em] transition-colors duration-200 sm:text-[2.2rem]",
-                    activeSection === "dangerZone" ? "text-[color:var(--danger)]" : "text-[color:var(--text-dim)] group-hover:text-[color:var(--danger)]"
-                  )}
-                >
-                  Danger zone
-                </div>
-                <div
-                  className={cn(
-                    "text-[10px] font-bold uppercase tracking-[0.18em] transition-colors duration-200",
-                    activeSection === "dangerZone" ? "text-[color:var(--danger)]/80" : "text-[color:var(--text-dim)]/50 group-hover:text-[color:var(--danger)]/80"
-                  )}
-                >
-                  DELETE ACCOUNT
-                </div>
-              </div>
+              <SettingsNavButton
+                eyebrow="Delete account"
+                isActive={activeSection === "dangerZone"}
+                isDanger
+                label="Danger zone"
+                onClick={() => onSelectSection("dangerZone")}
+              />
             ) : null}
           </div>
         </div>
@@ -209,13 +224,14 @@ export function SettingsPanel({
                               onChange={(event) => onBinanceSecretChange(event.target.value)}
                             />
                             {!isApiKeySaved ? (
-                              <div
-                                role="button"
+                              <button
+                                aria-label={showSecret ? "Hide secret key" : "Show secret key"}
+                                className="icon-plain absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
                                 onClick={onToggleSecret}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-dim)] hover:text-white cursor-pointer animate-none"
+                                type="button"
                               >
                                 {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                              </div>
+                              </button>
                             ) : null}
                           </div>
                         </div>

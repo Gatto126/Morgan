@@ -13,8 +13,6 @@ model User {
   name                      String
   createdAt                 DateTime                @default(now())
   updatedAt                 DateTime                @updatedAt
-  binanceApiKey             String?
-  binanceApiSecret          String?
   binanceApiKeyEncrypted    String?
   binanceApiSecretEncrypted String?
   binanceApiKeyPreview      String?

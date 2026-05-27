@@ -10,14 +10,12 @@ import { InvestmentDashboard } from "./investment-dashboard";
 import { BinanceDashboard } from "./binance-dashboard";
 import { CryptoDashboard } from "./crypto-dashboard";
 import { ReviewPanel } from "./finance-shell/review-panel";
-import {
-  canSubmitDeleteAccountDialog,
-  getDeleteAccountDialogResetState
-} from "./finance-shell/delete-account-dialog";
+import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
+import { getDeleteAccountDialogResetState } from "./finance-shell/delete-account-dialog-helpers";
 import { SettingsPanel, type SettingsSection } from "./finance-shell/settings-panel";
 import type { UserRecord } from "./finance-shell/types";
 import { UploadPanel } from "./finance-shell/upload-panel";
-import { useFinanceNavigation, type Stage } from "./finance-shell/use-finance-navigation";
+import { shouldAutoOpenUpload, useFinanceNavigation, type Stage } from "./finance-shell/use-finance-navigation";
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
 import { UserSelectPanel } from "./finance-shell/user-select-panel";
 import PlusIcon from "./ui/plus-icon";
@@ -187,7 +185,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
           const restoredStage = isRestorableStage(savedStage) ? savedStage : "dashboard";
 
           setActiveUser(savedUser);
-          setShowUploadView(savedUser.transactionCount === 0);
+          setShowUploadView(shouldAutoOpenUpload(savedUser.transactionCount, restoredStage));
           setStage(restoredStage);
           setActiveSettingsSection(restoredStage === "settings" ? "general" : null);
         }
@@ -712,14 +710,15 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         )}
       >
         {shouldShowClose ? (
-          <div
-            role="button"
-            onClick={handleClosePanel}
+          <button
+            aria-label={closeTitle}
             className="absolute right-4 top-4 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
+            onClick={handleClosePanel}
             title={closeTitle}
+            type="button"
           >
             <XIcon className="h-5 w-5" strokeWidth={2.3} />
-          </div>
+          </button>
         ) : null}
         <div className="relative flex h-full w-full flex-col justify-center px-3 py-3 sm:px-5 sm:py-5">
           {panelContent}
@@ -733,39 +732,42 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
       const homeOverlay = showUploadView ? (
         <div className={cn("relative h-full w-full flex flex-col justify-center", isClosingUpload ? "upload-panel-exit" : "upload-panel-enter")}>
           {activeUser?.transactionCount !== 0 ? (
-            <div
-              role="button"
-              onClick={handleCloseUpload}
+            <button
+              aria-label="Close upload panel"
               className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
+              onClick={handleCloseUpload}
               title="Close upload panel"
+              type="button"
             >
               <XIcon className="h-5 w-5" strokeWidth={2.3} />
-            </div>
+            </button>
           ) : null}
           {previewTransactions.length > 0 ? renderReviewState() : renderUploadState()}
         </div>
       ) : showSettingsView ? (
         <div className={cn("relative h-full w-full flex flex-col justify-center", isClosingSettings ? "upload-panel-exit" : "upload-panel-enter")}>
-          <div
-            role="button"
-            onClick={handleSettingsPanelClose}
+          <button
+            aria-label="Close settings"
             className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
+            onClick={handleSettingsPanelClose}
             title="Close settings"
+            type="button"
           >
             <XIcon className="h-5 w-5" strokeWidth={2.3} />
-          </div>
+          </button>
           {renderSettingsState()}
         </div>
       ) : showUserSelectView ? (
         <div className={cn("relative h-full w-full flex flex-col justify-center", isClosingUserSelect ? "upload-panel-exit" : "upload-panel-enter")}>
-          <div
-            role="button"
-            onClick={handleCloseUserSelect}
+          <button
+            aria-label="Close profile panel"
             className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
+            onClick={handleCloseUserSelect}
             title="Close profile panel"
+            type="button"
           >
             <XIcon className="h-5 w-5" strokeWidth={2.3} />
-          </div>
+          </button>
           {renderUserSelectState()}
         </div>
       ) : null;
@@ -911,98 +913,16 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     return null;
   }
 
-  function renderDeleteAccountDialog() {
-    if (!showDeleteAccountConfirm) {
-      return null;
-    }
-
-    const canSubmitDeleteAccount = canSubmitDeleteAccountDialog(
-      deleteAccountPassword,
-      isDeletingAccount
-    );
-
-    return (
-      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-account-title"
-          className="relative flex w-full max-w-[460px] flex-col gap-5 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-shell)] p-5 shadow-2xl sm:p-6"
-        >
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={closeDeleteAccountConfirm}
-            disabled={isDeletingAccount}
-            className="absolute right-4 top-4 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white disabled:pointer-events-none disabled:opacity-40"
-          >
-            <XIcon className="h-5 w-5" strokeWidth={2.3} />
-          </button>
-
-          <div className="space-y-2 pr-8">
-            <h2 id="delete-account-title" className="text-xl font-bold uppercase tracking-[-0.04em] text-[color:var(--danger)]">
-              Delete account
-            </h2>
-            <p className="text-sm font-medium leading-relaxed text-[color:var(--text-dim)]">
-              This permanently removes every profile, transaction, Binance balance and cached price tied to this account.
-            </p>
-          </div>
-
-          <form
-            className="space-y-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (canSubmitDeleteAccount) {
-                void handleDeleteAccount();
-              }
-            }}
-          >
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
-                Password
-              </label>
-              <Input
-                autoFocus
-                value={deleteAccountPassword}
-                onChange={(event) => setDeleteAccountPassword(event.target.value)}
-                disabled={isDeletingAccount}
-                className="w-full border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-white focus:border-white focus:ring-0"
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                type="password"
-              />
-            </div>
-
-            {deleteAccountError ? (
-              <div className="text-xs font-semibold text-[color:var(--danger)]">{deleteAccountError}</div>
-            ) : null}
-
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={closeDeleteAccountConfirm}
-                disabled={isDeletingAccount}
-                className="flex h-11 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] px-5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--text-dim)] transition-colors hover:border-white hover:bg-[color:var(--surface-elevated)] hover:text-white disabled:pointer-events-none disabled:opacity-40"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!canSubmitDeleteAccount}
-                className="flex h-11 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] px-5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--danger)] transition-colors hover:border-red-400 hover:bg-[color:var(--surface-elevated)] hover:text-red-400 disabled:pointer-events-none disabled:opacity-40"
-              >
-                {isDeletingAccount ? "Deleting..." : "Delete account"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
   if (isSignedOut) {
     return <AuthShell />;
   }
+
+  const isUploadButtonActive =
+    showUploadView ||
+    (!!activeUser &&
+      shouldAutoOpenUpload(activeUser.transactionCount, stage) &&
+      !showSettingsView &&
+      !showUserSelectView);
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-[color:var(--page-bg)] text-[color:var(--text-main)]">
@@ -1020,7 +940,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                   <button
                     aria-label="Add document"
                     className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] text-[color:var(--text-main)] transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985] has-lucide"
-                    data-active={showUploadView || activeUser.transactionCount === 0 ? "true" : "false"}
+                    data-active={isUploadButtonActive ? "true" : "false"}
                     onClick={handlePlusClick}
                     type="button"
                   >
@@ -1290,17 +1210,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                     pointerEvents: importOverlayFadingOut ? "none" : "all"
                   }}
                 >
-                  <style dangerouslySetInnerHTML={{ __html: `@keyframes importSpinner { to { transform: rotate(360deg); } }` }} />
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "50%",
-                      border: "2.5px solid rgba(255,255,255,0.07)",
-                      borderTopColor: "rgba(255,255,255,0.5)",
-                      animation: "importSpinner 0.85s linear infinite"
-                    }}
-                  />
+                  <div className="import-spinner" />
                 </div>
               )}
               <input
@@ -1400,7 +1310,15 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
           <div id="dashboard-cards-portal" className="order-4 md:col-start-2 md:row-start-3" />
         </section>
       </div>
-      {renderDeleteAccountDialog()}
+      <DeleteAccountDialog
+        error={deleteAccountError}
+        isDeleting={isDeletingAccount}
+        isOpen={showDeleteAccountConfirm}
+        onClose={closeDeleteAccountConfirm}
+        onPasswordChange={setDeleteAccountPassword}
+        onSubmit={() => void handleDeleteAccount()}
+        password={deleteAccountPassword}
+      />
     </main>
   );
 }

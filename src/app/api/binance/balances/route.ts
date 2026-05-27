@@ -29,8 +29,6 @@ export async function GET(request: NextRequest) {
       prisma.user.findUnique({
         where: { id: userId },
         select: {
-          binanceApiKey: true,
-          binanceApiSecret: true,
           binanceApiKeyEncrypted: true,
           binanceApiSecretEncrypted: true,
         },
