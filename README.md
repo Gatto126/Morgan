@@ -93,10 +93,26 @@ pnpm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to use the application.
 
+### Local Runtime Policy
+
+Keep local services stopped by default. Start only the runtime needed for the
+task, then stop it when finished:
+
+- port `3000` is for the local Next.js development server;
+- `pnpm run dev:docker` also serves the app on port `3000`, but points it at
+  Docker Postgres on `localhost:5432`;
+- port `3001` is reserved for the Docker pre-production app container;
+- Docker should be running only while using Postgres or pre-production checks.
+
+Use `pnpm run docker:postgres:down` or `pnpm run docker:preprod:down` after
+Docker-backed work. Do not keep both `3000` and `3001` running unless a task
+explicitly compares development and production-like behavior.
+
 ## Available Scripts
 
 ```bash
-pnpm run dev              # Start the local development server
+pnpm run dev              # Start the local development server on port 3000
+pnpm run dev:docker       # Start Next dev on port 3000 against Docker Postgres
 pnpm run build            # Create a production build
 pnpm run start            # Start the production server
 pnpm run lint             # Run ESLint
@@ -109,6 +125,7 @@ pnpm run test:rate-limit:clear # Clear Better Auth test rate limits on safe loca
 pnpm run smoke:upload-panel # Run the upload-panel navigation smoke test
 pnpm run smoke:upload-panel:docker # Run the smoke test against the Docker app on port 3001
 pnpm run e2e:docker:full  # Run the full Docker browser flow; Binance runs only when test env keys are provided
+pnpm run e2e:realistic    # Run the large realistic browser flow against TEST_BASE_URL or port 3000
 pnpm run prisma:generate  # Generate the default Postgres Prisma client
 pnpm run prisma:generate:sqlite # Generate the SQLite Prisma client for desktop storage checks
 pnpm run db:migrate       # Apply committed Postgres Prisma migrations
@@ -116,6 +133,7 @@ pnpm run db:migrate:dev   # Create/apply a new local Postgres migration
 pnpm run db:migrate:dev:sqlite # Create/apply a local SQLite migration for the desktop scaffold
 pnpm run docker:postgres  # Start the local Postgres service
 pnpm run docker:postgres:down # Stop the local Postgres service
+pnpm run docker:preprod:build # Build the Docker pre-production app image
 pnpm run docker:preprod:up # Build and start Postgres + app in Docker
 pnpm run docker:preprod:down # Stop the Docker pre-production stack
 pnpm run docker:preprod:reset # Stop the stack and remove Docker volumes

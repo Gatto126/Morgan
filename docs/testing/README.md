@@ -38,6 +38,34 @@ pnpm run smoke:upload-panel:docker
 pnpm run e2e:docker:full
 ```
 
+## Local Runtime Policy
+
+Keep all local runtimes stopped by default. Port `3000` is for local Next.js
+development, including `pnpm run dev:docker`. Port `3001` is for the Docker
+pre-production app only. Docker should be started only for Postgres-backed
+development or pre-production checks, then stopped after the run.
+
+Prefer this loop:
+
+```powershell
+pnpm run docker:postgres
+pnpm run dev:docker
+# test the app on http://127.0.0.1:3000
+pnpm run docker:postgres:down
+```
+
+For production-like checks:
+
+```powershell
+pnpm run docker:preprod:up
+pnpm run smoke:upload-panel:docker
+pnpm run e2e:docker:full
+pnpm run docker:preprod:down
+```
+
+Do not keep both `3000` and `3001` running unless the task explicitly compares
+development and production-like behavior.
+
 The full Docker E2E script uses `TEST_BASE_URL` when provided, otherwise
 `http://127.0.0.1:3001`. It reads database settings from `.env` unless
 `TEST_DATABASE_URL` and optional `TEST_DIRECT_URL` are set.
