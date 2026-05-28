@@ -4,11 +4,7 @@ import { useRef, useState, useEffect, useLayoutEffect, useMemo, type ReactNode }
 import { useRouter } from "next/navigation";
 import { X as XIcon } from "lucide-react";
 import { AuthShell } from "./auth-shell";
-import { Dashboard } from "./dashboard";
-import { CheckingDashboard } from "./checking-dashboard";
-import { InvestmentDashboard } from "./investment-dashboard";
-import { BinanceDashboard } from "./binance-dashboard";
-import { CryptoDashboard } from "./crypto-dashboard";
+import { DashboardStageStack } from "./finance-shell/dashboard-stage-stack";
 import { ReviewPanel } from "./finance-shell/review-panel";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
 import { getDeleteAccountDialogResetState } from "./finance-shell/delete-account-dialog-helpers";
@@ -1219,63 +1215,14 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
               >
                 <div className="h-full w-full max-w-none">
                   <div className="relative flex h-full min-h-0 flex-col justify-center">
-                    {activeUser ? (
-                      <div className={cn("absolute inset-0", isDashboardStage ? "z-10" : "z-0 pointer-events-none opacity-0 invisible")}>
-                        <Dashboard
-                          emptyStateElement={activeUser.transactionCount === 0 && !activeUser.hasBinanceCredentials ? renderInlineUploadState() : undefined}
-                          hasBinanceCredentials={activeUser.hasBinanceCredentials}
-                          isActive={stage === "dashboard"}
-                          shouldLoad={activeUser.transactionCount > 0 || stage === "dashboard"}
-                          key={`dashboard-${activeUser.id}`}
-                          userId={activeUser.id}
-                          binanceRefreshKey={binanceRefreshKey}
-                          onImportRefreshComplete={stage === "dashboard" ? handleImportRefreshComplete : undefined}
-                          checkingCount={activeUser.checkingCount}
-                          investmentCount={activeUser.investmentCount}
-                          cryptoCount={activeUser.cryptoCount}
-                          transactionCount={activeUser.transactionCount}
-                        />
-                        {activeUser.checkingCount > 0 && (
-                          <CheckingDashboard
-                            isActive={stage === "checking"}
-                            shouldLoad
-                            key={`checking-${activeUser.id}`}
-                            userId={activeUser.id}
-                            onImportRefreshComplete={stage === "checking" ? handleImportRefreshComplete : undefined}
-                            transactionCount={activeUser.transactionCount}
-                          />
-                        )}
-                        {activeUser.investmentCount > 0 && (
-                          <InvestmentDashboard
-                            isActive={stage === "investment"}
-                            shouldLoad
-                            key={`investment-${activeUser.id}`}
-                            userId={activeUser.id}
-                            onImportRefreshComplete={stage === "investment" ? handleImportRefreshComplete : undefined}
-                            transactionCount={activeUser.transactionCount}
-                          />
-                        )}
-                        {activeUser.cryptoCount > 0 && (
-                          <CryptoDashboard
-                            isActive={stage === "crypto"}
-                            shouldLoad
-                            key={`crypto-${activeUser.id}`}
-                            userId={activeUser.id}
-                            onImportRefreshComplete={stage === "crypto" ? handleImportRefreshComplete : undefined}
-                            transactionCount={activeUser.transactionCount}
-                          />
-                        )}
-                        {activeUser.hasBinanceCredentials && (
-                          <BinanceDashboard
-                            isActive={stage === "binance"}
-                            shouldLoad
-                            key={`binance-${activeUser.id}`}
-                            userId={activeUser.id}
-                            transactionCount={activeUser.transactionCount}
-                          />
-                        )}
-                      </div>
-                    ) : null}
+                    <DashboardStageStack
+                      activeUser={activeUser}
+                      binanceRefreshKey={binanceRefreshKey}
+                      isDashboardStage={isDashboardStage}
+                      onImportRefreshComplete={handleImportRefreshComplete}
+                      renderInlineUploadState={renderInlineUploadState}
+                      stage={stage}
+                    />
 
                     {!isDashboardStage ? (
                       <>
