@@ -1,55 +1,36 @@
 import crypto from "node:crypto";
-import type { Prisma } from "@prisma/client";
 
-import { prisma } from "@/server/db/prisma";
 import { classifyTransaction } from "@/domain/imports/transaction-classifier";
 import { fetchAssetMetadata, fetchAssetHistory } from "@/integrations/justetf/justetf-parser";
 import { fetchCryptoHistory } from "@/integrations/binance/binance-parser";
 import { apiLogger } from "@/server/logging/logger";
 import type { PreviewTransactionPayload } from "@/domain/imports/transaction-preview";
+import {
+  transactionImportRepository,
+  type CheckingTransactionCreateManyInput,
+  type CryptoTransactionCreateManyInput,
+  type InvestmentTransactionCreateManyInput,
+  type TransactionImportRepository
+} from "@/server/repositories/transaction-import-repository";
 
 export { markPreviewTransactions, previewTransactionSchema } from "@/domain/imports/transaction-preview";
 export type { PreviewTransactionPayload } from "@/domain/imports/transaction-preview";
 
 const log = apiLogger("Import");
 
-export async function getExistingFingerprints(userId: string, fingerprints: string[]) {
-  if (fingerprints.length === 0) {
-    return new Set<string>();
-  }
-
-  const [checkingTxs, investmentTxs, cryptoTxs] = await Promise.all([
-    prisma.checkingTransaction.findMany({
-      where: { userId, fingerprint: { in: fingerprints } },
-      select: { fingerprint: true }
-    }),
-    prisma.investmentTransaction.findMany({
-      where: { userId, fingerprint: { in: fingerprints } },
-      select: { fingerprint: true }
-    }),
-    prisma.cryptoTransaction.findMany({
-      where: { userId, fingerprint: { in: fingerprints } },
-      select: { fingerprint: true }
-    })
-  ]);
-
-  return new Set([
-    ...checkingTxs.map((t) => t.fingerprint),
-    ...investmentTxs.map((t) => t.fingerprint),
-    ...cryptoTxs.map((t) => t.fingerprint)
-  ]);
+export async function getExistingFingerprints(
+  userId: string,
+  fingerprints: string[],
+  repository: TransactionImportRepository = transactionImportRepository
+) {
+  return repository.getExistingFingerprints(userId, fingerprints);
 }
 
-export async function assertUserExists(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: {
-      id: userId
-    },
-    select: {
-      id: true,
-      name: true
-    }
-  });
+export async function assertUserExists(
+  userId: string,
+  repository: TransactionImportRepository = transactionImportRepository
+) {
+  const user = await repository.findUser(userId);
 
   if (!user) {
     throw new Error("Utente non trovato.");
@@ -61,12 +42,14 @@ export async function assertUserExists(userId: string) {
 export async function importPreviewTransactions(
   userId: string,
   transactions: PreviewTransactionPayload[],
-  statementFileName?: string
+  statementFileName?: string,
+  repository: TransactionImportRepository = transactionImportRepository
 ) {
   const uniqueTransactions = [...new Map(transactions.map((transaction) => [transaction.fingerprint, transaction])).values()];
   const existingFingerprints = await getExistingFingerprints(
     userId,
-    uniqueTransactions.map((transaction) => transaction.fingerprint)
+    uniqueTransactions.map((transaction) => transaction.fingerprint),
+    repository
   );
 
   const transactionsToCreate = uniqueTransactions.filter(
@@ -74,9 +57,9 @@ export async function importPreviewTransactions(
   );
 
   if (transactionsToCreate.length > 0) {
-    const checkingData: Prisma.CheckingTransactionCreateManyInput[] = [];
-    const investmentData: Prisma.InvestmentTransactionCreateManyInput[] = [];
-    const cryptoData: Prisma.CryptoTransactionCreateManyInput[] = [];
+    const checkingData: CheckingTransactionCreateManyInput[] = [];
+    const investmentData: InvestmentTransactionCreateManyInput[] = [];
+    const cryptoData: CryptoTransactionCreateManyInput[] = [];
 
     for (const tx of transactionsToCreate) {
       const classification = classifyTransaction(tx.typeLabel, tx.description);
@@ -184,15 +167,11 @@ export async function importPreviewTransactions(
       }
     }
 
-    // Atomic insert of user-specific transactions
-    const queries: Prisma.PrismaPromise<Prisma.BatchPayload>[] = [];
-    if (investmentData.length > 0) queries.push(prisma.investmentTransaction.createMany({ data: investmentData }));
-    if (cryptoData.length > 0) queries.push(prisma.cryptoTransaction.createMany({ data: cryptoData }));
-    if (checkingData.length > 0) queries.push(prisma.checkingTransaction.createMany({ data: checkingData }));
-    
-    if (queries.length > 0) {
-      await prisma.$transaction(queries);
-    }
+    await repository.createTransactions({
+      checkingData,
+      investmentData,
+      cryptoData
+    });
 
     // Extract unique ISINs from transactions to create
     const isinsToProcess = new Set<string>();
@@ -226,14 +205,7 @@ export async function importPreviewTransactions(
       if (isinsToProcess.size === 0) return;
       log.info(`${isinsToProcess.size} ISIN unici da elaborare: ${Array.from(isinsToProcess).join(", ")}`);
       
-      const existingAssets = await prisma.asset.findMany({
-        where: {
-          isin: { in: Array.from(isinsToProcess) }
-        },
-        select: { isin: true }
-      });
-
-      const existingIsins = new Set(existingAssets.map((a) => a.isin));
+      const existingIsins = await repository.listExistingAssetIsins(Array.from(isinsToProcess));
       if (existingIsins.size > 0) {
         log.info(`Saltati ${existingIsins.size} ISIN già presenti: ${Array.from(existingIsins).join(", ")}`);
       }
@@ -246,96 +218,19 @@ export async function importPreviewTransactions(
             try {
               log.info(`Fetching metadata JustETF per nuovo ISIN: ${isin}`);
               const metadata = await fetchAssetMetadata(isin);
-              await prisma.asset.upsert({
-                where: { isin },
-                update: {
-                  type: metadata.type,
-                  wkn: metadata.wkn,
-                  name: metadata.name,
-                  ter: metadata.ter,
-                  ticker: metadata.ticker,
-                  marketCap: metadata.marketCap,
-                  country: metadata.country,
-                  sector: metadata.sector,
-                  dividendYield: metadata.dividendYield,
-                  perfYTD: metadata.perfYTD,
-                  perf1Month: metadata.perf1Month,
-                  perf3Months: metadata.perf3Months,
-                  perf6Months: metadata.perf6Months,
-                  perf1Year: metadata.perf1Year,
-                  perf3Years: metadata.perf3Years,
-                  perf5Years: metadata.perf5Years,
-                  volatility1Year: metadata.volatility1Year,
-                  volatility3Years: metadata.volatility3Years,
-                  volatility5Years: metadata.volatility5Years,
-                  returnPerRisk1Year: metadata.returnPerRisk1Year,
-                  returnPerRisk3Years: metadata.returnPerRisk3Years,
-                  returnPerRisk5Years: metadata.returnPerRisk5Years,
-                  maxDrawdown1Year: metadata.maxDrawdown1Year,
-                  maxDrawdown3Years: metadata.maxDrawdown3Years,
-                  maxDrawdown5Years: metadata.maxDrawdown5Years,
-                  maxDrawdownSinceInception: metadata.maxDrawdownSinceInception,
-                  fundSize: metadata.fundSize,
-                  distributionPolicy: metadata.distributionPolicy,
-                  replication: metadata.replication,
-                  inceptionDate: metadata.inceptionDate,
-                  holdingsTotalWeight: metadata.holdingsTotalWeight,
-                  holdingsCount: metadata.holdingsCount,
-                  topHoldings: metadata.topHoldings,
-                  countriesWeight: metadata.countriesWeight,
-                  sectorsWeight: metadata.sectorsWeight
-                },
-                create: {
-                  isin,
-                  type: metadata.type,
-                  wkn: metadata.wkn,
-                  name: metadata.name,
-                  ter: metadata.ter,
-                  ticker: metadata.ticker,
-                  marketCap: metadata.marketCap,
-                  country: metadata.country,
-                  sector: metadata.sector,
-                  dividendYield: metadata.dividendYield,
-                  perfYTD: metadata.perfYTD,
-                  perf1Month: metadata.perf1Month,
-                  perf3Months: metadata.perf3Months,
-                  perf6Months: metadata.perf6Months,
-                  perf1Year: metadata.perf1Year,
-                  perf3Years: metadata.perf3Years,
-                  perf5Years: metadata.perf5Years,
-                  volatility1Year: metadata.volatility1Year,
-                  volatility3Years: metadata.volatility3Years,
-                  volatility5Years: metadata.volatility5Years,
-                  returnPerRisk1Year: metadata.returnPerRisk1Year,
-                  returnPerRisk3Years: metadata.returnPerRisk3Years,
-                  returnPerRisk5Years: metadata.returnPerRisk5Years,
-                  maxDrawdown1Year: metadata.maxDrawdown1Year,
-                  maxDrawdown3Years: metadata.maxDrawdown3Years,
-                  maxDrawdown5Years: metadata.maxDrawdown5Years,
-                  maxDrawdownSinceInception: metadata.maxDrawdownSinceInception,
-                  fundSize: metadata.fundSize,
-                  distributionPolicy: metadata.distributionPolicy,
-                  replication: metadata.replication,
-                  inceptionDate: metadata.inceptionDate,
-                  holdingsTotalWeight: metadata.holdingsTotalWeight,
-                  holdingsCount: metadata.holdingsCount,
-                  topHoldings: metadata.topHoldings,
-                  countriesWeight: metadata.countriesWeight,
-                  sectorsWeight: metadata.sectorsWeight
-                }
-              });
+              await repository.upsertAssetMetadata(isin, metadata);
 
               log.info(`Fetching storico prezzi JustETF per nuovo ISIN: ${isin}`);
               const historyPoints = await fetchAssetHistory(isin);
               if (historyPoints.length > 0) {
-                await prisma.assetHistory.createMany({
-                  data: historyPoints.map((p) => ({
+                await repository.createAssetHistory(
+                  historyPoints.map((p) => ({
                     isin,
                     date: p.date,
                     value: p.value,
                     currency: "EUR"
                   }))
-                });
+                );
                 log.info(`Salvato storico prezzi per ${isin}: ${historyPoints.length} punti`);
               }
             } catch (err) {
@@ -350,14 +245,7 @@ export async function importPreviewTransactions(
       if (tokensToProcess.size === 0) return;
       log.info(`${tokensToProcess.size} token crypto unici da elaborare: ${Array.from(tokensToProcess).join(", ")}`);
 
-      const existingCryptoAssets = await prisma.cryptoAsset.findMany({
-        where: {
-          tokenSymbol: { in: Array.from(tokensToProcess) }
-        },
-        select: { tokenSymbol: true }
-      });
-
-      const existingTokens = new Set(existingCryptoAssets.map((c) => c.tokenSymbol));
+      const existingTokens = await repository.listExistingCryptoTokens(Array.from(tokensToProcess));
       if (existingTokens.size > 0) {
         log.info(`Saltati ${existingTokens.size} token crypto già presenti: ${Array.from(existingTokens).join(", ")}`);
       }
@@ -369,28 +257,19 @@ export async function importPreviewTransactions(
           missingTokens.map(async (symbol) => {
             try {
               log.info(`Creazione metadati crypto per: ${symbol}`);
-              await prisma.cryptoAsset.upsert({
-                where: { tokenSymbol: symbol },
-                update: {
-                  name: tokenNames.get(symbol) || symbol
-                },
-                create: {
-                  tokenSymbol: symbol,
-                  name: tokenNames.get(symbol) || symbol
-                }
-              });
+              await repository.upsertCryptoAsset(symbol, tokenNames.get(symbol) || symbol);
 
               log.info(`Fetching storico prezzi Binance per nuova crypto: ${symbol}`);
               const historyPoints = await fetchCryptoHistory(symbol);
               if (historyPoints.length > 0) {
-                await prisma.assetHistory.createMany({
-                  data: historyPoints.map((p) => ({
+                await repository.createAssetHistory(
+                  historyPoints.map((p) => ({
                     isin: symbol,
                     date: p.date,
                     value: p.value,
                     currency: "EUR"
                   }))
-                });
+                );
                 log.info(`Salvato storico prezzi Binance per ${symbol}: ${historyPoints.length} punti`);
               }
             } catch (err) {

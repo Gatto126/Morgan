@@ -1,7 +1,10 @@
 import { verifyPassword } from "better-auth/crypto";
 
 import { hasLocalPasswordInput } from "@/domain/auth/local-auth";
-import { prisma } from "@/server/db/prisma";
+import {
+  accountDeletionRepository,
+  type AccountDeletionRepository
+} from "@/server/repositories/account-deletion-repository";
 
 export class AccountDeleteValidationError extends Error {
   constructor(
@@ -46,91 +49,58 @@ export async function parseAccountDeletePassword(request: Request) {
   return password;
 }
 
-export async function verifyAccountDeletePassword(ownerId: string, password: string) {
-  const credentialAccount = await prisma.authAccount.findFirst({
-    where: {
-      userId: ownerId,
-      providerId: "credential",
-      password: { not: null }
-    },
-    select: { password: true }
-  });
+export async function verifyAccountDeletePassword(
+  ownerId: string,
+  password: string,
+  repository: AccountDeletionRepository = accountDeletionRepository
+) {
+  const credentialPassword = await repository.getCredentialPassword(ownerId);
 
-  if (!credentialAccount?.password) {
+  if (!credentialPassword) {
     return false;
   }
 
   return verifyPassword({
-    hash: credentialAccount.password,
+    hash: credentialPassword,
     password
   });
 }
 
-export async function deleteAccount(ownerId: string): Promise<AccountDeletionResult> {
-  const profiles = await prisma.user.findMany({
-    where: { ownerId },
-    select: { id: true }
-  });
-  const profileIds = profiles.map((profile) => profile.id);
+export async function deleteAccount(
+  ownerId: string,
+  repository: AccountDeletionRepository = accountDeletionRepository
+): Promise<AccountDeletionResult> {
+  const profileIds = await repository.listProfileIds(ownerId);
   const binanceSyncKeys = profileIds.map((profileId) => `binance_sync_${profileId}`);
 
   let isinsToDelete: string[] = [];
   let tokensToDelete: string[] = [];
 
   if (profileIds.length > 0) {
-    const [investmentRows, cryptoRows, binanceRows] = await Promise.all([
-      prisma.investmentTransaction.findMany({
-        where: { userId: { in: profileIds } },
-        select: { isin: true }
-      }),
-      prisma.cryptoTransaction.findMany({
-        where: { userId: { in: profileIds } },
-        select: { tokenSymbol: true }
-      }),
-      prisma.binanceBalance.findMany({
-        where: { userId: { in: profileIds } },
-        select: { tokenSymbol: true }
-      })
+    const [userIsins, userCryptoTokens, userBinanceTokens] = await Promise.all([
+      repository.listInvestmentIsins(profileIds),
+      repository.listCryptoTokens(profileIds),
+      repository.listBinanceTokens(profileIds)
     ]);
 
-    const userIsins = uniqueStrings(investmentRows.map((transaction) => transaction.isin));
     const userTokens = uniqueStrings([
-      ...cryptoRows.map((transaction) => transaction.tokenSymbol),
-      ...binanceRows.map((balance) => balance.tokenSymbol)
+      ...userCryptoTokens,
+      ...userBinanceTokens
     ]);
 
     if (userIsins.length > 0) {
-      const otherInvestmentRows = await prisma.investmentTransaction.findMany({
-        where: {
-          userId: { notIn: profileIds },
-          isin: { in: userIsins }
-        },
-        select: { isin: true }
-      });
-      const otherIsins = new Set(uniqueStrings(otherInvestmentRows.map((transaction) => transaction.isin)));
+      const otherIsins = new Set(await repository.listOtherInvestmentIsins(profileIds, userIsins));
       isinsToDelete = userIsins.filter((isin) => !otherIsins.has(isin));
     }
 
     if (userTokens.length > 0) {
-      const [otherCryptoRows, otherBinanceRows] = await Promise.all([
-        prisma.cryptoTransaction.findMany({
-          where: {
-            userId: { notIn: profileIds },
-            tokenSymbol: { in: userTokens }
-          },
-          select: { tokenSymbol: true }
-        }),
-        prisma.binanceBalance.findMany({
-          where: {
-            userId: { notIn: profileIds },
-            tokenSymbol: { in: userTokens }
-          },
-          select: { tokenSymbol: true }
-        })
+      const [otherCryptoTokens, otherBinanceTokens] = await Promise.all([
+        repository.listOtherCryptoTokens(profileIds, userTokens),
+        repository.listOtherBinanceTokens(profileIds, userTokens)
       ]);
       const otherTokens = new Set(uniqueStrings([
-        ...otherCryptoRows.map((transaction) => transaction.tokenSymbol),
-        ...otherBinanceRows.map((balance) => balance.tokenSymbol)
+        ...otherCryptoTokens,
+        ...otherBinanceTokens
       ]));
       tokensToDelete = userTokens.filter((token) => !otherTokens.has(token));
     }
@@ -142,61 +112,11 @@ export async function deleteAccount(ownerId: string): Promise<AccountDeletionRes
     ...binanceSyncKeys
   ]);
 
-  const result = await prisma.$transaction(async (tx) => {
-    if (profileIds.length > 0) {
-      await tx.checkingTransaction.deleteMany({ where: { userId: { in: profileIds } } });
-      await tx.investmentTransaction.deleteMany({ where: { userId: { in: profileIds } } });
-      await tx.cryptoTransaction.deleteMany({ where: { userId: { in: profileIds } } });
-      await tx.binanceBalance.deleteMany({ where: { userId: { in: profileIds } } });
-      await tx.user.deleteMany({ where: { ownerId } });
-    }
-
-    await tx.authSession.deleteMany({ where: { userId: ownerId } });
-    await tx.authAccount.deleteMany({ where: { userId: ownerId } });
-    await tx.authUser.deleteMany({ where: { id: ownerId } });
-
-    const remainingProfiles = await tx.user.count();
-
-    if (remainingProfiles === 0) {
-      const deletedHistory = await tx.assetHistory.deleteMany({});
-      const deletedAssets = await tx.asset.deleteMany({});
-      const deletedCryptoAssets = await tx.cryptoAsset.deleteMany({});
-      const deletedPriceCache = await tx.priceCache.deleteMany({});
-
-      return {
-        cleanupMode: "full" as const,
-        deletedHistory: deletedHistory.count,
-        deletedAssets: deletedAssets.count,
-        deletedCryptoAssets: deletedCryptoAssets.count,
-        deletedPriceCache: deletedPriceCache.count
-      };
-    }
-
-    const assetHistoryKeys = uniqueStrings([...isinsToDelete, ...tokensToDelete]);
-    const deletedHistory =
-      assetHistoryKeys.length > 0
-        ? await tx.assetHistory.deleteMany({ where: { isin: { in: assetHistoryKeys } } })
-        : { count: 0 };
-    const deletedAssets =
-      isinsToDelete.length > 0
-        ? await tx.asset.deleteMany({ where: { isin: { in: isinsToDelete } } })
-        : { count: 0 };
-    const deletedCryptoAssets =
-      tokensToDelete.length > 0
-        ? await tx.cryptoAsset.deleteMany({ where: { tokenSymbol: { in: tokensToDelete } } })
-        : { count: 0 };
-    const deletedPriceCache =
-      scopedPriceCacheKeys.length > 0
-        ? await tx.priceCache.deleteMany({ where: { key: { in: scopedPriceCacheKeys } } })
-        : { count: 0 };
-
-    return {
-      cleanupMode: "scoped" as const,
-      deletedHistory: deletedHistory.count,
-      deletedAssets: deletedAssets.count,
-      deletedCryptoAssets: deletedCryptoAssets.count,
-      deletedPriceCache: deletedPriceCache.count
-    };
+  const result = await repository.deleteAccountData(ownerId, {
+    profileIds,
+    isinsToDelete,
+    tokensToDelete,
+    scopedPriceCacheKeys
   });
 
   return {

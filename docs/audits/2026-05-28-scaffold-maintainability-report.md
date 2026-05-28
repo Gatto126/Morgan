@@ -308,9 +308,10 @@ Stato dei candidati:
 3. `profile-service.ts` estratto in `src/server/services/profile-service.ts`.
 4. `binance-sync.ts` estratto in `src/server/services/binance-sync.ts`; il client
    in `src/integrations/binance` non importa piu' Prisma o codice security.
-5. Repository layer minimale introdotto con
-   `src/server/repositories/profile-repository.ts` e
-   `src/server/repositories/binance-repository.ts`.
+5. Repository layer introdotto per `profile`, `binance`, `dashboard`,
+   `account-deletion` e `transaction-import`.
+6. `src/server/services` non importa piu' Prisma o `@prisma/client`; la regola
+   ESLint `no-restricted-imports` impedisce nuove dipendenze dirette dai service.
 
 ## Script
 
@@ -498,9 +499,10 @@ Stato attuale: non ci sono piu' test sotto `src/`. I test applicativi vivono in
 La fase 1 del piano e' completata. Sono completati anche il primo taglio della
 fase 2 sugli script, la separazione di `src/lib` e l'estrazione dei servizi
 `dashboard-data`, `account-deletion`, `profile-service` e `binance-sync`.
-Il primo repository layer e' in uso per profili e Binance; restano da portare
-dietro repository `dashboard-data`, `account-deletion` e `transaction-import`,
-oltre alle regole automatiche di boundary lint.
+Il repository layer e' in uso per i service business principali:
+`profile-service`, `binance-sync`, `dashboard-data`, `account-deletion` e
+`transaction-import`. Resta da valutare una seconda fase sui direct Prisma
+ancora presenti in auth guard, health check e route read-only legacy.
 
 ## Criteri Di Accettazione
 

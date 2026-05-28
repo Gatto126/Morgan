@@ -187,8 +187,7 @@ boundaries are:
 - `src/client/` for browser-only client wiring;
 - thin route handlers under `src/app/api/` that call `src/server/services/`
   for business workflows;
-- `src/server/repositories/` for persistence access already extracted from
-  stable services;
+- `src/server/repositories/` for persistence access used by business services;
 - `scripts/e2e/` for browser flows;
 - `scripts/testing/` for local test maintenance;
 - `docs/audits/` for durable audit reports;
@@ -235,8 +234,9 @@ Until the repo is physically split:
 - treat `src/components/ui` as future `packages/ui`;
 - treat `src/domain` as future `packages/domain`;
 - treat `src/integrations` as future `packages/integrations`;
-- keep new persistence-heavy code behind `src/server/services` instead of
-  spreading Prisma calls into route handlers or UI components;
+- keep new persistence-heavy code behind `src/server/repositories` and call it
+  from `src/server/services`;
+- `src/server/services` is guarded by ESLint against direct Prisma imports;
 - document any target-specific decision in `docs/architecture`.
 
 This avoids a big-bang migration while still making every new change point in the right direction.

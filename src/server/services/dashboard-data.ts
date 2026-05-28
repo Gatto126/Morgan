@@ -1,22 +1,15 @@
 import { resolveDailyEndingBalanceCents } from "@/domain/finance/checking-balance";
-import { prisma } from "@/server/db/prisma";
+import {
+  dashboardRepository,
+  type DashboardRepository
+} from "@/server/repositories/dashboard-repository";
 
-export async function getDashboardData(userId: string) {
+export async function getDashboardData(
+  userId: string,
+  repository: DashboardRepository = dashboardRepository
+) {
     // Retrieve transactions from separate tables
-    const [checkingTxs, investmentTxs, cryptoTxs] = await Promise.all([
-      prisma.checkingTransaction.findMany({
-        where: { userId },
-        orderBy: { bookingDate: "asc" }
-      }),
-      prisma.investmentTransaction.findMany({
-        where: { userId },
-        orderBy: { bookingDate: "asc" }
-      }),
-      prisma.cryptoTransaction.findMany({
-        where: { userId },
-        orderBy: { bookingDate: "asc" }
-      })
-    ]);
+    const { checkingTxs, investmentTxs, cryptoTxs } = await repository.listTransactions(userId);
 
     const mappedChecking = checkingTxs.map((t) => ({
       sourceInstitution: t.sourceInstitution,
@@ -180,18 +173,7 @@ export async function getDashboardData(userId: string) {
 
     const allSymbols = [...isins, ...cryptoSymbols];
 
-    const historyPrices = await prisma.assetHistory.findMany({
-      where: {
-        isin: { in: allSymbols },
-        currency: "EUR"
-      },
-      select: {
-        isin: true,
-        date: true,
-        value: true
-      },
-      orderBy: { date: "asc" }
-    });
+    const historyPrices = await repository.listAssetHistory(allSymbols);
 
     const priceMap = new Map<string, Map<string, number>>();
     for (const hp of historyPrices) {

@@ -1,32 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextResponse } from "next/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   authGuardResponse: vi.fn(),
-  authAccountFindFirst: vi.fn(),
   requireAuth: vi.fn(),
+  getCredentialPassword: vi.fn(),
+  listProfileIds: vi.fn(),
+  listInvestmentIsins: vi.fn(),
+  listCryptoTokens: vi.fn(),
+  listBinanceTokens: vi.fn(),
+  listOtherInvestmentIsins: vi.fn(),
+  listOtherCryptoTokens: vi.fn(),
+  listOtherBinanceTokens: vi.fn(),
+  deleteAccountData: vi.fn(),
   logError: vi.fn(),
   logRequest: vi.fn(),
   logResponse: vi.fn(),
-  profileFindMany: vi.fn(),
-  investmentFindMany: vi.fn(),
-  cryptoFindMany: vi.fn(),
-  binanceBalanceFindMany: vi.fn(),
-  transaction: vi.fn(),
-  tx: {
-    checkingTransaction: { deleteMany: vi.fn() },
-    investmentTransaction: { deleteMany: vi.fn() },
-    cryptoTransaction: { deleteMany: vi.fn() },
-    binanceBalance: { deleteMany: vi.fn() },
-    user: { deleteMany: vi.fn(), count: vi.fn() },
-    authSession: { deleteMany: vi.fn() },
-    authAccount: { deleteMany: vi.fn() },
-    authUser: { deleteMany: vi.fn() },
-    assetHistory: { deleteMany: vi.fn() },
-    asset: { deleteMany: vi.fn() },
-    cryptoAsset: { deleteMany: vi.fn() },
-    priceCache: { deleteMany: vi.fn() }
-  },
   verifyPassword: vi.fn()
 }));
 
@@ -35,24 +24,17 @@ vi.mock("@/server/auth/auth-guard", () => ({
   requireAuth: mocks.requireAuth
 }));
 
-vi.mock("@/server/db/prisma", () => ({
-  prisma: {
-    authAccount: {
-      findFirst: mocks.authAccountFindFirst
-    },
-    user: {
-      findMany: mocks.profileFindMany
-    },
-    investmentTransaction: {
-      findMany: mocks.investmentFindMany
-    },
-    cryptoTransaction: {
-      findMany: mocks.cryptoFindMany
-    },
-    binanceBalance: {
-      findMany: mocks.binanceBalanceFindMany
-    },
-    $transaction: mocks.transaction
+vi.mock("@/server/repositories/account-deletion-repository", () => ({
+  accountDeletionRepository: {
+    getCredentialPassword: mocks.getCredentialPassword,
+    listProfileIds: mocks.listProfileIds,
+    listInvestmentIsins: mocks.listInvestmentIsins,
+    listCryptoTokens: mocks.listCryptoTokens,
+    listBinanceTokens: mocks.listBinanceTokens,
+    listOtherInvestmentIsins: mocks.listOtherInvestmentIsins,
+    listOtherCryptoTokens: mocks.listOtherCryptoTokens,
+    listOtherBinanceTokens: mocks.listOtherBinanceTokens,
+    deleteAccountData: mocks.deleteAccountData
   }
 }));
 
@@ -88,47 +70,30 @@ function makeRequest(
   });
 }
 
-function resetTxMocks() {
-  for (const model of Object.values(mocks.tx)) {
-    for (const fn of Object.values(model)) {
-      fn.mockReset();
-    }
-  }
-}
-
 describe("DELETE /api/account", () => {
   beforeEach(() => {
-    mocks.authGuardResponse.mockReset();
-    mocks.authAccountFindFirst.mockReset();
-    mocks.requireAuth.mockReset();
-    mocks.logError.mockReset();
-    mocks.logRequest.mockReset();
-    mocks.logResponse.mockReset();
-    mocks.profileFindMany.mockReset();
-    mocks.investmentFindMany.mockReset();
-    mocks.cryptoFindMany.mockReset();
-    mocks.binanceBalanceFindMany.mockReset();
-    mocks.transaction.mockReset();
-    mocks.verifyPassword.mockReset();
-    resetTxMocks();
+    for (const mock of Object.values(mocks)) {
+      mock.mockReset();
+    }
 
     mocks.authGuardResponse.mockReturnValue(null);
     mocks.requireAuth.mockResolvedValue({ user: { id: "owner-1", name: "Luca" } });
-    mocks.authAccountFindFirst.mockResolvedValue({ password: "hashed-password" });
-    mocks.profileFindMany.mockResolvedValue([{ id: "profile-1" }]);
-    mocks.investmentFindMany.mockResolvedValue([]);
-    mocks.cryptoFindMany.mockResolvedValue([]);
-    mocks.binanceBalanceFindMany.mockResolvedValue([]);
-    mocks.transaction.mockImplementation(async (callback) => callback(mocks.tx));
+    mocks.getCredentialPassword.mockResolvedValue("hashed-password");
+    mocks.listProfileIds.mockResolvedValue(["profile-1"]);
+    mocks.listInvestmentIsins.mockResolvedValue([]);
+    mocks.listCryptoTokens.mockResolvedValue([]);
+    mocks.listBinanceTokens.mockResolvedValue([]);
+    mocks.listOtherInvestmentIsins.mockResolvedValue([]);
+    mocks.listOtherCryptoTokens.mockResolvedValue([]);
+    mocks.listOtherBinanceTokens.mockResolvedValue([]);
+    mocks.deleteAccountData.mockResolvedValue({
+      cleanupMode: "full",
+      deletedHistory: 0,
+      deletedAssets: 0,
+      deletedCryptoAssets: 0,
+      deletedPriceCache: 0
+    });
     mocks.verifyPassword.mockResolvedValue(true);
-
-    for (const model of Object.values(mocks.tx)) {
-      for (const fn of Object.values(model)) {
-        fn.mockResolvedValue({ count: 0 });
-      }
-    }
-
-    mocks.tx.user.count.mockResolvedValue(0);
   });
 
   it("preserves auth guard responses", async () => {
@@ -141,7 +106,7 @@ describe("DELETE /api/account", () => {
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "Autenticazione richiesta." });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.deleteAccountData).not.toHaveBeenCalled();
   });
 
   it("rejects destructive requests without a same-origin signal", async () => {
@@ -149,7 +114,7 @@ describe("DELETE /api/account", () => {
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({ error: "Request origin not allowed." });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.deleteAccountData).not.toHaveBeenCalled();
   });
 
   it("rejects malformed JSON before deleting anything", async () => {
@@ -157,7 +122,7 @@ describe("DELETE /api/account", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "Invalid request body." });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.deleteAccountData).not.toHaveBeenCalled();
   });
 
   it("requires a password field", async () => {
@@ -165,7 +130,7 @@ describe("DELETE /api/account", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "Password is required." });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.deleteAccountData).not.toHaveBeenCalled();
   });
 
   it("rejects invalid passwords without deleting anything", async () => {
@@ -177,23 +142,16 @@ describe("DELETE /api/account", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Password confirmation is invalid."
     });
-    expect(mocks.authAccountFindFirst).toHaveBeenCalledWith({
-      where: {
-        userId: "owner-1",
-        providerId: "credential",
-        password: { not: null }
-      },
-      select: { password: true }
-    });
+    expect(mocks.getCredentialPassword).toHaveBeenCalledWith("owner-1");
     expect(mocks.verifyPassword).toHaveBeenCalledWith({
       hash: "hashed-password",
       password: "Wrong1"
     });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.deleteAccountData).not.toHaveBeenCalled();
   });
 
   it("rejects users without a credential password", async () => {
-    mocks.authAccountFindFirst.mockResolvedValueOnce(null);
+    mocks.getCredentialPassword.mockResolvedValueOnce(null);
 
     const response = await DELETE(makeRequest({ password: "Secret1" }));
 
@@ -202,7 +160,7 @@ describe("DELETE /api/account", () => {
       error: "Password confirmation is invalid."
     });
     expect(mocks.verifyPassword).not.toHaveBeenCalled();
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.deleteAccountData).not.toHaveBeenCalled();
   });
 
   it("rate limits repeated failed password confirmations", async () => {
@@ -221,10 +179,10 @@ describe("DELETE /api/account", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Too many failed account deletion attempts."
     });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.deleteAccountData).not.toHaveBeenCalled();
   });
 
-  it("accepts a valid password and runs the deletion transaction", async () => {
+  it("accepts a valid password and runs the deletion repository workflow", async () => {
     const response = await DELETE(makeRequest({ password: "Secret1" }));
 
     expect(response.status).toBe(200);
@@ -237,11 +195,12 @@ describe("DELETE /api/account", () => {
       hash: "hashed-password",
       password: "Secret1"
     });
-    expect(mocks.profileFindMany).toHaveBeenCalledWith({
-      where: { ownerId: "owner-1" },
-      select: { id: true }
+    expect(mocks.listProfileIds).toHaveBeenCalledWith("owner-1");
+    expect(mocks.deleteAccountData).toHaveBeenCalledWith("owner-1", {
+      profileIds: ["profile-1"],
+      isinsToDelete: [],
+      tokensToDelete: [],
+      scopedPriceCacheKeys: ["binance_sync_profile-1"]
     });
-    expect(mocks.transaction).toHaveBeenCalledOnce();
-    expect(mocks.tx.authUser.deleteMany).toHaveBeenCalledWith({ where: { id: "owner-1" } });
   });
 });
