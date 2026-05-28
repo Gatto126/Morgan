@@ -116,6 +116,11 @@ Recommended direction:
 
 Tauri is preferred over a C#/.NET WebView2 shell because Morgan's UI and workflows are already React/TypeScript. A C# shell can be reconsidered only if the desktop app becomes deeply Windows-native.
 
+The current desktop product direction is captured as a concept mockup in
+`docs/desktop/windows-desktop-mockup.md`. That mockup is not an implementation
+commitment; it exists to define desktop-only product concerns before any desktop
+runtime code is introduced.
+
 ## Migration Implications
 
 The project now has explicit Prisma schemas for two database providers:

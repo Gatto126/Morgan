@@ -191,6 +191,8 @@ boundaries are:
 - `scripts/e2e/` for browser flows;
 - `scripts/testing/` for local test maintenance;
 - `docs/audits/` for durable audit reports;
+- `docs/desktop/` for desktop/offline concepts and mockups that should not yet
+  introduce desktop runtime code;
 - ignored `artifacts/` for disposable run outputs.
 
 ## Environment Files
@@ -236,8 +238,13 @@ Until the repo is physically split:
 - treat `src/integrations` as future `packages/integrations`;
 - keep new persistence-heavy code behind `src/server/repositories` and call it
   from `src/server/services`;
+- `src/domain` and `src/shared` are guarded by ESLint against React, Next,
+  Prisma, server, client and component imports;
+- `src/components` and `src/client` are guarded by ESLint against server/runtime
+  imports;
 - `src/app`, `src/server/services` and `src/server/auth/auth-guard.ts` are
-  guarded by ESLint against direct Prisma imports;
+  guarded by ESLint against direct Prisma/database imports;
+- `src/server` is guarded by ESLint against web UI, client and route imports;
 - `src/server/auth/auth.ts` remains an intentional exception because Better Auth
   needs the Prisma adapter wiring there;
 - document any target-specific decision in `docs/architecture`.
