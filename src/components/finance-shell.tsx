@@ -52,6 +52,14 @@ function isRestorableStage(value: string | null): value is Stage {
   return value !== null && restorableStages.has(value as Stage);
 }
 
+function resolveRestoredStage(savedStage: string | null) {
+  if (!isRestorableStage(savedStage) || savedStage === "select" || savedStage === "create") {
+    return "dashboard" as Stage;
+  }
+
+  return savedStage;
+}
+
 function resolveInitialFinanceState(initialUsers: UserRecord[]) {
   const onlyUser = initialUsers.length === 1 ? initialUsers[0] : null;
 
@@ -66,7 +74,7 @@ function resolveInitialFinanceState(initialUsers: UserRecord[]) {
   return {
     activeUser: null,
     showUploadView: false,
-    stage: initialUsers.length > 0 ? "select" as Stage : "create" as Stage
+    stage: initialUsers.length > 0 ? "welcome" as Stage : "create" as Stage
   };
 }
 
@@ -311,12 +319,16 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         const savedUser = savedUserId ? initialUsers.find((user) => user.id === savedUserId) ?? null : null;
 
         if (!cancelled && savedUser) {
-          const restoredStage = isRestorableStage(savedStage) ? savedStage : "dashboard";
+          const restoredStage = resolveRestoredStage(savedStage);
 
           setActiveUser(savedUser);
           setShowUploadView(false);
           setStage(restoredStage);
           setActiveSettingsSection(restoredStage === "settings" ? "general" : null);
+        } else if (!cancelled && initialUsers.length > 0 && initialUsers.length !== 1) {
+          setShowUploadView(false);
+          setStage("select");
+          setActiveSettingsSection(null);
         }
       } catch (err) {
         console.warn("Could not read localStorage for persistence", err);
@@ -524,7 +536,8 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
   }, [stage, activeUser, hasRestoredClientState]);
 
   const hasUsers = users.length > 0;
-  const title = getStageTitle(stage, hasUsers);
+  const isRestoringProfileSelection = initialUsers.length > 1 && !hasRestoredClientState && !activeUser;
+  const title = isRestoringProfileSelection ? "Morgan" : getStageTitle(stage, hasUsers);
 
   function applyImportedTransactionCounts({
     insertedCount,
@@ -961,6 +974,10 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
   }
 
   function renderStageContent() {
+    if (isRestoringProfileSelection) {
+      return null;
+    }
+
     if (stage === "welcome") {
       return (
         <div className="relative h-full w-full">
@@ -1114,7 +1131,11 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
   const isUploadButtonActive = canUseHeaderUploadButton && showUploadView;
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-[color:var(--page-bg)] text-[color:var(--text-main)]">
+    <main
+      className="flex min-h-dvh items-center justify-center bg-[color:var(--page-bg)] text-[color:var(--text-main)]"
+      data-finance-shell-ready={hasRestoredClientState ? "true" : "false"}
+      data-profile-restore-pending={isRestoringProfileSelection ? "true" : "false"}
+    >
       <div ref={appContentRef} className="mx-auto flex min-h-dvh w-full max-w-[1800px] flex-col overflow-y-auto hide-scrollbar px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
         <section className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_320px_auto] sm:grid-rows-[auto_480px_auto] md:grid-cols-[64px_minmax(0,1fr)] md:grid-rows-[auto_520px_auto] lg:grid-rows-[auto_600px_auto] gap-4 content-start lg:gap-5">
           <header className="grid min-h-16 grid-cols-[64px_minmax(0,1fr)] items-center gap-4 md:col-span-2 lg:gap-5">

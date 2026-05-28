@@ -70,4 +70,23 @@ describe("transaction preview helpers", () => {
 
     expect(previewTransactionSchema.parse(payload)).toMatchObject(payload);
   });
+
+  it("accepts signed account balances while keeping movement amounts non-negative", () => {
+    const payload = {
+      fingerprint: "negative-balance",
+      sourceInstitution: BBVA_INSTITUTION,
+      pageNumber: 1,
+      bookingDate: "2024-04-10T00:00:00.000Z",
+      rawDateLabel: "10/04/2024",
+      typeLabel: "Card payment",
+      description: "Overdraft purchase",
+      direction: "OUT",
+      amountCents: 25_00,
+      balanceCents: -12_50,
+      currency: "EUR"
+    };
+
+    expect(previewTransactionSchema.parse(payload)).toMatchObject(payload);
+    expect(() => previewTransactionSchema.parse({ ...payload, amountCents: -25_00 })).toThrow();
+  });
 });

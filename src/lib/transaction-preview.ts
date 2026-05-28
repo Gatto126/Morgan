@@ -14,7 +14,7 @@ export const previewTransactionSchema = z.object({
   description: z.string().min(1),
   direction: z.enum(["IN", "OUT"]),
   amountCents: z.number().int().nonnegative(),
-  balanceCents: z.number().int().nonnegative(),
+  balanceCents: z.number().int(),
   currency: z.literal("EUR"),
   accountType: z.enum(["checking", "investment", "crypto"]).optional(),
   productName: z.string().nullable().optional(),

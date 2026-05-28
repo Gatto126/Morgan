@@ -212,6 +212,59 @@ async function expectPanelCleared(page, label) {
   );
 }
 
+async function expectNoProfileSelectFlashOnReload(page, label) {
+  await page.addInitScript(() => {
+    window.__morganProfileSelectFlash = false;
+    window.__morganProfileSelectFlashSamples = [];
+
+    const inspect = () => {
+      const ready = document.querySelector('main[data-finance-shell-ready="true"]');
+      const text = document.body?.innerText ?? "";
+
+      if (!ready && /\bSelect profile\b/.test(text)) {
+        window.__morganProfileSelectFlash = true;
+        window.__morganProfileSelectFlashSamples.push(text.slice(0, 400));
+      }
+    };
+
+    const observer = new MutationObserver(inspect);
+    observer.observe(document.documentElement, {
+      characterData: true,
+      childList: true,
+      subtree: true
+    });
+
+    const interval = window.setInterval(inspect, 10);
+    window.addEventListener("load", () => {
+      window.setTimeout(() => {
+        observer.disconnect();
+        window.clearInterval(interval);
+      }, 2_000);
+    });
+
+    inspect();
+  });
+
+  await page.waitForFunction(() => localStorage.getItem("morgan_active_user") && localStorage.getItem("morgan_stage") === "dashboard", {
+    timeout: 5_000
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.locator('main[data-finance-shell-ready="true"]').waitFor({
+    state: "attached",
+    timeout: 10_000
+  });
+
+  const flashState = await page.evaluate(() => ({
+    flashed: window.__morganProfileSelectFlash === true,
+    samples: window.__morganProfileSelectFlashSamples ?? []
+  }));
+
+  assert(
+    !flashState.flashed,
+    `${label}: Select profile appeared before client profile restore completed: ${JSON.stringify(flashState.samples)}.`
+  );
+}
+
 async function expectElementIsolated(page, selector, label) {
   const state = await page.locator(selector).evaluate((element) => ({
     ariaHidden: element.getAttribute("aria-hidden"),
@@ -356,6 +409,13 @@ function expectSecurityHeaders(response) {
   );
 }
 
+async function waitForAuthShellHydration(page) {
+  await page.locator('main[data-auth-shell-ready="true"]').waitFor({
+    state: "attached",
+    timeout: 15_000
+  });
+}
+
 async function clickUntilVisible(trigger, target, label) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     await trigger.click();
@@ -388,6 +448,7 @@ async function runSmoke() {
 
     const initialResponse = await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
     expectSecurityHeaders(initialResponse);
+    await waitForAuthShellHydration(page);
     const usernameInput = page.getByPlaceholder("Username", { exact: true });
     await clickUntilVisible(
       page.getByRole("button", { name: "Register New local account", exact: true }),
@@ -459,6 +520,8 @@ async function runSmoke() {
       toName: username
     });
     await expectInlineUploadPromptVisible(page, "after animated profile switch");
+    await expectNoProfileSelectFlashOnReload(page, "reload with restored profile");
+    await expectInlineUploadPromptVisible(page, "after restored profile reload");
 
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Select profile", exact: true }).click();

@@ -133,7 +133,7 @@ describe("parseBbvaXlsxStatement", () => {
       buildWorkbookFile([
         ["Report BBVA"],
         ["Data", "Parola chiave", "Importo", "Disponibile", "Osservazioni"],
-        ["03/02/2024", "Cashback promozione commerciale", "0,07", "1.100,12", "CASHBACK BBVA"]
+        ["03/02/2024", "Cashback promozione commerciale", "0,07", "-12,50", "CASHBACK BBVA"]
       ])
     );
 
@@ -144,7 +144,7 @@ describe("parseBbvaXlsxStatement", () => {
       description: "CASHBACK BBVA",
       direction: "IN",
       amountCents: 7,
-      balanceCents: 110_012
+      balanceCents: -1_250
     });
   });
 });

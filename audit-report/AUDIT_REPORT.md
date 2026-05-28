@@ -1,281 +1,413 @@
 # Morgan Finance - Audit Report
 
-Data audit: 2026-05-27
+Data audit: 2026-05-28
 Repository: `C:\Users\Lucaa\Desktop\morgan`
-Stack rilevato: Next.js 15 App Router, React 19, TypeScript strict, Prisma + SQLite, Better Auth, Tailwind CSS 4, Vitest.
+Ambiente: Windows, PowerShell, Node 22, pnpm, Next dev server locale su `http://127.0.0.1:3000`
+
+Le credenziali Binance fornite per il test live sono state usate solo in memoria/process env del comando di audit. Non sono state scritte nel report, in file sorgente, in commit o in file tracciati.
 
 ## Executive Summary
 
-L'app e' in buono stato tecnico generale: build, type-check, lint, test unitari e audit dipendenze passano. La separazione dei profili tramite `ownerId`, l'uso di Prisma invece di SQL manuale, la cifratura AES-GCM per le credenziali Binance e i controlli su upload/import sono segnali positivi.
+Morgan Finance ha una base tecnica complessivamente solida per un'app finance local-first: le API proteggono i profili con owner check, le mutazioni applicano same-origin check, le credenziali Binance sono cifrate con AES-256-GCM, gli import deduplicano tramite fingerprint e la suite automatica principale passa.
 
-Le aree ancora aperte piu' urgenti riguardano:
+Il flusso Binance live e' stato testato con successo: salvataggio credenziali, verifica cifratura at-rest, sync live, lettura saldi e rimozione credenziali. La sync ha risposto `200`, `success=true`, con 94 saldi/token restituiti. Dopo il cleanup non restavano utenti, profili, transazioni, righe Binance o credenziali cifrate dell'audit.
 
-1. layout mobile con overflow orizzontale e controlli parzialmente fuori viewport;
-2. schema di import che rifiuta saldi conto negativi anche se il parser BBVA li puo' produrre.
+Le priorita' principali restano:
 
-Aggiornamento post-fix del 2026-05-27:
+1. correggere l'overflow orizzontale responsive, presente sia desktop sia mobile;
+2. allineare l'infrastruttura cloud prevista nei documenti con una vera persistenza Postgres prima di qualsiasi deploy pubblico;
+3. rendere persistenti/distribuiti i rate limit custom e irrigidire la gestione IP in produzione.
 
-- `/api/prices` e' stato hardenizzato con validazione, deduplica, limiti cardinalita' e rate limit.
-- `connect` e `sync` Binance usano un servizio condiviso e aggiornano timestamp/staleness in modo coerente.
-- la cancellazione account richiede password verificata server-side, origin check e rate limit sui tentativi falliti.
-- l'autenticazione locale non usa piu' un PIN breve per nuovi account: registrazione con password/passphrase 15-128 caratteri, spazi/simboli ammessi, rate limit Better Auth database-backed.
-- il submit auth e' esplicito: rimosso auto-login temporizzato; il bottone resta visibile/disabilitato finche' i campi non sono validi.
-- le voci Settings/API/Danger, New Profile e il toggle secret sono controlli `button` semantici; la modale delete account e' stata estratta in componente dedicato.
-- i pannelli Upload/Settings/Profile isolano il contenuto sottostante con `inert`/`aria-hidden` e focus trap; la modale delete account usa lo stesso focus management.
-- l'upload panel non resta aperto quando si naviga verso Settings/Profile, non si auto-apre su Home con profili vuoti e il pulsante upload non rimane attivo fuori dagli stage contenuto.
-- i campi plaintext legacy Binance sono rimossi dallo schema e dalla lettura applicativa; `scripts/migrate-binance-plaintext.mjs` conserva un percorso di migrazione per DB preesistenti.
-- online readiness avanzata: header HTTP difensivi in `next.config.ts`, same-origin check su tutte le mutazioni app, cookie Better Auth sicuri quando `BETTER_AUTH_URL` e' HTTPS, warning produzione per origin/proxy IP non configurati.
+Aggiornamento post-fix 2026-05-28:
+
+- l'import accetta ora `balanceCents` firmato mantenendo `amountCents` non negativo;
+- il parser/test BBVA copre un saldo disponibile negativo;
+- lo smoke `upload-panel` aspetta un segnale esplicito di idratazione (`data-auth-shell-ready=true`) prima del click iniziale.
+
+## Stack E Infrastruttura Rilevati
+
+Stack applicativo installato/eseguito:
+
+- Next.js 15.5.18 App Router
+- React 19
+- TypeScript strict
+- Prisma 6.x con SQLite e `better-sqlite3`
+- Better Auth con plugin username e cookie Next
+- Tailwind CSS 4
+- Recharts per dashboard
+- Playwright per smoke/browser test
+- Integrazioni esterne: Binance REST/SAPI, JustETF WebSocket/scraping
+
+Persistenza attuale:
+
+- `SQLITE_DATABASE_URL` locale, risolto sotto `prisma/dev.db`
+- WAL SQLite abilitato in `src/lib/db.ts`
+- timeout SQLite a 15 secondi
+- `.env`, DB, WAL/SHM, log, `.next` e `test-results` ignorati da Git
+
+Configurazione ambiente verificata in forma redatta:
+
+| Variabile | Stato |
+| --- | --- |
+| `SQLITE_DATABASE_URL` | impostata |
+| `MORGAN_ENCRYPTION_KEY` | valida, 32 byte base64 |
+| `BETTER_AUTH_SECRET` | impostata |
+| `BETTER_AUTH_URL` | `http://localhost:3000` in locale |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | 3 origin locali |
+| `BETTER_AUTH_IP_HEADERS` | non impostata |
+
+Target infrastrutturali documentati:
+
+- cloud production: Vercel Hobby + Neon Postgres;
+- pre-produzione: Vercel Preview/Docker + Postgres/Neon branch;
+- desktop offline: Tauri + WebView2 + SQLite locale.
+
+Nota: il codice corrente e' ancora cablato su datasource Prisma SQLite. La strategia cloud/Postgres e' documentata, ma non ancora implementata nella repo corrente.
 
 ## Scope Eseguito
 
-- Mappatura repo, stack, script e stato Git.
-- Review statica di API routes, auth guard, import/parsing, Prisma schema, gestione segreti, dashboard e shell UI.
-- Controlli automatici: lint, test, type-check, build, dependency audit.
-- Navigazione app via browser:
+- Review statica di auth, API route, sicurezza request, gestione segreti, import, dashboard, Binance service, schema Prisma e configurazione Next.
+- Verifica `.env` redatta e `.gitignore`.
+- Test automatici: lint, unit test, type-check, build, dependency audit, outdated.
+- Smoke ufficiale upload/settings/profile.
+- Smoke e2e HTTP con cookie jar isolato:
+  - richieste senza sessione;
   - registrazione account locale temporaneo;
-  - creazione profilo;
-  - dashboard vuota;
-  - dashboard con dati sintetici;
-  - tab Dashboard, Checking, Investments;
-  - Upload panel;
-  - Settings, API Key, Danger Zone;
-  - viewport desktop e mobile;
-  - cancellazione/cleanup dell'account temporaneo.
+  - profilo senza transazioni;
+  - profilo con transazioni importate;
+  - deduplica import;
+  - endpoint dashboard/checking/investment/crypto/prices;
+  - salvataggio, sync live, rimozione credenziali Binance;
+  - cancellazione account e verifica cleanup DB.
+- Smoke cross-owner:
+  - profilo reale con transazioni;
+  - accesso no-auth su ID reale;
+  - accesso da secondo account autenticato ma non owner;
+  - restore dei rate limit dopo test.
+- Smoke UI responsive:
+  - viewport desktop 1440x900;
+  - viewport mobile 390x844;
+  - misurazione scroll width e controlli offscreen;
+  - controllo errori console;
+  - screenshot salvati in `test-results/` (ignorato da Git).
+- Secret scan locale sulle credenziali fornite: nessun match nei file della repo esclusi `.git` e `node_modules`.
 
-Screenshot salvati in `test-results/audit/`, in particolare:
-
-- `10-dashboard-viewport.png`
-- `11-investments-viewport.png`
-- `13-mobile-dashboard-main.png`
-- `14-mobile-settings.png`
-- `16-mobile-settings-menu.png`
-- `17-mobile-api-key.png`
-- `18-mobile-danger-zone.png`
-
-## Verifiche Automatiche
+## Risultati Automatici
 
 | Controllo | Esito |
 | --- | --- |
-| `pnpm audit --prod` | OK, nessuna vulnerabilita' nota |
-| `pnpm outdated` | Warning: diverse major disponibili |
 | `pnpm run lint` | OK |
-| `pnpm run test:run` | OK, 17 file / 73 test |
+| `pnpm run test:run` | OK, 17 file / 74 test |
 | `pnpm exec tsc --noEmit` | OK |
-| `pnpm run build` | OK, Next build completato |
-| `pnpm run smoke:upload-panel` | OK, include isolamento pannelli e tab order |
+| `pnpm run build` | OK, build Next completata |
+| `pnpm audit --prod` | OK, nessuna vulnerabilita' nota |
+| `pnpm outdated` | Warning informativo, diverse major/minor disponibili |
+| `pnpm run smoke:upload-panel` | OK dopo fix idratazione |
 
-Dipendenze principali con major disponibili: Next 16, Prisma 7, Zod 4, TypeScript 6, ESLint 10, lucide-react 1.x. Non sono aggiornamenti urgenti per vulnerabilita', ma vanno pianificati per ridurre debito tecnico.
+Dipendenze con aggiornamenti disponibili rilevanti:
+
+- Next 16.x
+- Prisma 7.x
+- Zod 4.x
+- TypeScript 6.x
+- ESLint 10.x
+- `better-sqlite3` 12.x
+- `lucide-react` 1.x
+
+Nessuno di questi e' emerso come vulnerabilita' da `pnpm audit --prod`; sono aggiornamenti da pianificare, non emergenze immediate.
+
+## Test Auth, Profili E Dati
+
+### No-auth
+
+Su richieste senza sessione:
+
+| Endpoint | Esito atteso | Esito |
+| --- | ---: | ---: |
+| `GET /api/users` | 401 | 401 |
+| `GET /api/transactions/dashboard?userId=...` | 401 | 401 |
+| `GET /api/prices?cryptos=BTC` | 401 | 401 |
+| `POST /api/binance/sync` senza `Origin` | 403 | 403 |
+| `POST /api/binance/sync` same-origin senza cookie | 401 | 401 |
+
+Su ID reale di un profilo temporaneo con transazioni:
+
+| Endpoint | Esito |
+| --- | ---: |
+| `GET /api/transactions/dashboard?userId=<profilo reale>` senza cookie | 401 |
+| `GET /api/binance/balances?userId=<profilo reale>` senza cookie | 401 |
+| `POST /api/binance/sync` same-origin senza cookie | 401 |
+
+### Auth con profilo senza transazioni
+
+Profilo temporaneo vuoto:
+
+- `transactionCount=0`
+- `GET /api/transactions/dashboard` OK
+- `GET /api/transactions/checking` OK
+- `GET /api/transactions/investment` OK
+- `GET /api/transactions/crypto` OK
+- `GET /api/binance/balances` OK con `hasApiKey=false` e `balances=[]`
+- `POST /api/binance/sync` senza credenziali OK come rifiuto controllato: `400`
+
+### Auth con profilo con transazioni
+
+Profilo temporaneo con due transazioni checking BBVA importate via API:
+
+- primo import: `insertedCount=2`, `skippedCount=0`;
+- secondo import dello stesso payload: `insertedCount=0`, `skippedCount=2`;
+- `transactionCount=2`, `checkingCount=2`;
+- dashboard checking totale: `210000` centesimi, coerente con 2500.00 EUR in entrata e 400.00 EUR in uscita;
+- endpoint checking/investment/crypto e prices: OK.
+
+### Cross-owner
+
+Secondo account autenticato non owner su profilo reale del primo account:
+
+| Endpoint | Esito |
+| --- | ---: |
+| `GET /api/users/<profileId>` | 404 |
+| `GET /api/transactions/dashboard?userId=<profileId>` | 404 |
+| `PATCH /api/users/<profileId>` | 404 |
+
+Questo evita enumerazione utile e impedisce lettura/modifica cross-account.
+
+## Test Binance Live
+
+Sequenza eseguita su profilo temporaneo:
+
+1. `PATCH /api/users/<id>` con API key e secret.
+2. Verifica risposta: nessuna credenziale raw restituita.
+3. Verifica DB: campi cifrati presenti con prefisso formato `v1`, nessuna credenziale raw nella riga profilo.
+4. `GET /api/binance/balances`: `hasApiKey=true`.
+5. `POST /api/binance/sync`: `200`, `success=true`, 94 saldi/token.
+6. `PATCH /api/users/<id>` con `apiKey=null`, `apiSecret=null`, `deleteBalances=true`.
+7. Verifica risposta: `hasBinanceCredentials=false`.
+8. `DELETE /api/account` con password.
+9. Verifica cleanup DB: 0 auth users, 0 profili, 0 righe credenziali, 0 checking rows, 0 Binance rows per l'audit.
+
+Osservazioni:
+
+- Il flusso applicativo live funziona.
+- Le credenziali vengono cifrate prima della persistenza.
+- Le route non espongono secret raw.
+- La sync cancella/aggiorna i saldi cached tramite la path condivisa del servizio.
+- La chiamata live dipende dai permessi Binance associati alla key; in questo test i permessi sono risultati sufficienti.
+
+## Analisi Sicurezza
+
+Punti positivi:
+
+- `requireAuth` e `requireOwnedProfile` proteggono le route dati utente.
+- Le mutazioni app usano `requireSameOriginMutation`.
+- Better Auth usa rate limit database-backed per sign-in/sign-up e password operations.
+- Password locali nuove: 15-128 caratteri, spazi/simboli ammessi.
+- Cancellazione account richiede password server-side.
+- Credenziali Binance cifrate con AES-256-GCM.
+- Nessun fallback plaintext Binance nel codice corrente.
+- API responses usano `toSafeUser`/summary senza secret raw.
+- Header difensivi Next: `nosniff`, `DENY`, `COOP`, `Permissions-Policy`, `base-uri`, `frame-ancestors`, `object-src`.
+- Upload limitato a 8 MB e a estensioni `.csv`/`.xlsx`.
+- Import deduplicato con fingerprint e vincoli unique Prisma.
+
+Rischi residui:
+
+- I rate limit custom di `/api/prices` e account delete sono `Map` in memoria. Vanno bene per sviluppo/single process, ma non sono affidabili in multi-instance/serverless.
+- In produzione `getIpAddressHeaders` cade su `x-forwarded-for` se `BETTER_AUTH_IP_HEADERS` non e' configurato. C'e' un warning, ma il comportamento resta permissivo.
+- La CSP e' minima: protegge frame/object/base-uri, ma non restringe `script-src`, `style-src` o `connect-src`. Un hardening CSP completo richiede lavoro specifico con Next.
+- La key di cifratura locale e il DB vivono sullo stesso host. Per local-first e' accettabile, ma backup e deployment pubblici devono usare secret manager e backup cifrati.
+- Binance sync usa chiamate SAPI parallele con peso elevato e non imposta `recvWindow`; clock drift o rate limit Binance possono causare failure operativi.
+
+## Analisi Infrastruttura
+
+Stato attuale:
+
+- Buono per sviluppo locale e desktop/offline prototipale.
+- SQLite WAL e timeout migliorano concorrenza locale.
+- Build Next produce route dinamiche server-side.
+- Test suite rapida e utile, ma ancora principalmente unit/integration leggera.
+
+Gap rispetto al target cloud:
+
+- Il datasource Prisma e' SQLite, mentre i documenti indicano Neon Postgres per cloud.
+- Non esiste ancora uno storage boundary/repository concreto per separare web/Postgres e desktop/SQLite.
+- Rate limit custom non sono condivisi tra istanze.
+- Log e DB locali non sono una strategia di osservabilita'/backup cloud.
+- Deploy pubblico richiede HTTPS, trusted origins esatti, IP headers affidabili e secret manager.
+
+Valutazione:
+
+- Local desktop/private self-host: adatto con attenzione a backup e protezione filesystem.
+- Public cloud oggi: non pronto senza migrazione Postgres, rate limit distribuiti e revisione config produzione.
 
 ## Findings Prioritari
 
-### P1 - Layout mobile con overflow e controlli fuori viewport
+### P1 - Overflow orizzontale responsive su desktop e mobile
 
-**Evidenza:** nel viewport mobile 390x844 la pagina produce `documentElement.scrollWidth = 621`. Diversi bottoni risultano oltre il viewport: esempi misurati `x=456`, `x=429`, `x=398`; la nav laterale mobile risulta anche parzialmente spostata a sinistra (`x=-11`). Visivamente la barra metriche e la nav mobile risultano tagliate o sovrapposte.
+Evidenza smoke UI con account temporaneo e transazioni:
 
-**File interessati:**
+- desktop 1440x900: `innerWidth=1440`, `documentElement.scrollWidth=1556`;
+- mobile 390x844: `innerWidth=390`, `documentElement.scrollWidth=448`;
+- elementi offscreen mobile rilevati:
+  - bottone/card valore `1050,00 EUR`, `left=283`, `right=448`, `width=165`;
+  - card provider BBVA, `left=283`, `right=448`, `width=165`.
 
-- `src/components/finance-shell.tsx:895` - portal dei tab con overflow orizzontale.
-- `src/components/finance-shell.tsx:911-912` - aside mobile orizzontale con larghezze fisse.
-
-**Impatto:** su mobile la navigazione e i dati finanziari principali possono risultare difficili da usare o invisibili. Per un'app finance personale e' un problema alto per usabilita' e fiducia.
-
-**Raccomandazione:** definire una strategia mobile dedicata:
-
-- top metrics in carousel/scroll area contenuta, con padding e snap;
-- nav inferiore o tab bar senza elementi fuori viewport;
-- evitare larghezze fisse non clampate;
-- aggiungere test visuale Playwright per 390x844 e 768px.
-
-### P1 - Import schema rifiuta saldi negativi
-
-**Evidenza:** lo schema di preview richiede `balanceCents` non negativo:
-
-- `src/lib/transaction-preview.ts:17`
-
-ma il parser BBVA calcola il saldo direttamente dal valore del foglio:
-
-- `src/lib/bbva-xlsx-parser.ts:166`
-- `src/lib/bbva-xlsx-parser.ts:172`
-
-Se un conto va in scoperto o il foglio contiene un saldo negativo, la preview puo' riuscire ma l'import JSON viene respinto da Zod.
-
-**Impatto:** import reali validi possono fallire in modo difficile da capire.
-
-**Raccomandazione:** permettere `balanceCents` signed, mantenendo `amountCents` non negativo. Aggiungere un test BBVA/import per saldo negativo.
-
-
-### P2 - Settings/Upload overlay non isola il contenuto sottostante - RISOLTO
-
-**Evidenza originaria:** quando Settings o Upload erano aperti, il DOM esponeva ancora bottoni, grafici e card dashboard sottostanti. I controlli di sfondo restavano nella navigazione assistiva e in parte interagibili.
-
-**File interessati:**
+File/aree interessate:
 
 - `src/components/finance-shell.tsx`
-- `src/components/finance-shell/use-modal-accessibility.ts`
-- `src/components/finance-shell/delete-account-dialog.tsx`
-- `scripts/smoke-upload-panel.mjs`
+- `src/components/dashboard/dashboard-tabs.tsx`
+- `src/components/checking-dashboard/checking-dashboard-tabs.tsx`
+- `src/components/dashboard/dashboard-cards.tsx`
 
-**Stato attuale:** risolto.
+Impatto:
 
-- `src/components/finance-shell/settings-panel.tsx` usa `button` per Settings/API/Danger e per il toggle visibilita' secret con `aria-label`.
-- `src/components/finance-shell/user-select-panel.tsx` usa un `button` per New Profile.
-- `src/components/finance-shell/use-modal-accessibility.ts` centralizza `inert`, `aria-hidden`, focus iniziale, focus trap, restore del focus ed Escape.
-- `src/components/finance-shell.tsx` marca Header, cards portal e background del frame con `inert`/`aria-hidden` quando Upload/Settings/Profile sono aperti.
-- I pannelli Upload/Settings/Profile espongono `role="dialog"` e `data-modal-panel`; Home resta navigabile liberamente e non auto-apre Upload anche se il profilo e' vuoto.
-- `src/components/finance-shell/delete-account-dialog.tsx` usa lo stesso focus trap quando la modale distruttiva e' aperta sopra Settings.
-- L'animazione di chiusura e' applicata solo al contenuto interno: il contenitore del pannello resta opaco, fermo e allineato al grafico fino allo smontaggio.
+- su mobile alcuni controlli/dati finiscono fuori viewport;
+- su desktop appare overflow orizzontale non desiderato;
+- in un'app finanziaria questo riduce leggibilita' e fiducia.
 
-**Verifica:** `pnpm run smoke:upload-panel` crea un profilo vuoto, attraversa Upload/Settings/Profile/Home, verifica `inert`/`aria-hidden`, controlla che il Tab non entri nello sfondo nascosto e conferma che Home rimanga senza Upload auto-aperto.
+Raccomandazione:
 
-**Impatto residuo:** nessuno noto su desktop. Resta separato il tema responsive mobile gia' tracciato come P1.
+- contenere i tab/card portal dentro scroll container espliciti con max-width 100%;
+- evitare card `w-[165px]` non compensate dal container;
+- aggiungere test Playwright che fallisce se `scrollWidth > innerWidth + 1`;
+- coprire almeno 390x844, 768x1024, 1440x900.
 
-### P2 - Cancellazione account protetta solo da `window.confirm` - RISOLTO
+### P1 - L'import rifiuta saldi conto negativi - RISOLTO
 
-**Evidenza originaria:** il client usava un confirm nativo e poi inviava una `DELETE` senza body:
+Evidenza originaria:
 
-- `src/components/finance-shell.tsx:490`
-- `src/components/finance-shell.tsx:496`
+- `src/lib/transaction-preview.ts` validava `balanceCents` con `.nonnegative()`;
+- `src/lib/bbva-xlsx-parser.ts` puo' produrre saldi firmati dal foglio.
 
-Il server cancellava profili e account autenticato dopo la sola sessione:
+Stato attuale:
 
-- `src/app/api/account/route.ts:13`
-- `src/app/api/account/route.ts:17`
-- `src/app/api/account/route.ts:100`
-- `src/app/api/account/route.ts:105`
+- `balanceCents` e' ora `z.number().int()`;
+- `amountCents` resta `z.number().int().nonnegative()`;
+- `src/lib/transaction-preview.test.ts` copre payload importabile con saldo negativo e rifiuto di importo movimento negativo;
+- `src/lib/bbva-xlsx-parser.test.ts` copre un saldo BBVA negativo.
 
-**Stato attuale:** risolto.
+### P2 - Produzione: header IP e rate limit custom non sufficienti
 
-- `src/app/api/account/route.ts` richiede `password` nel body, verifica la password Better Auth via hash server-side, applica same-origin check e rate limit sui tentativi falliti.
-- `src/lib/request-security.ts` centralizza il controllo `Origin`/`Referer`.
-- `src/components/finance-shell.tsx` usa una modale dedicata invece di `window.confirm`.
-- `src/app/api/account/route.test.ts` copre auth guard, origin check, body invalido, password errata, rate limit e percorso di successo.
+Evidenza:
 
-### P2 - Autenticazione locale basata su PIN alfanumerico breve - RISOLTO
+- `.env` locale non imposta `BETTER_AUTH_IP_HEADERS`;
+- `getIpAddressHeaders` usa fallback `x-forwarded-for`;
+- `/api/prices` e delete account usano Map in memoria.
 
-**Evidenza originaria:** il PIN era 6-16 caratteri alfanumerici:
+Impatto:
 
-- `src/lib/local-auth.ts:4`
-- `src/lib/auth.ts:110-111`
+- in deploy pubblico, client/proxy non fidati possono influire sull'identita' IP se la catena proxy non sanitizza gli header;
+- rate limit custom si azzerano al restart e non sono condivisi tra istanze.
 
-Non era evidente nel codice un rate limit applicativo o lockout dedicato per sign-in.
+Raccomandazione:
 
-**Stato attuale:** risolto per nuovi account e reso compatibile con gli account legacy.
+- in produzione rendere obbligatorio `BETTER_AUTH_IP_HEADERS`;
+- usare solo header garantiti dal provider, per esempio `cf-connecting-ip` su Cloudflare;
+- spostare rate limit custom su DB/Redis/KV condiviso.
 
-- `src/lib/local-auth.ts` definisce password/passphrase 15-128 caratteri, con spazi e simboli ammessi.
-- `src/lib/auth.ts` applica la policy alle nuove registrazioni, mantiene login legacy per non bloccare account locali esistenti e abilita rate limit Better Auth con storage database.
-- `prisma/schema.prisma` include `RateLimit`.
-- `src/components/auth-shell.tsx` parla di password, non PIN, e rimuove l'auto-login temporizzato.
-- `src/lib/local-auth.test.ts` copre policy password, username e compatibilita' input legacy.
+### P2 - Strategia cloud documentata ma non ancora implementata
 
-**Nota deploy:** prima di esposizione pubblica reale, configurare `BETTER_AUTH_IP_HEADERS` / `TRUSTED_IP_HEADERS` in base al provider. In locale il fallback `x-forwarded-for` e' sufficiente per test; con Cloudflare usare `cf-connecting-ip`. `src/lib/auth-config.ts` ora emette warning in produzione se `BETTER_AUTH_URL` non e' HTTPS pubblico, se gli origin trusted usano wildcard pubbliche o se gli header IP proxy non sono espliciti.
+Evidenza:
 
-### P3 - Campi legacy plaintext per Binance restano nel modello - RISOLTO
+- `docs/architecture/targets.md` indica Vercel + Neon Postgres per cloud;
+- `prisma/schema.prisma` usa ancora datasource SQLite;
+- `src/lib/db.ts` risolve path file locale.
 
-**Evidenza originaria:** lo schema conteneva sia campi plaintext sia encrypted:
+Impatto:
 
-- `prisma/schema.prisma:16-19`
+- un deploy Vercel con SQLite locale non sarebbe durable o affidabile;
+- rischio di divergenza fra desktop/offline e cloud se la migrazione viene rinviata troppo.
 
-la lettura supportava ancora fallback plaintext:
+Raccomandazione:
 
-- `src/lib/secrets.ts:102-107`
+- introdurre schema/config Postgres per web;
+- creare adapter/repository minimi per i workflow persistence-heavy;
+- aggiungere test pre-prod con Postgres prima del deploy cloud.
 
-**Stato attuale:** risolto.
+### P3 - Smoke upload-panel ha una race di idratazione a freddo - RISOLTO
 
-- `prisma/schema.prisma` espone solo `binanceApiKeyEncrypted`, `binanceApiSecretEncrypted` e `binanceApiKeyPreview`.
-- `src/lib/secrets.ts` non fa piu' fallback su plaintext.
-- `src/app/api/users/[id]/route.ts` salva e cancella solo i campi cifrati.
-- `scripts/migrate-binance-plaintext.mjs` migra o pulisce eventuali valori plaintext in DB legacy prima del drop colonne.
+Evidenza originaria:
 
-### P3 - Duplicazione logica Binance connect/sync - RISOLTO
+- primo `pnpm run smoke:upload-panel` fallito: Register visibile ma click non apriva il form;
+- riproduzione manuale: click immediato dopo `domcontentloaded` non cambia vista;
+- aspettando idratazione il form appare.
 
-**Evidenza originaria:** `connect` e `sync` duplicavano token names, conversione prezzi EUR e upsert dei saldi:
+Stato attuale:
 
-- `src/app/api/binance/connect/route.ts:10`
-- `src/app/api/binance/connect/route.ts:53`
-- `src/app/api/binance/connect/route.ts:173`
-- `src/app/api/binance/sync/route.ts:10`
-- `src/app/api/binance/sync/route.ts:61`
-- `src/app/api/binance/sync/route.ts:265`
+- `src/components/auth-shell.tsx` espone `data-auth-shell-ready=true` dopo idratazione client;
+- `scripts/smoke-upload-panel.mjs` aspetta quel segnale prima del click su Register;
+- `pnpm run smoke:upload-panel` passa.
 
-Inoltre solo `sync` aggiorna `binance_sync_${userId}`:
+### P3 - CSP migliorabile
 
-- `src/app/api/binance/sync/route.ts:295-298`
+Evidenza:
 
-**Stato attuale:** risolto.
+- `next.config.ts` definisce CSP solo per `base-uri`, `frame-ancestors` e `object-src`.
 
-- `src/lib/binance-service.ts` centralizza fetch, merge, pricing, persist e timestamp.
-- `src/app/api/binance/connect/route.ts` e `src/app/api/binance/sync/route.ts` chiamano entrambe `syncBinanceBalances`.
-- `connect` e `sync` restituiscono `balances` + `syncedAt` e aggiornano `binance_sync_${userId}` tramite la stessa path.
-- `src/lib/binance-service.test.ts` e `src/app/api/binance/routes.test.ts` coprono servizio e route.
+Impatto:
+
+- protezione anti-XSS parziale;
+- utile ma non ancora una CSP restrittiva.
+
+Raccomandazione:
+
+- valutare CSP con `script-src`, `style-src`, `connect-src`, `img-src`;
+- includere domini necessari: self, Binance, JustETF/WebSocket;
+- testare in report-only prima di enforcement.
+
+### P3 - Test coverage API ancora incompleta
+
+Copertura esistente buona:
+
+- auth config, request security, secrets, Binance service/routes, price request, parsers, dashboard data helpers, account delete.
+
+Gap:
+
+- route dashboard/checking/investment/crypto con fixture DB;
+- ownership cross-account automatizzata in test suite, oggi coperta da smoke custom;
+- responsive overflow come regression test;
+- import con saldo negativo.
 
 ## Cose Che Funzionano Bene
 
-- Guardie auth/profilo coerenti:
-  - `src/lib/auth-guard.ts:18`
-  - `src/lib/auth-guard.ts:30-35`
-- Upload con limite dimensione e filtro estensione:
-  - `src/app/api/transactions/preview/route.ts:10-17`
-  - `src/app/api/transactions/preview/route.ts:51-60`
-- Preview/import vincolati a profilo posseduto:
-  - `src/app/api/transactions/preview/route.ts:68`
-  - `src/app/api/transactions/import/route.ts:26`
-- Deduplica tramite fingerprint e vincoli Prisma:
-  - `src/lib/transaction-import.ts:66-73`
-  - `prisma/schema.prisma:111`
-  - `prisma/schema.prisma:137`
-  - `prisma/schema.prisma:163`
-- Cifratura segreti Binance con AES-256-GCM:
-  - `src/lib/secrets.ts:22-36`
-  - `src/lib/secrets.ts:44`
-  - `src/lib/secrets.ts:65`
-- SQLite configurato con WAL e timeout:
-  - `src/lib/db.ts:31`
-  - `src/lib/db.ts:40-41`
-- Header di sicurezza applicati via Next:
-  - `next.config.ts`
-- Same-origin check centralizzato per mutazioni:
-  - `src/lib/request-security.ts`
-  - `src/app/api/users/route.ts`
-  - `src/app/api/users/[id]/route.ts`
-  - `src/app/api/transactions/preview/route.ts`
-  - `src/app/api/transactions/import/route.ts`
-  - `src/app/api/binance/route-handler.ts`
-
-## Copertura Test
-
-Attuale: 17 file test, 73 test totali.
-
-Copre parser, preview, price request validation, logica chart/time-series, servizio Binance, route Binance, cancellazione account, policy auth locale, helper UI auth/delete account, segreti cifrati, auth deployment config, request security e smoke UI per isolamento pannelli. Mancano ancora test su:
-
-- flusso import end-to-end con saldo negativo;
-- UI responsive mobile;
-- route handler API restanti con auth/profile ownership.
+- Auth guard e ownership coerenti.
+- Same-origin check sulle mutazioni.
+- Binance connect/sync centralizzati in `syncBinanceBalances`.
+- Cifratura secret robusta con AES-GCM e IV random.
+- API user response sicure.
+- Account delete protetta da password.
+- Deduplica import funzionante.
+- Build/type/lint/test puliti.
+- Flusso Binance live verificato end-to-end.
+- Cleanup dati audit riuscito.
 
 ## Raccomandazioni Operative
 
-Priorita' prossima:
+Priorita' immediata:
 
-1. Fix mobile overflow e aggiungere visual regression minima.
-2. Consentire `balanceCents` signed e aggiungere test.
+1. Fix overflow responsive e aggiungere test `scrollWidth`.
+2. Mantenere in CI lo smoke `upload-panel` ora stabilizzato.
 
-Poi:
+Prima di deploy pubblico:
 
-1. Aggiungere MFA/passkeys prima dell'esposizione pubblica reale.
-2. Configurare e verificare header IP affidabili sul provider reale (`cf-connecting-ip` con Cloudflare, altrimenti header del proxy scelto e sanitizzato).
-3. Pianificare upgrade major dipendenze in branch separati.
-4. Aggiungere test route/API restanti e smoke e2e.
+1. Implementare Postgres/Neon per web cloud.
+2. Rendere obbligatori IP headers espliciti in produzione.
+3. Spostare rate limit custom su storage condiviso.
+4. Configurare HTTPS origin esatti e secret manager.
+5. Pianificare CSP restrittiva in report-only.
 
-## Note Browser Audit
+Hardening successivo:
 
-Account temporaneo usato: `audit60555723`.
-L'account e' stato cancellato tramite la danger zone e al reload l'app e' tornata alla schermata di login.
-Non sono stati rilevati errori console durante la navigazione.
+1. Aggiungere MFA/passkey.
+2. Aggiungere audit log applicativo redatto per operazioni critiche.
+3. Aggiungere backup/export cifrati per desktop/local-first.
+4. Aggiungere `recvWindow`, backoff e reporting parziale permessi nel client Binance.
 
-Aggiornamento smoke 2026-05-27:
+## Note Di Cleanup
 
-- dev server avviato su `http://localhost:3000`;
-- registrazione con passphrase lunga completata fino alla schermata `New profile`;
-- verificato che il bottone auth non faccia piu' auto-submit;
-- verificato visualmente che password input e submit button abbiano radius/dimensioni coerenti in Login e Register;
-- DB locale ripulito al termine dello smoke (`authUsers`, `profiles`, `sessions`, `accounts`, `rateLimits` a 0).
-- smoke Upload/Settings/Profile aggiornato: verifica isolamento `inert`/`aria-hidden`, tab order keyboard e Home libera senza auto-upload su profili vuoti.
+- Account temporanei creati durante l'audit: cancellati.
+- Profili e transazioni temporanee: cancellati.
+- Credenziali Binance temporanee: rimosse.
+- Righe BinanceBalance temporanee: rimosse.
+- Rate limit temporaneamente svuotati in uno smoke cross-owner: ripristinati.
+- Secret scan sulle credenziali fornite: nessun match nei file della repo.

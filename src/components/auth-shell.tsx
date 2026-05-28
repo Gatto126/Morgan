@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, House, Send, UserRound } from "lucide-react";
 
@@ -87,6 +87,7 @@ export function AuthShell() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loginWelcome, setLoginWelcome] = useState(LOGIN_WELCOME_MESSAGES[1]);
   const [loginWelcomeKey, setLoginWelcomeKey] = useState(0);
+  const authShellRef = useRef<HTMLElement | null>(null);
 
   const normalizedUsername = useMemo(() => normalizeLocalUsername(username), [username]);
   const isAuthForm = view === "signIn" || view === "signUp";
@@ -95,6 +96,10 @@ export function AuthShell() {
     : hasLocalPasswordInput(password);
   const hasValidAuthInput = isAuthForm && isValidLocalUsername(normalizedUsername) && hasValidPassword;
   const canSubmit = hasValidAuthInput && !isSubmitting;
+
+  useEffect(() => {
+    authShellRef.current?.setAttribute("data-auth-shell-ready", "true");
+  }, []);
 
   function openAuthView(nextView: Exclude<AuthView, "landing">) {
     if (nextView === view) return;
@@ -377,7 +382,11 @@ export function AuthShell() {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-[color:var(--page-bg)] text-[color:var(--text-main)]">
+    <main
+      className="flex min-h-dvh items-center justify-center bg-[color:var(--page-bg)] text-[color:var(--text-main)]"
+      data-auth-shell-ready="false"
+      ref={authShellRef}
+    >
       <div className="mx-auto flex min-h-dvh w-full max-w-[1800px] flex-col overflow-y-auto hide-scrollbar px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
         <section className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_320px_auto] sm:grid-rows-[auto_480px_auto] md:grid-cols-[64px_minmax(0,1fr)] md:grid-rows-[auto_520px_auto] lg:grid-rows-[auto_600px_auto] gap-4 content-start lg:gap-5">
           <header className="grid min-h-16 grid-cols-[64px_minmax(0,1fr)] items-center gap-4 md:col-span-2 lg:gap-5">
