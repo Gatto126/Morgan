@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Bitcoin, ChartPie, Coins, House, Landmark, Settings, Wallet, X as XIcon } from "lucide-react";
+import { X as XIcon } from "lucide-react";
 import { AuthShell } from "./auth-shell";
 import { Dashboard } from "./dashboard";
 import { CheckingDashboard } from "./checking-dashboard";
@@ -14,6 +14,7 @@ import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
 import { getDeleteAccountDialogResetState } from "./finance-shell/delete-account-dialog-helpers";
 import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import { SettingsPanel, type SettingsSection } from "./finance-shell/settings-panel";
+import { SidebarNavigation } from "./finance-shell/sidebar-navigation";
 import type { UserRecord } from "./finance-shell/types";
 import { UploadPanel } from "./finance-shell/upload-panel";
 import { useFinanceNavigation, type Stage } from "./finance-shell/use-finance-navigation";
@@ -21,11 +22,10 @@ import { useInertElements, useModalFocusTrap } from "./finance-shell/use-modal-a
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
 import { UserSelectPanel } from "./finance-shell/user-select-panel";
 import PlusIcon from "./ui/plus-icon";
-import UserIcon from "./ui/user-icon";
 
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/client/auth-client";
-import { cn, getInitials } from "@/shared/utils";
+import { cn } from "@/shared/utils";
 
 const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
 const restorableStages = new Set<Stage>(["welcome", "select", "create", "dashboard", "checking", "investment", "settings", "binance", "crypto"]);
@@ -1167,247 +1167,19 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
             </div>
           </header>
 
-          <aside
-            className="order-3 flex h-[88px] w-full flex-row items-center justify-between rounded-[22px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-shell)] p-3 transition-all duration-500 ease-out md:order-none md:row-start-2 md:h-auto md:w-auto md:flex-col md:justify-between md:translate-x-0 md:opacity-100"
-          >
-            <div className="hidden md:flex md:flex-col md:gap-2">
-              <button
-                aria-label="Home"
-                className={cn(
-                  "flex h-12 w-12 cursor-pointer items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985] has-lucide",
-                  stage === "welcome"
-                    ? "border-white text-white"
-                    : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                )}
-                onClick={navigateHome}
-                data-active={stage === "welcome"}
-                title="Home"
-                type="button"
-              >
-                <House className="h-5 w-5" strokeWidth={2.3} />
-              </button>
-              {activeUser && (
-                <button
-                  aria-label="Dashboard"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    stage === "dashboard"
-                      ? "border-white text-white"
-                      : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={() => navigateTo("dashboard")}
-                  data-active={stage === "dashboard"}
-                  type="button"
-                >
-                  <ChartPie className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              )}
-              {activeUser && activeUser.checkingCount > 0 && (
-                <button
-                  aria-label="Checking"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    stage === "checking"
-                      ? "border-white text-white"
-                      : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={() => navigateTo("checking")}
-                  data-active={stage === "checking"}
-                  type="button"
-                >
-                  <Landmark className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              )}
-              {activeUser && activeUser.investmentCount > 0 && (
-                <button
-                  aria-label="Investments"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    stage === "investment"
-                      ? "border-white text-white"
-                      : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={() => navigateTo("investment")}
-                  data-active={stage === "investment"}
-                  type="button"
-                >
-                  <Wallet className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              )}
-              {activeUser && activeUser.cryptoCount > 0 && (
-                <button
-                  aria-label="Crypto"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    stage === "crypto"
-                      ? "border-white text-white"
-                      : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={() => navigateTo("crypto")}
-                  data-active={stage === "crypto"}
-                  type="button"
-                >
-                  <Coins className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              )}
-            </div>
-            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--text-dim)] md:hidden">
-              {activeUser ? activeUser.name : title}
-            </div>
-            <div className="flex gap-2 md:flex-col">
-              <button
-                aria-label="Home"
-                className={cn(
-                  "flex h-12 w-12 cursor-pointer items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985] md:hidden has-lucide",
-                  stage === "welcome"
-                    ? "border-white text-white"
-                    : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                )}
-                onClick={navigateHome}
-                data-active={stage === "welcome"}
-                title="Home"
-                type="button"
-              >
-                <House className="h-5 w-5" strokeWidth={2.3} />
-              </button>
-              {activeUser && (
-                <button
-                  aria-label="Dashboard"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer md:hidden",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    stage === "dashboard"
-                      ? "border-white text-white"
-                      : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={() => navigateTo("dashboard")}
-                  data-active={stage === "dashboard"}
-                  type="button"
-                >
-                  <ChartPie className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              )}
-              {activeUser && activeUser.checkingCount > 0 && (
-                <button
-                  aria-label="Checking"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer md:hidden",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    stage === "checking"
-                      ? "border-white text-white"
-                      : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={() => navigateTo("checking")}
-                  data-active={stage === "checking"}
-                  type="button"
-                >
-                  <Landmark className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              )}
-              {activeUser && activeUser.investmentCount > 0 && (
-                <button
-                  aria-label="Investments"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer md:hidden",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    stage === "investment"
-                      ? "border-white text-white"
-                      : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={() => navigateTo("investment")}
-                  data-active={stage === "investment"}
-                  type="button"
-                >
-                  <Wallet className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              )}
-              {activeUser && activeUser.cryptoCount > 0 && (
-                <button
-                  aria-label="Crypto"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer md:hidden",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    stage === "crypto"
-                      ? "border-white text-white"
-                      : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={() => navigateTo("crypto")}
-                  data-active={stage === "crypto"}
-                  type="button"
-                >
-                  <Coins className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              )}
-              {activeUser && (activeUser.hasBinanceCredentials || binanceFading) && (
-                <button
-                  aria-label="Binance"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-300 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    binanceFading
-                      ? "opacity-0 pointer-events-none scale-90"
-                      : stage === "binance"
-                        ? "border-white text-white"
-                        : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={() => navigateTo("binance")}
-                  data-active={stage === "binance"}
-                  type="button"
-                >
-                  <Bitcoin className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              )}
-              {activeUser && (
-                <button
-                  aria-label="Settings"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    showSettingsView
-                      ? "border-white text-white"
-                      : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={handleSettingsNavClick}
-                  data-active={showSettingsView}
-                  type="button"
-                >
-                  <Settings className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              )}
-              {hasUsers && (
-                <button
-                  aria-label="Select profile"
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] cursor-pointer",
-                    "transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
-                    "has-lucide",
-                    (showUserSelectView || stage === "select")
-                      ? "border-white text-white"
-                      : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)]"
-                  )}
-                  onClick={handleUserSelectClick}
-                  data-active={showUserSelectView || stage === "select"}
-                  type="button"
-                >
-                  {activeUser ? <span className="text-xl font-extrabold initials">{getInitials(activeUser.name)}</span> : <UserIcon className="h-6 w-6" />}
-                </button>
-              )}
-            </div>
-          </aside>
+          <SidebarNavigation
+            activeUser={activeUser}
+            binanceFading={binanceFading}
+            hasUsers={hasUsers}
+            onHomeClick={navigateHome}
+            onNavigate={navigateTo}
+            onProfileClick={handleUserSelectClick}
+            onSettingsClick={handleSettingsNavClick}
+            showSettingsView={showSettingsView}
+            showUserSelectView={showUserSelectView}
+            stage={stage}
+            title={title}
+          />
 
           <section 
             className="order-2 flex min-h-0 md:order-none md:row-start-2"
