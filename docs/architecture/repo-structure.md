@@ -181,11 +181,14 @@ boundaries are:
 - `src/domain/` for target-neutral validation, import rules and finance
   calculations;
 - `src/integrations/` for external provider clients and parsers;
-- `src/server/` for auth, Prisma, security, logging and service workflows;
+- `src/server/` for auth, Prisma, security, logging, service workflows and
+  repository adapters;
 - `src/shared/` for cross-cutting client/server helpers and constants;
 - `src/client/` for browser-only client wiring;
 - thin route handlers under `src/app/api/` that call `src/server/services/`
   for business workflows;
+- `src/server/repositories/` for persistence access already extracted from
+  stable services;
 - `scripts/e2e/` for browser flows;
 - `scripts/testing/` for local test maintenance;
 - `docs/audits/` for durable audit reports;

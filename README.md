@@ -152,7 +152,7 @@ src/
     ui/                  Shared UI primitives
   domain/                Pure validation, import, pricing, and finance calculations
   integrations/          External clients and provider parsers
-  server/                Auth, Prisma, security, logging, and service workflows
+  server/                Auth, Prisma, security, repositories, and service workflows
   shared/                Cross-cutting client/server helpers and constants
 ```
 

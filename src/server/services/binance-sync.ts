@@ -4,7 +4,11 @@ import {
   type BinanceFetch,
   type PricedBinanceBalance
 } from "@/integrations/binance/binance-service";
-import { prisma } from "@/server/db/prisma";
+import {
+  binanceRepository,
+  type BinanceRepository,
+  type PersistedBinanceBalance
+} from "@/server/repositories/binance-repository";
 import {
   decryptBinanceCredentials,
   hasBinanceCredentials,
@@ -13,18 +17,10 @@ import {
 
 const STALE_MS = 10 * 60 * 1000;
 
-export type PersistedBinanceBalance = PricedBinanceBalance & {
-  id: string;
-  userId: string;
-  updatedAt: Date;
-};
-
-export type BinanceSyncStore = Pick<typeof prisma, "binanceBalance" | "priceCache" | "user">;
-
 export type BinanceSyncDependencies = {
   fetcher?: BinanceFetch;
   now?: () => Date;
-  store?: BinanceSyncStore;
+  repository?: BinanceRepository;
 };
 
 export type SyncBinanceBalancesResult = {
@@ -44,49 +40,20 @@ export async function persistBalances(
   balances: PricedBinanceBalance[],
   dependencies: BinanceSyncDependencies = {}
 ): Promise<SyncBinanceBalancesResult> {
-  const store = dependencies.store ?? prisma;
+  const repository = dependencies.repository ?? binanceRepository;
   const syncedAt = dependencies.now?.() ?? new Date();
 
   for (const balance of balances) {
-    await store.binanceBalance.upsert({
-      where: { userId_tokenSymbol: { userId, tokenSymbol: balance.tokenSymbol } },
-      update: {
-        tokenName: balance.tokenName,
-        freeAmount: balance.freeAmount,
-        lockedAmount: balance.lockedAmount,
-        eurValue: balance.eurValue,
-      },
-      create: {
-        userId,
-        tokenSymbol: balance.tokenSymbol,
-        tokenName: balance.tokenName,
-        freeAmount: balance.freeAmount,
-        lockedAmount: balance.lockedAmount,
-        eurValue: balance.eurValue,
-      },
-    });
+    await repository.upsertBalance(userId, balance);
   }
 
   const activeSymbols = balances.map((balance) => balance.tokenSymbol);
-  await store.binanceBalance.deleteMany({
-    where: activeSymbols.length > 0
-      ? { userId, tokenSymbol: { notIn: activeSymbols } }
-      : { userId },
-  });
+  await repository.deleteInactiveBalances(userId, activeSymbols);
+  await repository.upsertSyncTimestamp(userId, syncedAt);
 
-  const syncKey = `binance_sync_${userId}`;
-  await store.priceCache.upsert({
-    where: { key: syncKey },
-    update: { timestamp: syncedAt },
-    create: { key: syncKey, timestamp: syncedAt },
-  });
+  const persistedBalances = await repository.listBalances(userId);
 
-  const persistedBalances = await store.binanceBalance.findMany({
-    where: { userId },
-    orderBy: { eurValue: "desc" },
-  });
-
-  return { balances: persistedBalances as PersistedBinanceBalance[], syncedAt };
+  return { balances: persistedBalances, syncedAt };
 }
 
 export async function syncBinanceBalances(
@@ -104,9 +71,9 @@ export async function syncBinanceProfile(
   userId: string,
   dependencies: BinanceSyncDependencies = {}
 ) {
-  const store = dependencies.store ?? prisma;
-  const user = await store.user.findUnique({ where: { id: userId } });
-  const credentials = decryptBinanceCredentials(user);
+  const repository = dependencies.repository ?? binanceRepository;
+  const credentialRecord = await repository.getCredentialRecord(userId);
+  const credentials = decryptBinanceCredentials(credentialRecord);
 
   if (!credentials) {
     throw new BinanceMissingCredentialsError();
@@ -119,29 +86,17 @@ export async function getBinanceBalancesStatus(
   userId: string,
   dependencies: BinanceSyncDependencies = {}
 ) {
-  const store = dependencies.store ?? prisma;
+  const repository = dependencies.repository ?? binanceRepository;
   const now = dependencies.now?.() ?? new Date();
-  const [balances, syncCache, user] = await Promise.all([
-    store.binanceBalance.findMany({
-      where: { userId },
-      orderBy: { eurValue: "desc" },
-    }),
-    store.priceCache.findUnique({ where: { key: `binance_sync_${userId}` } }),
-    store.user.findUnique({
-      where: { id: userId },
-      select: {
-        binanceApiKeyEncrypted: true,
-        binanceApiSecretEncrypted: true,
-      },
-    }),
-  ]);
-
-  const syncedAt = syncCache?.timestamp ?? null;
+  const { balances, syncTimestamp, credentialRecord } =
+    await repository.getBalanceStatusRecords(userId);
 
   return {
-    balances: balances as PersistedBinanceBalance[],
-    syncedAt,
-    isStale: !syncedAt || now.getTime() - syncedAt.getTime() > STALE_MS,
-    hasApiKey: hasBinanceCredentials(user)
+    balances,
+    syncedAt: syncTimestamp,
+    isStale: !syncTimestamp || now.getTime() - syncTimestamp.getTime() > STALE_MS,
+    hasApiKey: hasBinanceCredentials(credentialRecord)
   };
 }
+
+export type { PersistedBinanceBalance };

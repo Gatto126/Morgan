@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { toSafeUser, toSafeUserSummary } from "@/server/auth/user-response";
-import { prisma } from "@/server/db/prisma";
+import { profileRepository } from "@/server/repositories/profile-repository";
 import { encryptSecret, makeBinanceApiKeyPreview } from "@/server/security/secrets";
 
 export class ProfileConflictError extends Error {
@@ -25,16 +25,6 @@ export class ProfileBadRequestError extends Error {
   }
 }
 
-const profileSummaryInclude = {
-  _count: {
-    select: {
-      checkingTransactions: true,
-      investmentTransactions: true,
-      cryptoTransactions: true
-    }
-  }
-} as const;
-
 export const createProfileSchema = z.object({
   name: z
     .string()
@@ -54,15 +44,7 @@ function uniqueStrings(values: Array<string | null | undefined>) {
 }
 
 export async function listProfiles(ownerId: string) {
-  const users = await prisma.user.findMany({
-    where: {
-      ownerId
-    },
-    include: profileSummaryInclude,
-    orderBy: {
-      createdAt: "asc"
-    }
-  });
+  const users = await profileRepository.listByOwner(ownerId);
 
   return users.map(toSafeUserSummary);
 }
@@ -70,23 +52,13 @@ export async function listProfiles(ownerId: string) {
 export async function createProfile(ownerId: string, input: unknown) {
   const { name } = createProfileSchema.parse(input);
 
-  const existingUser = await prisma.user.findFirst({
-    where: {
-      ownerId,
-      name
-    }
-  });
+  const existingUser = await profileRepository.findByOwnerAndName(ownerId, name);
 
   if (existingUser) {
     throw new ProfileConflictError();
   }
 
-  const user = await prisma.user.create({
-    data: {
-      ownerId,
-      name
-    }
-  });
+  const user = await profileRepository.create(ownerId, name);
 
   const users = await listProfiles(ownerId);
 
@@ -103,12 +75,7 @@ export async function createProfile(ownerId: string, input: unknown) {
 }
 
 export async function getProfile(ownerId: string, id: string) {
-  const user = await prisma.user.findFirst({
-    where: {
-      id,
-      ownerId
-    }
-  });
+  const user = await profileRepository.findByOwner(ownerId, id);
 
   if (!user) {
     throw new ProfileNotFoundError();
@@ -118,89 +85,40 @@ export async function getProfile(ownerId: string, id: string) {
 }
 
 export async function deleteProfile(id: string) {
-  const userInvestments = await prisma.investmentTransaction.findMany({
-    where: { userId: id },
-    select: { isin: true }
-  });
-  const userIsins = uniqueStrings(userInvestments.map((transaction) => transaction.isin));
+  const userIsins = await profileRepository.listInvestmentIsins(id);
 
   let isinsToDelete: string[] = [];
   if (userIsins.length > 0) {
-    const otherTransactions = await prisma.investmentTransaction.findMany({
-      where: {
-        userId: { not: id },
-        isin: { in: userIsins }
-      },
-      select: { isin: true }
-    });
-    const otherIsins = new Set(uniqueStrings(otherTransactions.map((transaction) => transaction.isin)));
+    const otherIsins = new Set(await profileRepository.listOtherInvestmentIsins(id, userIsins));
     isinsToDelete = userIsins.filter((isin) => !otherIsins.has(isin));
   }
 
   if (isinsToDelete.length > 0) {
-    await prisma.assetHistory.deleteMany({
-      where: {
-        isin: { in: isinsToDelete }
-      }
-    });
-
-    await prisma.asset.deleteMany({
-      where: {
-        isin: { in: isinsToDelete }
-      }
-    });
+    await profileRepository.deleteAssetHistory(isinsToDelete);
+    await profileRepository.deleteAssets(isinsToDelete);
   }
 
-  const userCryptos = await prisma.cryptoTransaction.findMany({
-    where: { userId: id },
-    select: { tokenSymbol: true }
-  });
-  const userBinanceBalances = await prisma.binanceBalance.findMany({
-    where: { userId: id },
-    select: { tokenSymbol: true }
-  });
   const userTokens = uniqueStrings([
-    ...userCryptos.map((transaction) => transaction.tokenSymbol),
-    ...userBinanceBalances.map((balance) => balance.tokenSymbol)
+    ...(await profileRepository.listCryptoTokens(id)),
+    ...(await profileRepository.listBinanceTokens(id))
   ]);
 
   let tokensToDelete: string[] = [];
   if (userTokens.length > 0) {
-    const [otherCryptoTransactions, otherBinanceBalances] = await Promise.all([
-      prisma.cryptoTransaction.findMany({
-        where: {
-          userId: { not: id },
-          tokenSymbol: { in: userTokens }
-        },
-        select: { tokenSymbol: true }
-      }),
-      prisma.binanceBalance.findMany({
-        where: {
-          userId: { not: id },
-          tokenSymbol: { in: userTokens }
-        },
-        select: { tokenSymbol: true }
-      })
+    const [otherCryptoTokens, otherBinanceTokens] = await Promise.all([
+      profileRepository.listOtherCryptoTokens(id, userTokens),
+      profileRepository.listOtherBinanceTokens(id, userTokens)
     ]);
     const otherTokens = new Set(uniqueStrings([
-      ...otherCryptoTransactions.map((transaction) => transaction.tokenSymbol),
-      ...otherBinanceBalances.map((balance) => balance.tokenSymbol)
+      ...otherCryptoTokens,
+      ...otherBinanceTokens
     ]));
     tokensToDelete = userTokens.filter((token) => !otherTokens.has(token));
   }
 
   if (tokensToDelete.length > 0) {
-    await prisma.assetHistory.deleteMany({
-      where: {
-        isin: { in: tokensToDelete }
-      }
-    });
-
-    await prisma.cryptoAsset.deleteMany({
-      where: {
-        tokenSymbol: { in: tokensToDelete }
-      }
-    });
+    await profileRepository.deleteAssetHistory(tokensToDelete);
+    await profileRepository.deleteCryptoAssets(tokensToDelete);
   }
 
   const priceCacheKeysToDelete = uniqueStrings([
@@ -210,16 +128,10 @@ export async function deleteProfile(id: string) {
   ]);
 
   if (priceCacheKeysToDelete.length > 0) {
-    await prisma.priceCache.deleteMany({
-      where: {
-        key: { in: priceCacheKeysToDelete }
-      }
-    });
+    await profileRepository.deletePriceCache(priceCacheKeysToDelete);
   }
 
-  await prisma.user.delete({
-    where: { id }
-  });
+  await profileRepository.deleteProfile(id);
 
   return {
     isinsToDelete,
@@ -260,13 +172,10 @@ export async function updateProfileBinanceSettings(id: string, input: unknown) {
   }
 
   if (apiKey === null && apiSecret === null && json.deleteBalances === true) {
-    await prisma.binanceBalance.deleteMany({ where: { userId: id } });
+    await profileRepository.deleteBinanceBalances(id);
   }
 
-  const user = await prisma.user.update({
-    where: { id },
-    data
-  });
+  const user = await profileRepository.updateBinanceCredentials(id, data);
 
   return toSafeUser(user);
 }

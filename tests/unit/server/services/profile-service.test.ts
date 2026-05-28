@@ -1,54 +1,46 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  userFindMany: vi.fn(),
-  userFindFirst: vi.fn(),
-  userCreate: vi.fn(),
-  userDelete: vi.fn(),
-  userUpdate: vi.fn(),
-  investmentFindMany: vi.fn(),
-  cryptoFindMany: vi.fn(),
-  binanceBalanceFindMany: vi.fn(),
-  binanceBalanceDeleteMany: vi.fn(),
-  assetHistoryDeleteMany: vi.fn(),
-  assetDeleteMany: vi.fn(),
-  cryptoAssetDeleteMany: vi.fn(),
-  priceCacheDeleteMany: vi.fn(),
+  listByOwner: vi.fn(),
+  findByOwner: vi.fn(),
+  findByOwnerAndName: vi.fn(),
+  create: vi.fn(),
+  listInvestmentIsins: vi.fn(),
+  listOtherInvestmentIsins: vi.fn(),
+  listCryptoTokens: vi.fn(),
+  listBinanceTokens: vi.fn(),
+  listOtherCryptoTokens: vi.fn(),
+  listOtherBinanceTokens: vi.fn(),
+  deleteAssetHistory: vi.fn(),
+  deleteAssets: vi.fn(),
+  deleteCryptoAssets: vi.fn(),
+  deletePriceCache: vi.fn(),
+  deleteBinanceBalances: vi.fn(),
+  deleteProfile: vi.fn(),
+  updateBinanceCredentials: vi.fn(),
   encryptSecret: vi.fn((value: string | null | undefined) => value ? `encrypted:${value.trim()}` : null),
   makeBinanceApiKeyPreview: vi.fn((value: string | null | undefined) => value ? `${value.trim().slice(0, 8)}...` : null)
 }));
 
-vi.mock("@/server/db/prisma", () => ({
-  prisma: {
-    user: {
-      findMany: mocks.userFindMany,
-      findFirst: mocks.userFindFirst,
-      create: mocks.userCreate,
-      delete: mocks.userDelete,
-      update: mocks.userUpdate
-    },
-    investmentTransaction: {
-      findMany: mocks.investmentFindMany
-    },
-    cryptoTransaction: {
-      findMany: mocks.cryptoFindMany
-    },
-    binanceBalance: {
-      findMany: mocks.binanceBalanceFindMany,
-      deleteMany: mocks.binanceBalanceDeleteMany
-    },
-    assetHistory: {
-      deleteMany: mocks.assetHistoryDeleteMany
-    },
-    asset: {
-      deleteMany: mocks.assetDeleteMany
-    },
-    cryptoAsset: {
-      deleteMany: mocks.cryptoAssetDeleteMany
-    },
-    priceCache: {
-      deleteMany: mocks.priceCacheDeleteMany
-    }
+vi.mock("@/server/repositories/profile-repository", () => ({
+  profileRepository: {
+    listByOwner: mocks.listByOwner,
+    findByOwner: mocks.findByOwner,
+    findByOwnerAndName: mocks.findByOwnerAndName,
+    create: mocks.create,
+    listInvestmentIsins: mocks.listInvestmentIsins,
+    listOtherInvestmentIsins: mocks.listOtherInvestmentIsins,
+    listCryptoTokens: mocks.listCryptoTokens,
+    listBinanceTokens: mocks.listBinanceTokens,
+    listOtherCryptoTokens: mocks.listOtherCryptoTokens,
+    listOtherBinanceTokens: mocks.listOtherBinanceTokens,
+    deleteAssetHistory: mocks.deleteAssetHistory,
+    deleteAssets: mocks.deleteAssets,
+    deleteCryptoAssets: mocks.deleteCryptoAssets,
+    deletePriceCache: mocks.deletePriceCache,
+    deleteBinanceBalances: mocks.deleteBinanceBalances,
+    deleteProfile: mocks.deleteProfile,
+    updateBinanceCredentials: mocks.updateBinanceCredentials
   }
 }));
 
@@ -88,23 +80,27 @@ describe("profile service", () => {
       mock.mockClear();
     }
 
-    mocks.userFindMany.mockResolvedValue([]);
-    mocks.userFindFirst.mockResolvedValue(null);
-    mocks.userCreate.mockResolvedValue(profile);
-    mocks.userDelete.mockResolvedValue(profile);
-    mocks.userUpdate.mockResolvedValue(profile);
-    mocks.investmentFindMany.mockResolvedValue([]);
-    mocks.cryptoFindMany.mockResolvedValue([]);
-    mocks.binanceBalanceFindMany.mockResolvedValue([]);
-    mocks.binanceBalanceDeleteMany.mockResolvedValue({ count: 0 });
-    mocks.assetHistoryDeleteMany.mockResolvedValue({ count: 0 });
-    mocks.assetDeleteMany.mockResolvedValue({ count: 0 });
-    mocks.cryptoAssetDeleteMany.mockResolvedValue({ count: 0 });
-    mocks.priceCacheDeleteMany.mockResolvedValue({ count: 0 });
+    mocks.listByOwner.mockResolvedValue([]);
+    mocks.findByOwner.mockResolvedValue(null);
+    mocks.findByOwnerAndName.mockResolvedValue(null);
+    mocks.create.mockResolvedValue(profile);
+    mocks.listInvestmentIsins.mockResolvedValue([]);
+    mocks.listOtherInvestmentIsins.mockResolvedValue([]);
+    mocks.listCryptoTokens.mockResolvedValue([]);
+    mocks.listBinanceTokens.mockResolvedValue([]);
+    mocks.listOtherCryptoTokens.mockResolvedValue([]);
+    mocks.listOtherBinanceTokens.mockResolvedValue([]);
+    mocks.deleteAssetHistory.mockResolvedValue(undefined);
+    mocks.deleteAssets.mockResolvedValue(undefined);
+    mocks.deleteCryptoAssets.mockResolvedValue(undefined);
+    mocks.deletePriceCache.mockResolvedValue(undefined);
+    mocks.deleteBinanceBalances.mockResolvedValue(undefined);
+    mocks.deleteProfile.mockResolvedValue(undefined);
+    mocks.updateBinanceCredentials.mockResolvedValue(profile);
   });
 
   it("lists owned profiles with transaction counts", async () => {
-    mocks.userFindMany.mockResolvedValueOnce([
+    mocks.listByOwner.mockResolvedValueOnce([
       {
         ...profile,
         _count: {
@@ -127,14 +123,11 @@ describe("profile service", () => {
         cryptoCount: 5
       })
     ]);
-    expect(mocks.userFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { ownerId: "owner-1" },
-      orderBy: { createdAt: "asc" }
-    }));
+    expect(mocks.listByOwner).toHaveBeenCalledWith("owner-1");
   });
 
   it("creates a profile and returns the refreshed list", async () => {
-    mocks.userFindMany.mockResolvedValueOnce([
+    mocks.listByOwner.mockResolvedValueOnce([
       {
         ...profile,
         _count: {
@@ -147,18 +140,8 @@ describe("profile service", () => {
 
     const result = await createProfile("owner-1", { name: " Main " });
 
-    expect(mocks.userFindFirst).toHaveBeenCalledWith({
-      where: {
-        ownerId: "owner-1",
-        name: "Main"
-      }
-    });
-    expect(mocks.userCreate).toHaveBeenCalledWith({
-      data: {
-        ownerId: "owner-1",
-        name: "Main"
-      }
-    });
+    expect(mocks.findByOwnerAndName).toHaveBeenCalledWith("owner-1", "Main");
+    expect(mocks.create).toHaveBeenCalledWith("owner-1", "Main");
     expect(result.user).toMatchObject({
       id: "profile-1",
       transactionCount: 0
@@ -167,14 +150,14 @@ describe("profile service", () => {
   });
 
   it("rejects duplicate profile names", async () => {
-    mocks.userFindFirst.mockResolvedValueOnce(profile);
+    mocks.findByOwnerAndName.mockResolvedValueOnce(profile);
 
     await expect(createProfile("owner-1", { name: "Main" })).rejects.toBeInstanceOf(ProfileConflictError);
-    expect(mocks.userCreate).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
   });
 
   it("returns a safe owned profile or not found", async () => {
-    mocks.userFindFirst.mockResolvedValueOnce({
+    mocks.findByOwner.mockResolvedValueOnce({
       ...profile,
       binanceApiKeyEncrypted: "encrypted-key",
       binanceApiSecretEncrypted: "encrypted-secret",
@@ -187,27 +170,24 @@ describe("profile service", () => {
       binanceApiKeyPreview: "apikey12..."
     });
 
-    mocks.userFindFirst.mockResolvedValueOnce(null);
+    mocks.findByOwner.mockResolvedValueOnce(null);
     await expect(getProfile("owner-1", "missing")).rejects.toBeInstanceOf(ProfileNotFoundError);
   });
 
   it("updates Binance credentials only when key and secret are provided together", async () => {
     await expect(updateProfileBinanceSettings("profile-1", { apiKey: "only-key" }))
       .rejects.toBeInstanceOf(ProfileBadRequestError);
-    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(mocks.updateBinanceCredentials).not.toHaveBeenCalled();
 
     await updateProfileBinanceSettings("profile-1", {
       apiKey: "abcdefgh123",
       apiSecret: "secret-value"
     });
 
-    expect(mocks.userUpdate).toHaveBeenCalledWith({
-      where: { id: "profile-1" },
-      data: {
-        binanceApiKeyEncrypted: "encrypted:abcdefgh123",
-        binanceApiSecretEncrypted: "encrypted:secret-value",
-        binanceApiKeyPreview: "abcdefgh..."
-      }
+    expect(mocks.updateBinanceCredentials).toHaveBeenCalledWith("profile-1", {
+      binanceApiKeyEncrypted: "encrypted:abcdefgh123",
+      binanceApiSecretEncrypted: "encrypted:secret-value",
+      binanceApiKeyPreview: "abcdefgh..."
     });
   });
 
@@ -218,46 +198,30 @@ describe("profile service", () => {
       deleteBalances: true
     });
 
-    expect(mocks.binanceBalanceDeleteMany).toHaveBeenCalledWith({ where: { userId: "profile-1" } });
-    expect(mocks.userUpdate).toHaveBeenCalledWith({
-      where: { id: "profile-1" },
-      data: {
-        binanceApiKeyEncrypted: null,
-        binanceApiSecretEncrypted: null,
-        binanceApiKeyPreview: null
-      }
+    expect(mocks.deleteBinanceBalances).toHaveBeenCalledWith("profile-1");
+    expect(mocks.updateBinanceCredentials).toHaveBeenCalledWith("profile-1", {
+      binanceApiKeyEncrypted: null,
+      binanceApiSecretEncrypted: null,
+      binanceApiKeyPreview: null
     });
   });
 
   it("deletes a profile and removes only unshared asset metadata", async () => {
-    mocks.investmentFindMany
-      .mockResolvedValueOnce([{ isin: "ETF1" }, { isin: "ETF2" }, { isin: null }])
-      .mockResolvedValueOnce([{ isin: "ETF2" }]);
-    mocks.cryptoFindMany
-      .mockResolvedValueOnce([{ tokenSymbol: "BTC" }, { tokenSymbol: "ETH" }])
-      .mockResolvedValueOnce([{ tokenSymbol: "ETH" }]);
-    mocks.binanceBalanceFindMany
-      .mockResolvedValueOnce([{ tokenSymbol: "BNB" }])
-      .mockResolvedValueOnce([]);
+    mocks.listInvestmentIsins.mockResolvedValueOnce(["ETF1", "ETF2"]);
+    mocks.listOtherInvestmentIsins.mockResolvedValueOnce(["ETF2"]);
+    mocks.listCryptoTokens.mockResolvedValueOnce(["BTC", "ETH"]);
+    mocks.listBinanceTokens.mockResolvedValueOnce(["BNB"]);
+    mocks.listOtherCryptoTokens.mockResolvedValueOnce(["ETH"]);
+    mocks.listOtherBinanceTokens.mockResolvedValueOnce([]);
 
     const result = await deleteProfile("profile-1");
 
-    expect(mocks.assetHistoryDeleteMany).toHaveBeenNthCalledWith(1, {
-      where: { isin: { in: ["ETF1"] } }
-    });
-    expect(mocks.assetDeleteMany).toHaveBeenCalledWith({
-      where: { isin: { in: ["ETF1"] } }
-    });
-    expect(mocks.assetHistoryDeleteMany).toHaveBeenNthCalledWith(2, {
-      where: { isin: { in: ["BTC", "BNB"] } }
-    });
-    expect(mocks.cryptoAssetDeleteMany).toHaveBeenCalledWith({
-      where: { tokenSymbol: { in: ["BTC", "BNB"] } }
-    });
-    expect(mocks.priceCacheDeleteMany).toHaveBeenCalledWith({
-      where: { key: { in: ["ETF1", "BTC", "BNB", "binance_sync_profile-1"] } }
-    });
-    expect(mocks.userDelete).toHaveBeenCalledWith({ where: { id: "profile-1" } });
+    expect(mocks.deleteAssetHistory).toHaveBeenNthCalledWith(1, ["ETF1"]);
+    expect(mocks.deleteAssets).toHaveBeenCalledWith(["ETF1"]);
+    expect(mocks.deleteAssetHistory).toHaveBeenNthCalledWith(2, ["BTC", "BNB"]);
+    expect(mocks.deleteCryptoAssets).toHaveBeenCalledWith(["BTC", "BNB"]);
+    expect(mocks.deletePriceCache).toHaveBeenCalledWith(["ETF1", "BTC", "BNB", "binance_sync_profile-1"]);
+    expect(mocks.deleteProfile).toHaveBeenCalledWith("profile-1");
     expect(result).toEqual({
       isinsToDelete: ["ETF1"],
       tokensToDelete: ["BTC", "BNB"],
