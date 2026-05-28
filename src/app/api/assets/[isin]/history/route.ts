@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authGuardResponse, requireAuth } from "@/server/auth/auth-guard";
-import { prisma } from "@/server/db/prisma";
 import { apiLogger } from "@/server/logging/logger";
+import { marketDataRepository } from "@/server/repositories/market-data-repository";
 
 const log = apiLogger("AssetHistoryAPI");
 
@@ -17,19 +17,7 @@ export async function GET(
 
     log.info(`Fetching asset history for ${isin} (currency: ${currency})`);
 
-    const history = await prisma.assetHistory.findMany({
-      where: {
-        isin,
-        currency,
-      },
-      orderBy: {
-        date: "asc",
-      },
-      select: {
-        date: true,
-        value: true,
-      },
-    });
+    const history = await marketDataRepository.listAssetHistorySeries(isin, currency);
 
     return NextResponse.json({
       isin,

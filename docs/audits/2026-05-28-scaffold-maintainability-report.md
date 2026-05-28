@@ -501,8 +501,11 @@ fase 2 sugli script, la separazione di `src/lib` e l'estrazione dei servizi
 `dashboard-data`, `account-deletion`, `profile-service` e `binance-sync`.
 Il repository layer e' in uso per i service business principali:
 `profile-service`, `binance-sync`, `dashboard-data`, `account-deletion` e
-`transaction-import`. Resta da valutare una seconda fase sui direct Prisma
-ancora presenti in auth guard, health check e route read-only legacy.
+`transaction-import`. Anche `auth-guard`, health check, pagina iniziale e route
+read-only legacy passano ora da repository/service dedicati. L'unico direct
+Prisma rimasto nel runtime app fuori da `src/server/repositories` e'
+`src/server/auth/auth.ts`, intenzionalmente, per il wiring dell'adapter Better
+Auth.
 
 ## Criteri Di Accettazione
 

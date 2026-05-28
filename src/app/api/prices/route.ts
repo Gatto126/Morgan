@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authGuardResponse, requireAuth } from "@/server/auth/auth-guard";
 import { apiLogger } from "@/server/logging/logger";
-import { prisma } from "@/server/db/prisma";
 import { parsePriceRequestParams, PriceRequestValidationError } from "@/domain/pricing/price-request";
+import { marketDataRepository } from "@/server/repositories/market-data-repository";
 
 const log = apiLogger("Prices");
 
@@ -156,36 +156,6 @@ async function fetchBinancePrice(symbol: string, timeoutMs = BINANCE_TIMEOUT_MS)
   }
 }
 
-async function getLatestHistoricalPrices(keys: string[]) {
-  if (keys.length === 0) {
-    return new Map<string, number>();
-  }
-
-  const historyPoints = await prisma.assetHistory.findMany({
-    where: {
-      isin: { in: keys },
-      currency: "EUR"
-    },
-    select: {
-      isin: true,
-      value: true
-    },
-    orderBy: [
-      { isin: "asc" },
-      { date: "desc" }
-    ]
-  });
-
-  const prices = new Map<string, number>();
-  for (const point of historyPoints) {
-    if (!prices.has(point.isin)) {
-      prices.set(point.isin, point.value);
-    }
-  }
-
-  return prices;
-}
-
 export async function GET(request: NextRequest) {
   try {
     const session = await requireAuth(request);
@@ -241,7 +211,7 @@ export async function GET(request: NextRequest) {
     const missingLiveKeys = fetchResults
       .filter((result) => result.price === null)
       .map((result) => result.key);
-    const historicalPrices = await getLatestHistoricalPrices(missingLiveKeys);
+    const historicalPrices = await marketDataRepository.listLatestHistoricalPrices(missingLiveKeys);
 
     for (const result of fetchResults) {
       let finalPrice = result.price;

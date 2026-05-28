@@ -3,8 +3,7 @@ import { headers } from "next/headers";
 import { AuthShell } from "@/components/auth-shell";
 import { FinanceShell } from "@/components/finance-shell";
 import { auth } from "@/server/auth/auth";
-import { prisma } from "@/server/db/prisma";
-import { toSafeUserSummary } from "@/server/auth/user-response";
+import { listProfiles } from "@/server/services/profile-service";
 
 export const dynamic = "force-dynamic";
 
@@ -17,25 +16,7 @@ export default async function HomePage() {
     return <AuthShell />;
   }
 
-  const users = await prisma.user.findMany({
-    where: {
-      ownerId: session.user.id
-    },
-    include: {
-      _count: {
-        select: {
-          checkingTransactions: true,
-          investmentTransactions: true,
-          cryptoTransactions: true
-        }
-      }
-    },
-    orderBy: {
-      createdAt: "asc"
-    }
-  });
-
-  const usersWithCount = users.map(toSafeUserSummary);
+  const usersWithCount = await listProfiles(session.user.id);
 
   return <FinanceShell accountName={session.user.name} initialUsers={usersWithCount} />;
 }

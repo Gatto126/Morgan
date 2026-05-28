@@ -3,7 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/server/auth/auth";
-import { prisma } from "@/server/db/prisma";
+import { profileRepository } from "@/server/repositories/profile-repository";
 
 export class AuthGuardError extends Error {
   constructor(
@@ -29,17 +29,7 @@ export async function requireAuth(request: Request) {
 
 export async function requireOwnedProfile(request: Request, userId: string) {
   const session = await requireAuth(request);
-  const profile = await prisma.user.findFirst({
-    where: {
-      id: userId,
-      ownerId: session.user.id
-    },
-    select: {
-      id: true,
-      ownerId: true,
-      name: true
-    }
-  });
+  const profile = await profileRepository.findByOwner(session.user.id, userId);
 
   if (!profile) {
     throw new AuthGuardError(404, "Profilo non trovato.");
@@ -55,4 +45,3 @@ export function authGuardResponse(error: unknown) {
 
   return null;
 }
-

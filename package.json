@@ -12,6 +12,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:docker": "node scripts/dev/dev-docker.mjs",
     "build": "next build",
     "start": "next start",
     "postinstall": "prisma generate --schema=prisma/schema.prisma",
@@ -27,6 +28,7 @@
     "smoke:upload-panel": "node scripts/e2e/smoke-upload-panel.mjs",
     "smoke:upload-panel:docker": "node scripts/e2e/smoke-upload-panel.mjs --base-url=http://127.0.0.1:3001 --no-start-server",
     "e2e:docker:full": "node scripts/e2e/full-browser-flow.mjs",
+    "e2e:realistic": "node scripts/e2e/realistic-browser-flow.mjs",
     "migrate:binance-secrets:legacy-sqlite": "node scripts/db/migrate-binance-plaintext.legacy-sqlite.mjs",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
     "prisma:generate:postgres": "prisma generate --schema=prisma/schema.prisma",

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
-import { prisma } from "@/server/db/prisma";
 import { BBVA_INSTITUTION } from "@/shared/institutions";
 import { apiLogger } from "@/server/logging/logger";
+import { transactionReadRepository } from "@/server/repositories/transaction-read-repository";
 
 const log = apiLogger("Checking");
 
@@ -18,20 +18,7 @@ export async function GET(request: NextRequest) {
 
     await requireOwnedProfile(request, userId);
 
-    const transactions = await prisma.checkingTransaction.findMany({
-      where: { userId },
-      orderBy: { bookingDate: "desc" },
-      select: {
-        id: true,
-        sourceInstitution: true,
-        bookingDate: true,
-        typeLabel: true,
-        description: true,
-        direction: true,
-        amountCents: true,
-        balanceCents: true
-      }
-    });
+    const transactions = await transactionReadRepository.listCheckingTransactions(userId);
 
     type CheckingProviderSummary = {
       sourceInstitution: string;

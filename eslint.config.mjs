@@ -9,8 +9,12 @@ const compat = new FlatCompat({
   baseDirectory: __dirname
 });
 
-const serviceBoundaryConfig = {
-  files: ["src/server/services/**/*.{ts,tsx}"],
+const prismaBoundaryConfig = {
+  files: [
+    "src/app/**/*.{ts,tsx}",
+    "src/server/auth/auth-guard.ts",
+    "src/server/services/**/*.{ts,tsx}"
+  ],
   rules: {
     "no-restricted-imports": [
       "error",
@@ -18,17 +22,17 @@ const serviceBoundaryConfig = {
         paths: [
           {
             name: "@/server/db/prisma",
-            message: "Service modules must use src/server/repositories instead of importing Prisma directly."
+            message: "Application modules must use src/server/repositories or services instead of importing Prisma directly."
           },
           {
             name: "@prisma/client",
-            message: "Keep Prisma types inside repository modules; export service-safe types from repositories when needed."
+            message: "Keep Prisma types inside repository modules; export app-safe types from repositories when needed."
           }
         ],
         patterns: [
           {
             group: ["@/server/db/*"],
-            message: "Service modules must depend on repositories, not database adapters."
+            message: "Application modules must depend on repositories/services, not database adapters."
           }
         ]
       }
@@ -38,7 +42,7 @@ const serviceBoundaryConfig = {
 
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
-  serviceBoundaryConfig
+  prismaBoundaryConfig
 ];
 
 export default eslintConfig;

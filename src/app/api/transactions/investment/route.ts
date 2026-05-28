@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
-import { prisma } from "@/server/db/prisma";
 import { apiLogger } from "@/server/logging/logger";
 import { buildPortfolioTimeSeries, getPortfolioPriceKeys } from "@/domain/finance/portfolio-timeseries";
+import { marketDataRepository } from "@/server/repositories/market-data-repository";
+import { transactionReadRepository } from "@/server/repositories/transaction-read-repository";
 
 const log = apiLogger("Investment");
 
@@ -19,39 +20,9 @@ export async function GET(request: NextRequest) {
 
     await requireOwnedProfile(request, userId);
 
-    const transactions = await prisma.investmentTransaction.findMany({
-      where: { userId },
-      orderBy: { bookingDate: "desc" },
-      select: {
-        id: true,
-        sourceInstitution: true,
-        bookingDate: true,
-        typeLabel: true,
-        description: true,
-        direction: true,
-        amountCents: true,
-        currency: true,
-        tradeType: true,
-        productName: true,
-        isin: true,
-        quantityUnits: true
-      }
-    });
+    const transactions = await transactionReadRepository.listInvestmentTransactions(userId);
     const priceKeys = getPortfolioPriceKeys(transactions, (isin) => isin.length === 12);
-    const historyPrices = priceKeys.length > 0
-      ? await prisma.assetHistory.findMany({
-          where: {
-            isin: { in: priceKeys },
-            currency: "EUR"
-          },
-          select: {
-            isin: true,
-            date: true,
-            value: true
-          },
-          orderBy: { date: "asc" }
-        })
-      : [];
+    const historyPrices = await marketDataRepository.listPortfolioHistory(priceKeys);
 
     const result = buildPortfolioTimeSeries({
       transactions,

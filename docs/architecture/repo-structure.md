@@ -236,7 +236,10 @@ Until the repo is physically split:
 - treat `src/integrations` as future `packages/integrations`;
 - keep new persistence-heavy code behind `src/server/repositories` and call it
   from `src/server/services`;
-- `src/server/services` is guarded by ESLint against direct Prisma imports;
+- `src/app`, `src/server/services` and `src/server/auth/auth-guard.ts` are
+  guarded by ESLint against direct Prisma imports;
+- `src/server/auth/auth.ts` remains an intentional exception because Better Auth
+  needs the Prisma adapter wiring there;
 - document any target-specific decision in `docs/architecture`.
 
 This avoids a big-bang migration while still making every new change point in the right direction.

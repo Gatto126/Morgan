@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
-import { prisma } from "@/server/db/prisma";
 import { apiLogger } from "@/server/logging/logger";
-import { buildPortfolioTimeSeries, getPortfolioPriceKeys, type PortfolioTransaction } from "@/domain/finance/portfolio-timeseries";
+import { buildPortfolioTimeSeries, getPortfolioPriceKeys } from "@/domain/finance/portfolio-timeseries";
+import { marketDataRepository } from "@/server/repositories/market-data-repository";
+import {
+  toCryptoPortfolioTransaction,
+  transactionReadRepository
+} from "@/server/repositories/transaction-read-repository";
 
 const log = apiLogger("CryptoTransactions");
 
@@ -19,43 +23,10 @@ export async function GET(request: NextRequest) {
 
     await requireOwnedProfile(request, userId);
 
-    const dbTransactions = await prisma.cryptoTransaction.findMany({
-      where: {
-        userId,
-        sourceInstitution: "trade_republic"
-      },
-      orderBy: { bookingDate: "desc" }
-    });
-    const transactions: PortfolioTransaction[] = dbTransactions.map((transaction) => ({
-      id: transaction.id,
-      sourceInstitution: transaction.sourceInstitution,
-      bookingDate: transaction.bookingDate,
-      typeLabel: transaction.typeLabel,
-      description: transaction.description,
-      direction: transaction.direction,
-      amountCents: transaction.amountCents,
-      tradeType: transaction.typeLabel === "BUY" || transaction.typeLabel === "SELL"
-        ? (transaction.description.toLowerCase().includes("savings plan") ? "savings_plan" : "buy_trade")
-        : null,
-      productName: transaction.tokenName,
-      isin: transaction.tokenSymbol,
-      quantityUnits: transaction.quantityUnits
-    }));
+    const dbTransactions = await transactionReadRepository.listTradeRepublicCryptoTransactions(userId);
+    const transactions = dbTransactions.map(toCryptoPortfolioTransaction);
     const priceKeys = getPortfolioPriceKeys(transactions);
-    const historyPrices = priceKeys.length > 0
-      ? await prisma.assetHistory.findMany({
-          where: {
-            isin: { in: priceKeys },
-            currency: "EUR"
-          },
-          select: {
-            isin: true,
-            date: true,
-            value: true
-          },
-          orderBy: { date: "asc" }
-        })
-      : [];
+    const historyPrices = await marketDataRepository.listPortfolioHistory(priceKeys);
 
     const result = buildPortfolioTimeSeries({
       transactions,
