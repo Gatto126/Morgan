@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { internalServerErrorResponse } from "@/server/api/error-response";
 import { assertUserExists, importPreviewTransactions, previewTransactionSchema } from "@/server/services/transaction-import";
 import { apiLogger } from "@/server/logging/logger";
 import {
@@ -53,9 +54,6 @@ export async function POST(request: Request) {
     }
 
     log.error("POST", "/api/transactions/import", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Errore durante il salvataggio delle transazioni." },
-      { status: 400 }
-    );
+    return internalServerErrorResponse("Errore durante il salvataggio delle transazioni.");
   }
 }

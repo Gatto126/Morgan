@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     log.error("POST", "/api/transactions/preview", error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Errore durante il parsing del CSV."
+        error: "Documento non leggibile o formato non supportato."
       },
       { status: 400 }
     );

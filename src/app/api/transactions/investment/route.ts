@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { internalServerErrorResponse } from "@/server/api/error-response";
 import { apiLogger } from "@/server/logging/logger";
-import { buildPortfolioTimeSeries, getPortfolioPriceKeys } from "@/domain/finance/portfolio-timeseries";
-import { marketDataRepository } from "@/server/repositories/market-data-repository";
-import { transactionReadRepository } from "@/server/repositories/transaction-read-repository";
+import { getInvestmentPortfolioData } from "@/server/services/portfolio-data";
 
 const log = apiLogger("Investment");
 
@@ -20,19 +19,11 @@ export async function GET(request: NextRequest) {
 
     await requireOwnedProfile(request, userId);
 
-    const transactions = await transactionReadRepository.listInvestmentTransactions(userId);
-    const priceKeys = getPortfolioPriceKeys(transactions, (isin) => isin.length === 12);
-    const historyPrices = await marketDataRepository.listPortfolioHistory(priceKeys);
-
-    const result = buildPortfolioTimeSeries({
-      transactions,
-      historyPrices,
-      priceKeys
-    });
+    const { result, transactionCount } = await getInvestmentPortfolioData(userId);
 
     log.response("GET", "/api/transactions/investment", 200, {
       providers: result.providers.length,
-      transactions: transactions.length,
+      transactions: transactionCount,
       products: result.providers.reduce((acc, provider) => acc + provider.products.length, 0),
       monthlyPoints: result.monthlyData.length,
       dailyPoints: result.dailyData.length
@@ -44,9 +35,6 @@ export async function GET(request: NextRequest) {
     if (response) return response;
 
     log.error("GET", "/api/transactions/investment", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Errore durante il caricamento." },
-      { status: 500 }
-    );
+    return internalServerErrorResponse("Errore durante il caricamento.");
   }
 }

@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { internalServerErrorResponse } from "@/server/api/error-response";
 import { apiLogger } from "@/server/logging/logger";
-import { buildPortfolioTimeSeries, getPortfolioPriceKeys } from "@/domain/finance/portfolio-timeseries";
-import { marketDataRepository } from "@/server/repositories/market-data-repository";
-import {
-  toCryptoPortfolioTransaction,
-  transactionReadRepository
-} from "@/server/repositories/transaction-read-repository";
+import { getTradeRepublicCryptoPortfolioData } from "@/server/services/portfolio-data";
 
 const log = apiLogger("CryptoTransactions");
 
@@ -23,20 +19,11 @@ export async function GET(request: NextRequest) {
 
     await requireOwnedProfile(request, userId);
 
-    const dbTransactions = await transactionReadRepository.listTradeRepublicCryptoTransactions(userId);
-    const transactions = dbTransactions.map(toCryptoPortfolioTransaction);
-    const priceKeys = getPortfolioPriceKeys(transactions);
-    const historyPrices = await marketDataRepository.listPortfolioHistory(priceKeys);
-
-    const result = buildPortfolioTimeSeries({
-      transactions,
-      historyPrices,
-      priceKeys
-    });
+    const { result, transactionCount } = await getTradeRepublicCryptoPortfolioData(userId);
 
     log.response("GET", "/api/transactions/crypto", 200, {
       providers: result.providers.length,
-      transactions: transactions.length,
+      transactions: transactionCount,
       products: result.providers.reduce((acc, provider) => acc + provider.products.length, 0),
       monthlyPoints: result.monthlyData.length,
       dailyPoints: result.dailyData.length
@@ -48,9 +35,6 @@ export async function GET(request: NextRequest) {
     if (response) return response;
 
     log.error("GET", "/api/transactions/crypto", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Errore durante il caricamento." },
-      { status: 500 }
-    );
+    return internalServerErrorResponse("Errore durante il caricamento.");
   }
 }

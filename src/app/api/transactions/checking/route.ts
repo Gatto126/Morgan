@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { internalServerErrorResponse } from "@/server/api/error-response";
 import { apiLogger } from "@/server/logging/logger";
 import { getCheckingData } from "@/server/services/checking-data";
 
@@ -32,9 +33,6 @@ export async function GET(request: NextRequest) {
     if (response) return response;
 
     log.error("GET", "/api/transactions/checking", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Errore durante il caricamento." },
-      { status: 500 }
-    );
+    return internalServerErrorResponse("Errore durante il caricamento.");
   }
 }

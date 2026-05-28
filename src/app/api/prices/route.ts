@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authGuardResponse, requireAuth } from "@/server/auth/auth-guard";
+import { internalServerErrorResponse } from "@/server/api/error-response";
 import { apiLogger } from "@/server/logging/logger";
 import { parsePriceRequestParams, PriceRequestValidationError } from "@/domain/pricing/price-request";
 import { priceRefreshService } from "@/server/services/price-refresh";
@@ -39,9 +40,6 @@ export async function GET(request: NextRequest) {
     if (response) return response;
 
     log.error("GET", "/api/prices", error);
-    return NextResponse.json(
-      { error: "Error fetching prices." },
-      { status: 500 }
-    );
+    return internalServerErrorResponse("Error fetching prices.");
   }
 }
