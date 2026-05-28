@@ -1,0 +1,89 @@
+name: Docker E2E
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: docker-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  POSTGRES_USER: morgan
+  POSTGRES_PASSWORD: morgan
+  POSTGRES_DB: morgan
+  POSTGRES_PORT: "5432"
+  APP_PORT: "3001"
+  MORGAN_DATABASE_PROVIDER: postgresql
+  MORGAN_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+  BETTER_AUTH_SECRET: docker-e2e-placeholder-secret-2026-05-28
+  PREPROD_BETTER_AUTH_URL: http://127.0.0.1:3001
+  PREPROD_BETTER_AUTH_TRUSTED_ORIGINS: http://127.0.0.1:3001,http://localhost:3001
+  PREPROD_BETTER_AUTH_IP_HEADERS: x-forwarded-for
+  MORGAN_LOG_LEVEL: info
+  MORGAN_LOG_DETAIL: minimal
+  DATABASE_URL: postgresql://morgan:morgan@localhost:5432/morgan?schema=public
+  DIRECT_URL: postgresql://morgan:morgan@localhost:5432/morgan?schema=public
+  SQLITE_DATABASE_URL: file:./prisma/sqlite/docker-e2e.db
+  TEST_BASE_URL: http://127.0.0.1:3001
+  TEST_DATABASE_URL: postgresql://morgan:morgan@localhost:5432/morgan?schema=public
+  TEST_DIRECT_URL: postgresql://morgan:morgan@localhost:5432/morgan?schema=public
+
+jobs:
+  docker-e2e:
+    name: Docker preprod browser flow
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start Docker preprod stack
+        run: pnpm run docker:preprod:up
+
+      - name: Wait for app health
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:3001/api/health; then
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose ps
+          docker compose logs --tail=120 app
+          exit 1
+
+      - name: Smoke upload panel
+        run: pnpm run smoke:upload-panel:docker
+
+      - name: Realistic browser flow
+        run: pnpm run e2e:realistic
+
+      - name: Upload browser artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-e2e-artifacts
+          path: artifacts/e2e/
+          if-no-files-found: ignore
+
+      - name: Stop Docker preprod stack
+        if: always()
+        run: docker compose down

@@ -38,6 +38,15 @@ pnpm run smoke:upload-panel:docker
 pnpm run e2e:docker:full
 ```
 
+## GitHub Workflows
+
+- `CI` runs on push and pull request. It installs dependencies, validates both
+  Prisma schemas, lints, typechecks, runs unit/script tests, and builds Next.
+- `Docker E2E` is manual (`workflow_dispatch`). It builds and starts the Docker
+  pre-production stack on port `3001`, runs the upload-panel smoke test and the
+  realistic browser flow, uploads browser artifacts on failure, then stops the
+  Docker stack.
+
 ## Local Runtime Policy
 
 Keep all local runtimes stopped by default. Port `3000` is for local Next.js
