@@ -11,10 +11,13 @@ coverage/
 .env
 .env.*
 !.env.example
+!.env.*.example
 
 # Generated clients and local databases
 generated/
 *.db
+*.sqlite
+*.sqlite3
 *.db-journal
 *.db-wal
 *.db-shm
@@ -24,6 +27,7 @@ generated/
 *.tsbuildinfo
 tmp_check_*.js
 test-results/
+artifacts/
 playwright-report/
 design_frames/*.pdf
 

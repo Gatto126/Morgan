@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authGuardResponse, requireOwnedProfile } from "@/lib/auth-guard";
-import { prisma } from "@/lib/db";
-import { apiLogger } from "@/lib/logger";
-import { hasBinanceCredentials } from "@/lib/secrets";
+import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { apiLogger } from "@/server/logging/logger";
+import { getBinanceBalancesStatus } from "@/server/services/binance-sync";
 
 const log = apiLogger("BinanceBalances");
-
-const STALE_MS = 10 * 60 * 1000; // 10 minutes
 
 export async function GET(request: NextRequest) {
   const userId = request.nextUrl.searchParams.get("userId");
@@ -20,24 +17,7 @@ export async function GET(request: NextRequest) {
   try {
     await requireOwnedProfile(request, userId);
 
-    const [balances, syncCache, user] = await Promise.all([
-      prisma.binanceBalance.findMany({
-        where: { userId },
-        orderBy: { eurValue: "desc" },
-      }),
-      prisma.priceCache.findUnique({ where: { key: `binance_sync_${userId}` } }),
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          binanceApiKeyEncrypted: true,
-          binanceApiSecretEncrypted: true,
-        },
-      }),
-    ]);
-
-    const hasApiKey = hasBinanceCredentials(user);
-    const syncedAt = syncCache?.timestamp ?? null;
-    const isStale = !syncedAt || Date.now() - syncedAt.getTime() > STALE_MS;
+    const { balances, syncedAt, isStale, hasApiKey } = await getBinanceBalancesStatus(userId);
 
     log.response("GET", "/api/binance/balances", 200, {
       count: balances.length,

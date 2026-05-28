@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { authGuardResponse, requireOwnedProfile } from "@/lib/auth-guard";
-import { assertUserExists, getExistingFingerprints, markPreviewTransactions } from "@/lib/transaction-import";
-import { parseTradeRepublicCsv } from "@/lib/trade-republic-csv-parser";
-import { parseBbvaXlsxStatement } from "@/lib/bbva-xlsx-parser";
-import { apiLogger } from "@/lib/logger";
+import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { assertUserExists, getExistingFingerprints, markPreviewTransactions } from "@/server/services/transaction-import";
+import { parseTradeRepublicCsv } from "@/domain/imports/trade-republic-csv-parser";
+import { parseBbvaXlsxStatement } from "@/domain/imports/bbva-xlsx-parser";
+import { apiLogger } from "@/server/logging/logger";
 import {
   requestSecurityResponse,
   requireSameOriginMutation
-} from "@/lib/request-security";
+} from "@/server/security/request-security";
 
 const log = apiLogger("Preview");
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;

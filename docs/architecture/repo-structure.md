@@ -171,6 +171,26 @@ transaction-import.ts
 portfolio-timeseries.ts
 ```
 
+## Current Physical Structure
+
+The repository has not moved to `apps/` and `packages/` yet. Current target
+boundaries are:
+
+- `prisma/schema.prisma` and `prisma/migrations/` for Postgres web/cloud;
+- `prisma/sqlite/schema.prisma` for the desktop SQLite scaffold;
+- `src/domain/` for target-neutral validation, import rules and finance
+  calculations;
+- `src/integrations/` for external provider clients and parsers;
+- `src/server/` for auth, Prisma, security, logging and service workflows;
+- `src/shared/` for cross-cutting client/server helpers and constants;
+- `src/client/` for browser-only client wiring;
+- thin route handlers under `src/app/api/` that call `src/server/services/`
+  for business workflows;
+- `scripts/e2e/` for browser flows;
+- `scripts/testing/` for local test maintenance;
+- `docs/audits/` for durable audit reports;
+- ignored `artifacts/` for disposable run outputs.
+
 ## Environment Files
 
 Use separate example files when the targets split:
@@ -178,8 +198,9 @@ Use separate example files when the targets split:
 ```text
 .env.example
 .env.web.example
-.env.desktop.example
+.env.preprod.example
 .env.test-postgres.example
+.env.sqlite.example
 ```
 
 Rules:
@@ -209,8 +230,10 @@ Pre-production should run Postgres tests through Docker before deploy.
 Until the repo is physically split:
 
 - treat `src/components/ui` as future `packages/ui`;
-- treat parser/import/chart helpers under `src/lib` as future `packages/domain` or `packages/integrations`;
-- keep new persistence-heavy code behind small functions instead of spreading Prisma calls into UI components;
+- treat `src/domain` as future `packages/domain`;
+- treat `src/integrations` as future `packages/integrations`;
+- keep new persistence-heavy code behind `src/server/services` instead of
+  spreading Prisma calls into route handlers or UI components;
 - document any target-specific decision in `docs/architecture`.
 
 This avoids a big-bang migration while still making every new change point in the right direction.

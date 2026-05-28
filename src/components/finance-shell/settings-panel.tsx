@@ -3,7 +3,7 @@
 import { CircleCheckBig, Eye, EyeOff, LogOut, RefreshCcwDot, Trash2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 export type SettingsSection = "general" | "apiKey" | "dangerZone";
 

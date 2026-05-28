@@ -4,7 +4,7 @@ import { ChartBar, ChartGantt } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 
 import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { ActiveDotProps, ChartPoint, ChartTooltipPayload } from "@/types/chart";
 
 import { GRAYSCALE_PALETTE, TIME_RANGES } from "./constants";

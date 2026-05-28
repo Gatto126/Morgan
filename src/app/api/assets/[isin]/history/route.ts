@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { authGuardResponse, requireAuth } from "@/lib/auth-guard";
-import { prisma } from "@/lib/db";
-import { apiLogger } from "@/lib/logger";
+import { authGuardResponse, requireAuth } from "@/server/auth/auth-guard";
+import { prisma } from "@/server/db/prisma";
+import { apiLogger } from "@/server/logging/logger";
 
 const log = apiLogger("AssetHistoryAPI");
 

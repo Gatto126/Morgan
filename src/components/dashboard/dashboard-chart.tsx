@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { ChartBar, ChartGantt, X } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { TIME_RANGES } from "./constants";
 import { formatEuroCents, formatProviderLabel, getMonthLabel } from "./formatters";
 import type { AccountTab, TimeRange } from "./types";

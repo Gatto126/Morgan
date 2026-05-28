@@ -24,8 +24,8 @@ import PlusIcon from "./ui/plus-icon";
 import UserIcon from "./ui/user-icon";
 
 import { Input } from "@/components/ui/input";
-import { authClient } from "@/lib/auth-client";
-import { cn, getInitials } from "@/lib/utils";
+import { authClient } from "@/client/auth-client";
+import { cn, getInitials } from "@/shared/utils";
 
 const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
 const restorableStages = new Set<Stage>(["welcome", "select", "create", "dashboard", "checking", "investment", "settings", "binance", "crypto"]);

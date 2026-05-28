@@ -1,5 +1,5 @@
 import { handleBinanceSyncRoute } from "@/app/api/binance/route-handler";
-import { apiLogger } from "@/lib/logger";
+import { apiLogger } from "@/server/logging/logger";
 
 const log = apiLogger("BinanceConnect");
 

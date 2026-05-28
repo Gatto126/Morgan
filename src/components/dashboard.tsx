@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { ACCOUNT_TABS, GRAYSCALE_PALETTE } from "./dashboard/constants";
 import { filterData, formatProviderLabel } from "./dashboard/formatters";
 import type { AccountTab, MonthlyBucket, ProviderSummary, TimeRange } from "./dashboard/types";
 import { useDashboardData } from "./dashboard/use-dashboard-data";
 import { useDashboardLivePrices } from "./dashboard/use-dashboard-live-prices";
 import { useBinanceBalances } from "./dashboard/use-binance-balances";
+import { usePortalNode } from "@/hooks/use-portal-node";
 import { DashboardErrorState, DashboardLoadingOverlay, DashboardLoadingState } from "./dashboard/dashboard-status";
 import { DashboardTabs } from "./dashboard/dashboard-tabs";
 import { DashboardChart, type DashboardChartPoint } from "./dashboard/dashboard-chart";
@@ -201,8 +202,8 @@ export function Dashboard({
   const marginLeft = baseMargin;
   const marginRight = baseMargin;
 
-  const portalNode = typeof document === "undefined" ? null : document.getElementById("dashboard-tabs-portal");
-  const cardsPortalNode = typeof document === "undefined" ? null : document.getElementById("dashboard-cards-portal");
+  const portalNode = usePortalNode("dashboard-tabs-portal");
+  const cardsPortalNode = usePortalNode("dashboard-cards-portal");
 
   const chartData = useMemo(() => {
     if (!data) {
@@ -282,7 +283,7 @@ export function Dashboard({
         const hasBeenAcquired = firstDate && bucketDate >= firstDate;
 
         if (rawVal && Math.abs(rawVal) > 0.000001) {
-          return Math.abs(rawVal);
+          return rawVal;
         } else if (hasBeenAcquired) {
           return 0;
         }

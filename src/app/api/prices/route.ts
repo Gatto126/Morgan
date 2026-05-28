@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authGuardResponse, requireAuth } from "@/lib/auth-guard";
-import { apiLogger } from "@/lib/logger";
-import { prisma } from "@/lib/db";
-import { parsePriceRequestParams, PriceRequestValidationError } from "@/lib/price-request";
+import { authGuardResponse, requireAuth } from "@/server/auth/auth-guard";
+import { apiLogger } from "@/server/logging/logger";
+import { prisma } from "@/server/db/prisma";
+import { parsePriceRequestParams, PriceRequestValidationError } from "@/domain/pricing/price-request";
 
 const log = apiLogger("Prices");
 

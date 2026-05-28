@@ -1,7 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import { Eye, EyeOff } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { euroFormatter, filterData, formatEuroCents, formatProviderLabel } from "./formatters";
 import type { BinanceBalanceRow, DashboardData, ProviderSummary, TimeRange } from "./types";
 

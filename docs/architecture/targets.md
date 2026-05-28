@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 
-Status: accepted
+Status: accepted, Postgres implemented, SQLite scaffolded
 
 ## Context
 
@@ -69,8 +69,9 @@ The goal is not to hide every Prisma call immediately. The goal is to stop new c
 Short term:
 
 - keep the current Next.js app working;
-- migrate the web/cloud path to Postgres;
-- introduce Docker Postgres for pre-production tests;
+- keep the web/cloud path on Postgres;
+- keep Docker Postgres available for pre-production tests;
+- maintain the SQLite Prisma schema scaffold for desktop/offline validation;
 - document which modules are web-only until extraction.
 
 Medium term:
@@ -117,10 +118,10 @@ Tauri is preferred over a C#/.NET WebView2 shell because Morgan's UI and workflo
 
 ## Migration Implications
 
-The project will need two database providers eventually:
+The project now has explicit Prisma schemas for two database providers:
 
 - Postgres schema/migrations for web and pre-production;
-- SQLite schema/migrations for desktop.
+- SQLite schema scaffold for desktop.
 
 To keep this maintainable:
 
@@ -134,5 +135,5 @@ To keep this maintainable:
 - Final desktop shell: Tauri is the current recommendation, but it should be validated with a minimal proof of concept.
 - Desktop packaging format: MSI, NSIS installer, portable build, or more than one.
 - Desktop backup/export format.
-- Whether desktop SQLite should use Prisma, Drizzle, raw SQLite, or a small repository layer over SQLite.
-- Whether the cloud app should keep using Prisma directly or move to repositories before the Postgres migration.
+- Whether desktop SQLite should stay on Prisma, or move to Drizzle, raw SQLite, or a small repository layer.
+- How much of the current Prisma usage should move behind repository functions before the desktop app begins.

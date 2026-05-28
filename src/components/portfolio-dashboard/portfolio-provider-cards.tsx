@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 import { formatEuroCents, formatProviderLabel } from "./formatters";
 import type { PortfolioDashboardConfig, PortfolioProviderSummary } from "./types";

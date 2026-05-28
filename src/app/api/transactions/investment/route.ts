@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { authGuardResponse, requireOwnedProfile } from "@/lib/auth-guard";
-import { prisma } from "@/lib/db";
-import { apiLogger } from "@/lib/logger";
-import { buildPortfolioTimeSeries, getPortfolioPriceKeys } from "@/lib/portfolio-timeseries";
+import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { prisma } from "@/server/db/prisma";
+import { apiLogger } from "@/server/logging/logger";
+import { buildPortfolioTimeSeries, getPortfolioPriceKeys } from "@/domain/finance/portfolio-timeseries";
 
 const log = apiLogger("Investment");
 

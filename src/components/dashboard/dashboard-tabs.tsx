@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { ChartPie, Coins, Landmark, Wallet } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { formatEuroCents } from "./formatters";
 import type { AccountTab, DashboardData } from "./types";
 

@@ -1,7 +1,7 @@
 import { createPortal } from "react-dom";
 import type { LucideIcon } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { ChartPoint } from "@/types/chart";
 
 import { formatEuroCents, getAbbreviatedLabel } from "./formatters";

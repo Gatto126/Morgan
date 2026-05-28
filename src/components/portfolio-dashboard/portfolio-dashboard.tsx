@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { ChartPoint } from "@/types/chart";
 import { DashboardPanelHost } from "@/components/dashboard-panel-host";
 import { DashboardLoadingOverlay, DashboardLoadingState } from "@/components/dashboard/dashboard-status";
@@ -18,6 +18,7 @@ import type {
   TimeRange
 } from "./types";
 import { useIsMobile } from "@/hooks/use-is-mobile";
+import { usePortalNode } from "@/hooks/use-portal-node";
 import { usePortfolioDashboardData } from "./use-portfolio-dashboard-data";
 import { usePortfolioLivePrices } from "./use-portfolio-live-prices";
 
@@ -84,8 +85,8 @@ export function PortfolioDashboard({
     setHiddenSeries(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const tabsPortalNode = typeof document === "undefined" ? null : document.getElementById("dashboard-tabs-portal");
-  const cardsPortalNode = typeof document === "undefined" ? null : document.getElementById("dashboard-cards-portal");
+  const tabsPortalNode = usePortalNode("dashboard-tabs-portal");
+  const cardsPortalNode = usePortalNode("dashboard-cards-portal");
 
   const activeProvider = useMemo(() => {
     return data?.providers.find(p => p.sourceInstitution === activeTab) || null;

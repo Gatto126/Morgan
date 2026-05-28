@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: morgan-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-morgan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-morgan}
+      POSTGRES_DB: ${POSTGRES_DB:-morgan}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - morgan-postgres-data:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DATABASE_URL: postgresql://${POSTGRES_USER:-morgan}:${POSTGRES_PASSWORD:-morgan}@postgres:5432/${POSTGRES_DB:-morgan}?schema=public
+        DIRECT_URL: postgresql://${POSTGRES_USER:-morgan}:${POSTGRES_PASSWORD:-morgan}@postgres:5432/${POSTGRES_DB:-morgan}?schema=public
+    container_name: morgan-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-morgan}:${POSTGRES_PASSWORD:-morgan}@postgres:5432/${POSTGRES_DB:-morgan}?schema=public
+      DIRECT_URL: postgresql://${POSTGRES_USER:-morgan}:${POSTGRES_PASSWORD:-morgan}@postgres:5432/${POSTGRES_DB:-morgan}?schema=public
+      MORGAN_DATABASE_PROVIDER: postgresql
+      MORGAN_ENCRYPTION_KEY: ${MORGAN_ENCRYPTION_KEY:?MORGAN_ENCRYPTION_KEY is required}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      BETTER_AUTH_URL: ${PREPROD_BETTER_AUTH_URL:-http://localhost:3001}
+      BETTER_AUTH_TRUSTED_ORIGINS: ${PREPROD_BETTER_AUTH_TRUSTED_ORIGINS:-http://localhost:3001,http://127.0.0.1:3001}
+      BETTER_AUTH_IP_HEADERS: ${PREPROD_BETTER_AUTH_IP_HEADERS:-x-forwarded-for}
+      MORGAN_LOG_LEVEL: ${MORGAN_LOG_LEVEL:-info}
+      MORGAN_LOG_DETAIL: ${MORGAN_LOG_DETAIL:-minimal}
+    ports:
+      - "${APP_PORT:-3001}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  morgan-postgres-data:

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { globalLivePricesCache, saveLivePricesToCache } from "@/lib/live-prices";
+import { globalLivePricesCache, saveLivePricesToCache } from "@/shared/live-prices";
 
 import type { PortfolioDashboardConfig, PortfolioProviderSummary } from "./types";
 

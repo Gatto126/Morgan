@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("SQLITE_DATABASE_URL")
+}
+
+model User {
+  id                        String                  @id @default(cuid())
+  ownerId                   String
+  name                      String
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
+  binanceApiKeyEncrypted    String?
+  binanceApiSecretEncrypted String?
+  binanceApiKeyPreview      String?
+  owner                     AuthUser                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  checkingTransactions      CheckingTransaction[]
+  investmentTransactions    InvestmentTransaction[]
+  cryptoTransactions        CryptoTransaction[]
+  binanceBalances           BinanceBalance[]
+
+  @@unique([ownerId, name])
+  @@index([ownerId])
+}
+
+model AuthUser {
+  id              String        @id @default(cuid())
+  name            String
+  email           String        @unique
+  emailVerified   Boolean       @default(false)
+  image           String?
+  username        String?       @unique
+  displayUsername String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  sessions        AuthSession[]
+  accounts        AuthAccount[]
+  profiles        User[]
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuthAccount {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  AuthUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuthVerification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model RateLimit {
+  id          String @id @default(cuid())
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+}
+
+model CheckingTransaction {
+  id                String   @id @default(cuid())
+  userId            String
+  sourceInstitution String
+  fingerprint       String
+  bookingDate       DateTime
+  rawDateLabel      String
+  typeLabel         String
+  description       String
+  direction         String // "IN" or "OUT"
+  amountCents       Int
+  balanceCents      Int
+  currency          String   @default("EUR")
+  statementFileName String?
+  importedAt        DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  relatedInvestmentId String?
+  relatedInvestment   InvestmentTransaction? @relation(fields: [relatedInvestmentId], references: [id], onDelete: Cascade)
+  relatedCryptoId     String?
+  relatedCrypto       CryptoTransaction?     @relation(fields: [relatedCryptoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fingerprint])
+  @@index([userId, bookingDate])
+}
+
+model InvestmentTransaction {
+  id                   String                @id @default(cuid())
+  userId               String
+  sourceInstitution    String
+  fingerprint          String
+  bookingDate          DateTime
+  rawDateLabel         String
+  typeLabel            String
+  description          String
+  direction            String // "IN" or "OUT"
+  amountCents          Int
+  currency             String                @default("EUR")
+  productName          String?
+  isin                 String?
+  quantityUnits        Float?
+  tradeType            String?
+  statementFileName    String?
+  importedAt           DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkingTransactions CheckingTransaction[]
+
+  @@unique([userId, fingerprint])
+  @@index([userId, bookingDate])
+  @@index([userId, isin])
+}
+
+model CryptoTransaction {
+  id                   String                @id @default(cuid())
+  userId               String
+  sourceInstitution    String
+  fingerprint          String
+  bookingDate          DateTime
+  rawDateLabel         String
+  typeLabel            String
+  description          String
+  direction            String // "IN" or "OUT"
+  amountCents          Int
+  currency             String                @default("EUR")
+  tokenName            String?
+  tokenSymbol          String?
+  quantityUnits        Float?
+  statementFileName    String?
+  importedAt           DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkingTransactions CheckingTransaction[]
+
+  @@unique([userId, fingerprint])
+  @@index([userId, bookingDate])
+  @@index([userId, tokenSymbol])
+}
+
+model Asset {
+  isin                      String   @id
+  ticker                    String?
+  name                      String?
+  ter                       Float?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  wkn                       String?
+  type                      String?
+  country                   String?
+  marketCap                 String?
+  dividendYield             String?
+  sector                    String?
+  perf1Month                String?
+  perf1Year                 String?
+  perf3Months               String?
+  perf3Years                String?
+  perf5Years                String?
+  perf6Months               String?
+  perfYTD                   String?
+  maxDrawdown1Year          String?
+  maxDrawdown3Years         String?
+  maxDrawdown5Years         String?
+  maxDrawdownSinceInception String?
+  returnPerRisk1Year        String?
+  returnPerRisk3Years       String?
+  returnPerRisk5Years       String?
+  volatility1Year           String?
+  volatility3Years          String?
+  volatility5Years          String?
+  distributionPolicy        String?
+  fundSize                  String?
+  inceptionDate             String?
+  replication               String?
+  holdingsCount             String?
+  holdingsTotalWeight       String?
+  topHoldings               String?
+  countriesWeight           String?
+  sectorsWeight             String?
+}
+
+model CryptoAsset {
+  tokenSymbol String   @id
+  name        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AssetHistory {
+  id        String   @id @default(cuid())
+  isin      String
+  date      String // "YYYY-MM-DD"
+  value     Float // prezzo in EUR
+  currency  String   @default("EUR")
+  createdAt DateTime @default(now())
+
+  @@unique([isin, date, currency])
+  @@index([isin, date])
+}
+
+model PriceCache {
+  key       String   @id // e.g. "DE000ETFL252" or "BTC"
+  price     Float?
+  timestamp DateTime @default(now())
+}
+
+model BinanceBalance {
+  id           String   @id @default(cuid())
+  userId       String
+  tokenSymbol  String
+  tokenName    String?
+  freeAmount   Float    @default(0)
+  lockedAmount Float    @default(0)
+  eurValue     Float    @default(0)
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tokenSymbol])
+  @@index([userId])
+}

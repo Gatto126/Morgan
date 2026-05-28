@@ -1,4 +1,4 @@
-import { cn, getInitials } from "@/lib/utils";
+import { cn, getInitials } from "@/shared/utils";
 
 type AvatarBadgeProps = {
   name: string;

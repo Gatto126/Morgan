@@ -6,7 +6,7 @@ import { ArrowLeft, House, Send, UserRound } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { getAuthLandingResetState, getAuthSubmitButtonClass } from "@/components/auth-shell-helpers";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@/client/auth-client";
 import {
   getLocalPasswordPolicyHint,
   hasLocalPasswordInput,
@@ -14,8 +14,8 @@ import {
   isValidLocalUsername,
   localUsernameToEmail,
   normalizeLocalUsername
-} from "@/lib/local-auth";
-import { cn } from "@/lib/utils";
+} from "@/domain/auth/local-auth";
+import { cn } from "@/shared/utils";
 
 type AuthView = "landing" | "signIn" | "signUp";
 

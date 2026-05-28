@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { authGuardResponse, requireOwnedProfile } from "@/lib/auth-guard";
-import { BinanceApiError, syncBinanceBalances } from "@/lib/binance-service";
-import { prisma } from "@/lib/db";
-import type { apiLogger } from "@/lib/logger";
+import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { BinanceApiError } from "@/integrations/binance/binance-service";
+import type { apiLogger } from "@/server/logging/logger";
 import {
   requestSecurityResponse,
   requireSameOriginMutation
-} from "@/lib/request-security";
-import { decryptBinanceCredentials } from "@/lib/secrets";
+} from "@/server/security/request-security";
+import {
+  BinanceMissingCredentialsError,
+  syncBinanceProfile
+} from "@/server/services/binance-sync";
 
 type BinanceRouteLogger = ReturnType<typeof apiLogger>;
 
@@ -50,13 +52,7 @@ export async function handleBinanceSyncRoute(
   try {
     await requireOwnedProfile(request, userId);
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    const credentials = decryptBinanceCredentials(user);
-    if (!credentials) {
-      return NextResponse.json({ error: "API key non configurata." }, { status: 400 });
-    }
-
-    const { balances, syncedAt } = await syncBinanceBalances(userId, credentials);
+    const { balances, syncedAt } = await syncBinanceProfile(userId);
 
     log.response("POST", endpoint, 200, { tokensFound: balances.length });
 
@@ -71,6 +67,10 @@ export async function handleBinanceSyncRoute(
 
     const securityResponse = requestSecurityResponse(error);
     if (securityResponse) return securityResponse;
+
+    if (error instanceof BinanceMissingCredentialsError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
 
     if (error instanceof BinanceApiError) {
       if (logBinanceApiError) {

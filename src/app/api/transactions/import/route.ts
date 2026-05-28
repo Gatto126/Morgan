@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { authGuardResponse, requireOwnedProfile } from "@/lib/auth-guard";
-import { assertUserExists, importPreviewTransactions, previewTransactionSchema } from "@/lib/transaction-import";
-import { apiLogger } from "@/lib/logger";
+import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { assertUserExists, importPreviewTransactions, previewTransactionSchema } from "@/server/services/transaction-import";
+import { apiLogger } from "@/server/logging/logger";
 import {
   requestSecurityResponse,
   requireSameOriginMutation
-} from "@/lib/request-security";
+} from "@/server/security/request-security";
 
 const log = apiLogger("Import");
 

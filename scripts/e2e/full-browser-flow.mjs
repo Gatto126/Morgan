@@ -1,0 +1,546 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
+import { PrismaClient } from "@prisma/client";
+import { chromium } from "playwright";
+import { strToU8, zipSync } from "fflate";
+
+import {
+  applyEnvFileDatabaseUrl,
+  restoreRateLimits,
+  snapshotAndClearRateLimits
+} from "../lib/rate-limit-test-scope.mjs";
+
+if (process.env.TEST_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+  process.env.DIRECT_URL = process.env.TEST_DIRECT_URL ?? process.env.TEST_DATABASE_URL;
+} else {
+  applyEnvFileDatabaseUrl();
+}
+
+const baseUrl = process.env.TEST_BASE_URL ?? "http://127.0.0.1:3001";
+const binanceApiKey = process.env.BINANCE_TEST_API_KEY ?? "";
+const binanceApiSecret = process.env.BINANCE_TEST_API_SECRET ?? "";
+const runBinance = binanceApiKey.length > 0 && binanceApiSecret.length > 0;
+
+const prisma = new PrismaClient();
+const runId = Date.now().toString(36);
+const username = `browseraudit${runId}`;
+const password = "Temporary audit password 2026!";
+const profileName = `Audit ${runId.slice(-6)}`;
+const outDir = path.resolve("artifacts", "e2e", "browser-flow");
+
+const HEADERS = [
+  "datetime",
+  "date",
+  "account_type",
+  "category",
+  "type",
+  "asset_class",
+  "name",
+  "symbol",
+  "shares",
+  "price",
+  "amount",
+  "fee",
+  "tax",
+  "currency",
+  "original_amount",
+  "original_currency",
+  "fx_rate",
+  "description",
+  "transaction_id",
+  "counterparty_name",
+  "counterparty_iban",
+  "payment_reference",
+  "mcc_code"
+];
+
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function csvEscape(value) {
+  return JSON.stringify(value ?? "");
+}
+
+function buildTradeRepublicCsv() {
+  const rows = [
+    {
+      datetime: "2026-01-02T10:00:00.000Z",
+      date: "2026-01-02",
+      account_type: "CASH",
+      category: "CASH",
+      type: "TRANSFER",
+      name: "Initial transfer",
+      amount: "1000.00",
+      fee: "0",
+      tax: "0",
+      currency: "EUR",
+      description: "Audit cash deposit",
+      transaction_id: `audit-cash-${runId}`
+    },
+    {
+      datetime: "2026-01-03T10:00:00.000Z",
+      date: "2026-01-03",
+      account_type: "SECURITIES",
+      category: "TRADING",
+      type: "BUY",
+      asset_class: "ETF",
+      name: "Core MSCI World",
+      symbol: "IE00B4L5Y983",
+      shares: "1.25",
+      price: "80.00",
+      amount: "-100.00",
+      fee: "0",
+      tax: "0",
+      currency: "EUR",
+      description: "Audit ETF order",
+      transaction_id: `audit-buy-${runId}`
+    }
+  ];
+
+  return [
+    HEADERS.join(","),
+    ...rows.map((row) => HEADERS.map((header) => csvEscape(row[header])).join(","))
+  ].join("\n");
+}
+
+function escapeXml(value) {
+  return String(value).replace(/[<>&"']/g, (char) => {
+    switch (char) {
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case "&":
+        return "&amp;";
+      case "\"":
+        return "&quot;";
+      default:
+        return "&apos;";
+    }
+  });
+}
+
+function columnName(index) {
+  let column = "";
+  let current = index + 1;
+
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    column = String.fromCharCode(65 + remainder) + column;
+    current = Math.floor((current - 1) / 26);
+  }
+
+  return column;
+}
+
+function cellXml(cell, rowIndex, columnIndex) {
+  if (cell === null || cell === undefined) return "";
+
+  const reference = `${columnName(columnIndex)}${rowIndex + 1}`;
+  if (typeof cell === "number") return `<c r="${reference}"><v>${cell}</v></c>`;
+  if (typeof cell === "boolean") return `<c r="${reference}" t="b"><v>${cell ? 1 : 0}</v></c>`;
+
+  return `<c r="${reference}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(cell)}</t></is></c>`;
+}
+
+function worksheetXml(rows) {
+  const sheetRows = rows
+    .map((row, rowIndex) => {
+      const cells = row.map((cell, columnIndex) => cellXml(cell, rowIndex, columnIndex)).join("");
+      return `<row r="${rowIndex + 1}">${cells}</row>`;
+    })
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>${sheetRows}</sheetData>
+</worksheet>`;
+}
+
+function buildBbvaXlsxBuffer() {
+  const rows = [
+    ["Audit BBVA"],
+    ["Data", "Parola chiave", "Importo", "Disponibile", "Osservazioni"],
+    ["04/01/2026", "Pagamento carta", "-12,50", "-12,50", "Audit saldo negativo"],
+    ["05/01/2026", "Bonifico ricevuto", "50,00", "37,50", "Audit bonifico"]
+  ];
+
+  return Buffer.from(zipSync({
+    "[Content_Types].xml": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>`),
+    "_rels/.rels": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`),
+    "xl/workbook.xml": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Informe BBVA" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`),
+    "xl/_rels/workbook.xml.rels": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>`),
+    "xl/worksheets/sheet1.xml": strToU8(worksheetXml(rows))
+  }));
+}
+
+async function saveScreenshot(page, name) {
+  await fs.mkdir(outDir, { recursive: true });
+  const screenshotPath = path.join(outDir, name);
+  await page.screenshot({ path: screenshotPath, fullPage: false });
+  return screenshotPath;
+}
+
+async function waitForServer() {
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${baseUrl}/api/health`);
+      if (response.ok) return;
+    } catch {
+      // Keep polling until the container is ready.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`Timed out waiting for ${baseUrl}.`);
+}
+
+async function expectNoHydrationOverlay(page, label) {
+  const overlay = await page.evaluate(() => {
+    const text = document.body?.innerText ?? "";
+    return {
+      hasOverlay: Boolean(document.querySelector("[data-nextjs-dialog-overlay], nextjs-portal")) ||
+        /Hydration failed|Console Error|Recoverable Error/.test(text),
+      excerpt: text.slice(0, 500)
+    };
+  });
+
+  assert(!overlay.hasOverlay, `${label}: unexpected Next hydration/error overlay: ${overlay.excerpt}`);
+}
+
+async function getProfiles(page) {
+  return page.evaluate(async () => {
+    const response = await fetch("/api/users");
+    if (!response.ok) {
+      throw new Error(`GET /api/users failed: ${response.status}`);
+    }
+    return response.json();
+  });
+}
+
+async function waitForProfileCounts(page, expected) {
+  const deadline = Date.now() + 20_000;
+  let lastProfile = null;
+
+  while (Date.now() < deadline) {
+    const payload = await getProfiles(page);
+    lastProfile = payload.users?.find((user) => user.name === profileName) ?? null;
+    if (
+      lastProfile &&
+      lastProfile.transactionCount === expected.transactionCount &&
+      lastProfile.checkingCount === expected.checkingCount &&
+      lastProfile.investmentCount === expected.investmentCount
+    ) {
+      return lastProfile;
+    }
+    await page.waitForTimeout(500);
+  }
+
+  throw new Error(`Timed out waiting for counts ${JSON.stringify(expected)}; last=${JSON.stringify(lastProfile)}`);
+}
+
+async function importFile(page, filePayload, expectedNewCount, triggerName) {
+  if (triggerName === "Add document") {
+    await page.getByRole("button", { name: "Add document", exact: true }).waitFor({ state: "visible", timeout: 15_000 });
+    await page.waitForFunction(() => {
+      const button = document.querySelector('button[aria-label="Add document"]');
+      return button instanceof HTMLButtonElement && !button.disabled;
+    });
+    await page.getByRole("button", { name: "Add document", exact: true }).click();
+    await page.locator('[role="dialog"][data-modal-panel="upload"]').waitFor({ state: "visible", timeout: 10_000 });
+  }
+
+  const [fileChooser] = await Promise.all([
+    page.waitForEvent("filechooser"),
+    page.getByRole("button", { name: "Upload", exact: true }).click()
+  ]);
+
+  await fileChooser.setFiles(filePayload);
+  await page.getByRole("heading", { name: "Review import", exact: true }).waitFor({ state: "visible", timeout: 15_000 });
+  const approveButton = page.locator("button[aria-label^='Approve and save']");
+  await approveButton.waitFor({ state: "visible", timeout: 10_000 });
+  const approveLabel = await approveButton.getAttribute("aria-label");
+  assert(
+    approveLabel?.includes(`${expectedNewCount} transactions`),
+    `Expected ${expectedNewCount} new transactions, received button label "${approveLabel}".`
+  );
+  await approveButton.click();
+  await page.locator(".import-spinner").waitFor({ state: "detached", timeout: 20_000 }).catch(() => {});
+}
+
+async function deleteTestAccountIfPresent() {
+  const authUsers = await prisma.authUser.findMany({
+    where: {
+      OR: [
+        { username },
+        { name: username },
+        { email: { startsWith: username } }
+      ]
+    },
+    select: { id: true }
+  });
+  const ownerIds = authUsers.map((user) => user.id);
+
+  if (ownerIds.length === 0) {
+    return { forcedCleanup: false, ownerIds: [] };
+  }
+
+  const profiles = await prisma.user.findMany({
+    where: { ownerId: { in: ownerIds } },
+    select: { id: true }
+  });
+  const profileIds = profiles.map((profile) => profile.id);
+
+  await prisma.$transaction(async (tx) => {
+    if (profileIds.length > 0) {
+      await tx.checkingTransaction.deleteMany({ where: { userId: { in: profileIds } } });
+      await tx.investmentTransaction.deleteMany({ where: { userId: { in: profileIds } } });
+      await tx.cryptoTransaction.deleteMany({ where: { userId: { in: profileIds } } });
+      await tx.binanceBalance.deleteMany({ where: { userId: { in: profileIds } } });
+      await tx.user.deleteMany({ where: { ownerId: { in: ownerIds } } });
+    }
+    await tx.authSession.deleteMany({ where: { userId: { in: ownerIds } } });
+    await tx.authAccount.deleteMany({ where: { userId: { in: ownerIds } } });
+    await tx.authUser.deleteMany({ where: { id: { in: ownerIds } } });
+  });
+
+  return { forcedCleanup: true, ownerIds };
+}
+
+async function collectDbState(profileId) {
+  const authUsers = await prisma.authUser.count({
+    where: {
+      OR: [
+        { username },
+        { name: username },
+        { email: { startsWith: username } }
+      ]
+    }
+  });
+
+  return {
+    authUsers,
+    profiles: await prisma.user.count({ where: { name: profileName } }),
+    checkingTransactions: profileId ? await prisma.checkingTransaction.count({ where: { userId: profileId } }) : null,
+    investmentTransactions: profileId ? await prisma.investmentTransaction.count({ where: { userId: profileId } }) : null,
+    binanceBalances: profileId ? await prisma.binanceBalance.count({ where: { userId: profileId } }) : null
+  };
+}
+
+let browser;
+let page;
+let profileId = null;
+let forcedCleanup = false;
+let initialRateLimits = null;
+const browserErrors = [];
+const steps = [];
+
+try {
+  await waitForServer();
+  initialRateLimits = await snapshotAndClearRateLimits({ prisma });
+
+  browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({ viewport: { width: 1572, height: 1270 } });
+  page = await context.newPage();
+  page.on("console", (message) => {
+    if (["error", "warning"].includes(message.type())) {
+      browserErrors.push({ type: message.type(), text: message.text().slice(0, 500) });
+    }
+  });
+  page.on("pageerror", (error) => {
+    browserErrors.push({ type: "pageerror", text: error.message.slice(0, 500) });
+  });
+
+  const initialResponse = await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  assert(initialResponse?.ok(), `Initial page request failed with status ${initialResponse?.status()}.`);
+  const headers = initialResponse.headers();
+  assert(headers["x-frame-options"] === "DENY", "Missing X-Frame-Options DENY.");
+  assert(headers["x-content-type-options"] === "nosniff", "Missing X-Content-Type-Options nosniff.");
+  assert(headers["content-security-policy"]?.includes("frame-ancestors 'none'"), "Missing frame-ancestors CSP.");
+  await page.locator('main[data-auth-shell-ready="true"]').waitFor({ state: "attached", timeout: 15_000 });
+  await expectNoHydrationOverlay(page, "initial load");
+  steps.push("loaded_home_with_security_headers");
+
+  await page.getByRole("button", { name: "Register New local account", exact: true }).click();
+  await page.getByPlaceholder("Username", { exact: true }).fill(username);
+  await page.getByPlaceholder("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Create profile", exact: true }).waitFor({ state: "visible", timeout: 15_000 });
+  steps.push("created_auth_account");
+
+  await page.getByPlaceholder("Profile", { exact: true }).fill(profileName);
+  await page.getByRole("button", { name: "Create profile", exact: true }).click();
+  await page.locator('main[data-finance-shell-ready="true"]').waitFor({ state: "attached", timeout: 15_000 });
+  await page.getByRole("heading", { name: "Upload", exact: true }).waitFor({ state: "visible", timeout: 15_000 });
+  profileId = await page.evaluate(() => localStorage.getItem("morgan_active_user"));
+  assert(profileId, "Profile id was not stored in localStorage.");
+  steps.push("created_profile");
+
+  await importFile(
+    page,
+    {
+      name: "trade-republic-audit.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from(buildTradeRepublicCsv(), "utf8")
+    },
+    2,
+    "Upload"
+  );
+  await waitForProfileCounts(page, {
+    transactionCount: 3,
+    checkingCount: 2,
+    investmentCount: 1
+  });
+  steps.push("imported_trade_republic_csv");
+
+  await page.getByRole("button", { name: "Add document", exact: true }).waitFor({ state: "visible", timeout: 15_000 });
+  await importFile(
+    page,
+    {
+      name: "bbva-audit.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: buildBbvaXlsxBuffer()
+    },
+    2,
+    "Add document"
+  );
+  const profileAfterImports = await waitForProfileCounts(page, {
+    transactionCount: 5,
+    checkingCount: 4,
+    investmentCount: 1
+  });
+  await saveScreenshot(page, "01-after-imports.png");
+  steps.push("imported_bbva_xlsx_with_negative_balance");
+
+  await page.getByRole("button", { name: "Checking", exact: true }).waitFor({ state: "visible", timeout: 15_000 });
+  await page.getByRole("button", { name: "Investments", exact: true }).waitFor({ state: "visible", timeout: 15_000 });
+  steps.push("navigation_unlocked_for_checking_and_investments");
+
+  let binanceResult = { attempted: false, status: "skipped", message: "No credentials provided.", balanceCount: null };
+  if (runBinance) {
+    binanceResult = { attempted: true, status: "unknown", message: "", balanceCount: null };
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("heading", { name: "General Settings", exact: true }).waitFor({ state: "visible", timeout: 10_000 });
+    await page.locator("button").filter({ hasText: "API Key" }).click();
+    await page.getByRole("heading", { name: "BINANCE", exact: true }).waitFor({ state: "visible", timeout: 10_000 });
+    await page.getByPlaceholder("Enter API Key", { exact: true }).fill(binanceApiKey);
+    await page.getByPlaceholder("Enter Secret Key", { exact: true }).fill(binanceApiSecret);
+    await page.locator('button[title="Save API Keys"]').click();
+
+    await page.locator('button[title="Delete Saved API Keys"]').waitFor({ state: "visible", timeout: 35_000 });
+    const settingsText = await page.locator('[role="dialog"][data-modal-panel="settings"]').innerText({ timeout: 5_000 });
+    const balancesAfterSync = await prisma.binanceBalance.count({ where: { userId: profileId } });
+    binanceResult.balanceCount = balancesAfterSync;
+
+    if (/Connected!/i.test(settingsText)) {
+      binanceResult.status = "connected";
+      binanceResult.message = settingsText.match(/Connected![^\n]*/i)?.[0] ?? "Connected.";
+    } else {
+      const lines = settingsText.split("\n").map((line) => line.trim()).filter(Boolean);
+      const lastUsefulLine = [...lines].reverse().find((line) =>
+        !["BINANCE", "API KEY", "SECRET", "API Only", "API + Data"].includes(line)
+      );
+      binanceResult.status = "saved_but_sync_reported_error";
+      binanceResult.message = lastUsefulLine ?? "Credentials saved, sync did not report success.";
+    }
+    await saveScreenshot(page, "02-binance-settings-after-sync.png");
+    steps.push("saved_and_synced_binance_credentials");
+
+    await page.locator('button[title="Delete Saved API Keys"]').click();
+    await page.getByRole("button", { name: "API + Data", exact: true }).click();
+    await page.locator('button[title="Save API Keys"]').waitFor({ state: "visible", timeout: 15_000 });
+    const profileAfterDeleteApi = (await getProfiles(page)).users.find((user) => user.name === profileName);
+    const balancesAfterDeleteApi = await prisma.binanceBalance.count({ where: { userId: profileId } });
+    assert(profileAfterDeleteApi?.hasBinanceCredentials === false, "Binance credentials were not cleared from profile summary.");
+    assert(balancesAfterDeleteApi === 0, `Expected Binance balances to be cleared, found ${balancesAfterDeleteApi}.`);
+    steps.push("deleted_binance_credentials_and_data");
+  }
+
+  if (await page.locator('[role="dialog"][data-modal-panel="settings"]').count() === 0) {
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[role="dialog"][data-modal-panel="settings"]').waitFor({ state: "visible", timeout: 10_000 });
+  }
+  await page.locator("button").filter({ hasText: "Danger zone" }).click();
+  await page.getByRole("button", { name: "Delete Account", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete account", exact: true });
+  await dialog.waitFor({ state: "visible", timeout: 10_000 });
+  await dialog.getByPlaceholder("Enter your password", { exact: true }).fill(password);
+  await dialog.getByRole("button", { name: "Delete account", exact: true }).click();
+  await page.locator('main[data-auth-shell-ready="true"]').waitFor({ state: "attached", timeout: 20_000 });
+  await page.getByRole("button", { name: "Register New local account", exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+  await expectNoHydrationOverlay(page, "after account deletion");
+  await saveScreenshot(page, "03-after-account-delete.png");
+  steps.push("deleted_account_via_ui");
+
+  const dbAfterDelete = await collectDbState(profileId);
+  assert(dbAfterDelete.authUsers === 0, `Auth user still exists after account delete: ${JSON.stringify(dbAfterDelete)}`);
+  assert(dbAfterDelete.profiles === 0, `Profile still exists after account delete: ${JSON.stringify(dbAfterDelete)}`);
+
+  console.log(JSON.stringify({
+    ok: true,
+    baseUrl,
+    username,
+    profileName,
+    profileId,
+    steps,
+    profileAfterImports,
+    binanceResult,
+    dbAfterDelete,
+    browserErrors,
+    screenshots: {
+      afterImports: path.join(outDir, "01-after-imports.png"),
+      binanceSettings: path.join(outDir, "02-binance-settings-after-sync.png"),
+      afterAccountDelete: path.join(outDir, "03-after-account-delete.png")
+    }
+  }, null, 2));
+} catch (error) {
+  if (page) {
+    await saveScreenshot(page, "failure.png").catch(() => null);
+  }
+  const cleanup = await deleteTestAccountIfPresent().catch((cleanupError) => ({
+    forcedCleanup: false,
+    cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+  }));
+  forcedCleanup = cleanup.forcedCleanup === true;
+  console.error(JSON.stringify({
+    ok: false,
+    baseUrl,
+    username,
+    profileName,
+    profileId,
+    steps,
+    forcedCleanup,
+    error: error instanceof Error ? error.message : String(error),
+    browserErrors,
+    failureScreenshot: path.join(outDir, "failure.png")
+  }, null, 2));
+  process.exitCode = 1;
+} finally {
+  await browser?.close();
+  if (initialRateLimits) {
+    await restoreRateLimits(initialRateLimits, { prisma });
+  }
+  await prisma.$disconnect();
+}

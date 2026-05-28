@@ -6,7 +6,8 @@ import { Bitcoin, X } from "lucide-react";
 import { Line, LineChart, CartesianGrid, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
-import { cn } from "@/lib/utils";
+import { usePortalNode } from "@/hooks/use-portal-node";
+import { cn } from "@/shared/utils";
 import type { ActiveDotProps, ChartPoint, ChartTooltipPayload } from "@/types/chart";
 
 type TimeRange = "ALL" | "1Y" | "6M" | "3M" | "1M" | "1W";
@@ -227,7 +228,7 @@ export function BinanceDashboard({
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;
   const { chartContainerRef, chartReady, chartSize } = useChartContainerReady();
-  const tabsPortalNode = typeof document === "undefined" ? null : document.getElementById("dashboard-tabs-portal");
+  const tabsPortalNode = usePortalNode("dashboard-tabs-portal");
 
   // Empty chart data (historical tracking not yet implemented)
   const allDailyData = useMemo(() => {

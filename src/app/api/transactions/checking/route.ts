@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authGuardResponse, requireOwnedProfile } from "@/lib/auth-guard";
-import { prisma } from "@/lib/db";
-import { BBVA_INSTITUTION } from "@/lib/institutions";
-import { apiLogger } from "@/lib/logger";
+import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { prisma } from "@/server/db/prisma";
+import { BBVA_INSTITUTION } from "@/shared/institutions";
+import { apiLogger } from "@/server/logging/logger";
 
 const log = apiLogger("Checking");
 

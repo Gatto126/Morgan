@@ -2,9 +2,9 @@ import { headers } from "next/headers";
 
 import { AuthShell } from "@/components/auth-shell";
 import { FinanceShell } from "@/components/finance-shell";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import { toSafeUserSummary } from "@/lib/user-response";
+import { auth } from "@/server/auth/auth";
+import { prisma } from "@/server/db/prisma";
+import { toSafeUserSummary } from "@/server/auth/user-response";
 
 export const dynamic = "force-dynamic";
 

@@ -3,7 +3,7 @@
 import type { RefObject } from "react";
 
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 import PlusIcon from "../ui/plus-icon";
 
