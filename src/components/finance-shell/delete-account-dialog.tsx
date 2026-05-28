@@ -1,8 +1,12 @@
+"use client";
+
+import { useRef } from "react";
 import { X as XIcon } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 
 import { canSubmitDeleteAccountDialog } from "./delete-account-dialog-helpers";
+import { useModalFocusTrap } from "./use-modal-accessibility";
 
 type DeleteAccountDialogProps = {
   error: string | null;
@@ -23,19 +27,29 @@ export function DeleteAccountDialog({
   onSubmit,
   password,
 }: DeleteAccountDialogProps) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const canSubmit = canSubmitDeleteAccountDialog(password, isDeleting);
+
+  useModalFocusTrap({
+    active: isOpen,
+    containerRef: dialogRef,
+    focusKey: isOpen ? "delete-account" : "closed",
+    onEscape: isDeleting ? undefined : onClose
+  });
+
   if (!isOpen) {
     return null;
   }
 
-  const canSubmit = canSubmitDeleteAccountDialog(password, isDeleting);
-
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
       <div
+        ref={dialogRef}
         aria-labelledby="delete-account-title"
         aria-modal="true"
         className="relative flex w-full max-w-[460px] flex-col gap-5 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-shell)] p-5 shadow-2xl sm:p-6"
         role="dialog"
+        tabIndex={-1}
       >
         <button
           aria-label="Close"
@@ -73,6 +87,7 @@ export function DeleteAccountDialog({
               autoComplete="current-password"
               autoFocus
               className="w-full border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-white focus:border-white focus:ring-0"
+              data-autofocus=""
               disabled={isDeleting}
               onChange={(event) => onPasswordChange(event.target.value)}
               placeholder="Enter your password"

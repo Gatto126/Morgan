@@ -37,6 +37,8 @@ interface DashboardProps {
   userSelectElement?: React.ReactNode;
   onImportRefreshComplete?: () => void;
   binanceRefreshKey?: number;
+  emptyStateElement?: React.ReactNode;
+  hasBinanceCredentials?: boolean;
 }
 
 export function Dashboard({
@@ -62,7 +64,9 @@ export function Dashboard({
   onCloseUserSelect,
   userSelectElement,
   onImportRefreshComplete,
-  binanceRefreshKey = 0
+  binanceRefreshKey = 0,
+  emptyStateElement,
+  hasBinanceCredentials = false
 }: DashboardProps) {
   const {
     binanceBalances,
@@ -99,8 +103,13 @@ export function Dashboard({
   const [prevActiveTab, setPrevActiveTab] = useState<AccountTab>(activeTab);
   const [showSoldAssets, setShowSoldAssets] = useState(false);
   const [activeChartPoint, setActiveChartPoint] = useState<DashboardChartPoint | null>(null);
-  const requiresInitialUpload = transactionCount === 0;
-  const shouldShowUploadPanel = (showUploadView || requiresInitialUpload) && !showSettingsView && !showUserSelectView;
+  const binanceTotalCents = useMemo(
+    () => Math.round(binanceBalances.reduce((sum, balance) => sum + balance.eurValue, 0) * 100),
+    [binanceBalances]
+  );
+  const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0;
+  const requiresInitialUpload = transactionCount === 0 && !hasBinancePortfolio;
+  const shouldShowUploadPanel = showUploadView && !showSettingsView && !showUserSelectView;
 
   useEffect(() => {
     onImportRefreshCompleteRef.current = onImportRefreshComplete;
@@ -108,13 +117,13 @@ export function Dashboard({
 
   const visibleTabs = useMemo(() => {
     return ACCOUNT_TABS.filter((tab) => {
-      if (tab.key === "heritage") return transactionCount > 0;
+      if (tab.key === "heritage") return transactionCount > 0 || hasBinancePortfolio;
       if (tab.key === "checking") return checkingCount > 0;
       if (tab.key === "investment") return investmentCount > 0;
       if (tab.key === "crypto") return cryptoCount > 0;
       return true;
     });
-  }, [checkingCount, investmentCount, cryptoCount, transactionCount]);
+  }, [checkingCount, hasBinancePortfolio, investmentCount, cryptoCount, transactionCount]);
 
   useEffect(() => {
     if (!visibleTabs.some((tab) => tab.key === activeTab)) {
@@ -280,20 +289,18 @@ export function Dashboard({
         return null;
       };
 
-      const binanceCents = Math.round(binanceBalances.reduce((s, b) => s + b.eurValue, 0) * 100);
-
       const checkingVal = resolveValue("checking", bucket.checking);
       const investmentVal = resolveValue("investment", bucket.investment);
       const cryptoVal = resolveValue("crypto", bucket.crypto);
       // Add live Binance to crypto only after the first crypto transaction exists (honest about history)
-      const cryptoWithBinance = cryptoVal !== null ? cryptoVal + binanceCents : null;
+      const cryptoWithBinance = cryptoVal !== null ? cryptoVal + binanceTotalCents : null;
 
       // Main line: add Binance to heritage/crypto tabs so the white line reflects the full portfolio
       const rawValue = resolveValue("value", val);
       const valueWithBinance =
-        rawValue !== null && (activeTab === "heritage" || activeTab === "crypto")
-          ? rawValue + binanceCents
-          : rawValue;
+        rawValue !== null
+          ? (activeTab === "heritage" || activeTab === "crypto" ? rawValue + binanceTotalCents : rawValue)
+          : (hasBinancePortfolio && (activeTab === "heritage" || activeTab === "crypto") ? binanceTotalCents : rawValue);
 
       const baseEntry: Record<string, number | string | null> = {
         month: rawMonth,
@@ -306,7 +313,7 @@ export function Dashboard({
       baseEntry.crypto = cryptoWithBinance; // used as CRYPTO sub-line in heritage tab
 
       if (checkingVal === null && investmentVal === null && cryptoWithBinance === null) {
-        baseEntry.heritage = null;
+        baseEntry.heritage = hasBinancePortfolio ? binanceTotalCents : null;
       } else {
         baseEntry.heritage = (checkingVal || 0) + (investmentVal || 0) + ((cryptoWithBinance) || 0);
       }
@@ -337,11 +344,11 @@ export function Dashboard({
       });
 
       // Binance sub-line key for the crypto tab (constant live value, no historical data)
-      baseEntry["binance"] = binanceCents > 0 ? binanceCents : null;
+      baseEntry["binance"] = hasBinancePortfolio ? binanceTotalCents : null;
 
       return baseEntry;
     });
-  }, [data, activeTab, timeRange, checkingProviders, investmentProducts, cryptoTokens, cryptoInstitutions, binanceBalances]);
+  }, [data, activeTab, timeRange, checkingProviders, investmentProducts, cryptoTokens, cryptoInstitutions, binanceTotalCents, hasBinancePortfolio]);
 
   const activePoint = activeChartPoint;
 
@@ -569,10 +576,10 @@ export function Dashboard({
         onCloseUserSelect={onCloseUserSelect}
         userSelectElement={userSelectElement}
         shouldShowUploadPanel={shouldShowUploadPanel}
-        requiresInitialUpload={requiresInitialUpload}
         isClosingUpload={isClosingUpload}
         onCloseUpload={onCloseUpload}
         uploadElement={uploadElement}
+        emptyStateElement={requiresInitialUpload ? emptyStateElement : undefined}
         reviewElement={reviewElement}
         previewTransactionsCount={previewTransactionsCount}
         activeTab={activeTab}

@@ -11,8 +11,7 @@ L'app e' in buono stato tecnico generale: build, type-check, lint, test unitari 
 Le aree ancora aperte piu' urgenti riguardano:
 
 1. layout mobile con overflow orizzontale e controlli parzialmente fuori viewport;
-2. schema di import che rifiuta saldi conto negativi anche se il parser BBVA li puo' produrre;
-3. isolamento completo dei pannelli overlay/settings dal contenuto sottostante.
+2. schema di import che rifiuta saldi conto negativi anche se il parser BBVA li puo' produrre.
 
 Aggiornamento post-fix del 2026-05-27:
 
@@ -22,7 +21,8 @@ Aggiornamento post-fix del 2026-05-27:
 - l'autenticazione locale non usa piu' un PIN breve per nuovi account: registrazione con password/passphrase 15-128 caratteri, spazi/simboli ammessi, rate limit Better Auth database-backed.
 - il submit auth e' esplicito: rimosso auto-login temporizzato; il bottone resta visibile/disabilitato finche' i campi non sono validi.
 - le voci Settings/API/Danger, New Profile e il toggle secret sono controlli `button` semantici; la modale delete account e' stata estratta in componente dedicato.
-- l'upload panel non resta aperto quando si naviga verso Settings/Profile e il pulsante upload non rimane attivo fuori dagli stage contenuto.
+- i pannelli Upload/Settings/Profile isolano il contenuto sottostante con `inert`/`aria-hidden` e focus trap; la modale delete account usa lo stesso focus management.
+- l'upload panel non resta aperto quando si naviga verso Settings/Profile, non si auto-apre su Home con profili vuoti e il pulsante upload non rimane attivo fuori dagli stage contenuto.
 - i campi plaintext legacy Binance sono rimossi dallo schema e dalla lettura applicativa; `scripts/migrate-binance-plaintext.mjs` conserva un percorso di migrazione per DB preesistenti.
 - online readiness avanzata: header HTTP difensivi in `next.config.ts`, same-origin check su tutte le mutazioni app, cookie Better Auth sicuri quando `BETTER_AUTH_URL` e' HTTPS, warning produzione per origin/proxy IP non configurati.
 
@@ -59,9 +59,10 @@ Screenshot salvati in `test-results/audit/`, in particolare:
 | `pnpm audit --prod` | OK, nessuna vulnerabilita' nota |
 | `pnpm outdated` | Warning: diverse major disponibili |
 | `pnpm run lint` | OK |
-| `pnpm run test:run` | OK, 15 file / 63 test |
+| `pnpm run test:run` | OK, 17 file / 73 test |
 | `pnpm exec tsc --noEmit` | OK |
 | `pnpm run build` | OK, Next build completato |
+| `pnpm run smoke:upload-panel` | OK, include isolamento pannelli e tab order |
 
 Dipendenze principali con major disponibili: Next 16, Prisma 7, Zod 4, TypeScript 6, ESLint 10, lucide-react 1.x. Non sono aggiornamenti urgenti per vulnerabilita', ma vanno pianificati per ridurre debito tecnico.
 
@@ -103,29 +104,30 @@ Se un conto va in scoperto o il foglio contiene un saldo negativo, la preview pu
 **Raccomandazione:** permettere `balanceCents` signed, mantenendo `amountCents` non negativo. Aggiungere un test BBVA/import per saldo negativo.
 
 
-### P2 - Settings/Upload overlay non isola il contenuto sottostante - PARZIALMENTE RISOLTO
+### P2 - Settings/Upload overlay non isola il contenuto sottostante - RISOLTO
 
-**Evidenza browser:** quando Settings o Upload sono aperti, il DOM espone ancora bottoni, grafici e card dashboard sottostanti. I controlli di sfondo restano nella navigazione assistiva e in parte interagibili.
+**Evidenza originaria:** quando Settings o Upload erano aperti, il DOM esponeva ancora bottoni, grafici e card dashboard sottostanti. I controlli di sfondo restavano nella navigazione assistiva e in parte interagibili.
 
 **File interessati:**
 
-- `src/components/finance-shell.tsx:676` e dintorni - overlay/panel assoluto.
-- `src/components/finance-shell/settings-panel.tsx:66`
-- `src/components/finance-shell/settings-panel.tsx:85`
-- `src/components/finance-shell/settings-panel.tsx:105`
+- `src/components/finance-shell.tsx`
+- `src/components/finance-shell/use-modal-accessibility.ts`
+- `src/components/finance-shell/delete-account-dialog.tsx`
+- `scripts/smoke-upload-panel.mjs`
 
-**Stato attuale:** la parte semantica dei controlli e' risolta; resta aperto l'isolamento completo dello sfondo quando Settings/Upload sono aperti.
+**Stato attuale:** risolto.
 
 - `src/components/finance-shell/settings-panel.tsx` usa `button` per Settings/API/Danger e per il toggle visibilita' secret con `aria-label`.
 - `src/components/finance-shell/user-select-panel.tsx` usa un `button` per New Profile.
-- `src/components/finance-shell/delete-account-dialog.tsx` isola la modale delete account in un componente con `role="dialog"` e form dedicato.
+- `src/components/finance-shell/use-modal-accessibility.ts` centralizza `inert`, `aria-hidden`, focus iniziale, focus trap, restore del focus ed Escape.
+- `src/components/finance-shell.tsx` marca Header, cards portal e background del frame con `inert`/`aria-hidden` quando Upload/Settings/Profile sono aperti.
+- I pannelli Upload/Settings/Profile espongono `role="dialog"` e `data-modal-panel`; Home resta navigabile liberamente e non auto-apre Upload anche se il profilo e' vuoto.
+- `src/components/finance-shell/delete-account-dialog.tsx` usa lo stesso focus trap quando la modale distruttiva e' aperta sopra Settings.
+- L'animazione di chiusura e' applicata solo al contenuto interno: il contenitore del pannello resta opaco, fermo e allineato al grafico fino allo smontaggio.
 
-**Impatto residuo:** senza isolamento/focus trap completo, il contenuto sottostante puo' restare raggiungibile nella navigazione assistiva o in tab order.
+**Verifica:** `pnpm run smoke:upload-panel` crea un profilo vuoto, attraversa Upload/Settings/Profile/Home, verifica `inert`/`aria-hidden`, controlla che il Tab non entri nello sfondo nascosto e conferma che Home rimanga senza Upload auto-aperto.
 
-**Raccomandazione:**
-
-- aggiungere focus management e `aria-modal`/`inert` o `aria-hidden` sul background quando un panel e' aperto;
-- verificare tab order con tastiera.
+**Impatto residuo:** nessuno noto su desktop. Resta separato il tema responsive mobile gia' tracciato come P1.
 
 ### P2 - Cancellazione account protetta solo da `window.confirm` - RISOLTO
 
@@ -241,13 +243,12 @@ Inoltre solo `sync` aggiorna `binance_sync_${userId}`:
 
 ## Copertura Test
 
-Attuale: 17 file test, 74 test totali.
+Attuale: 17 file test, 73 test totali.
 
-Copre parser, preview, price request validation, logica chart/time-series, servizio Binance, route Binance, cancellazione account, policy auth locale, helper UI auth/delete account, segreti cifrati, auth deployment config e request security. Mancano ancora test su:
+Copre parser, preview, price request validation, logica chart/time-series, servizio Binance, route Binance, cancellazione account, policy auth locale, helper UI auth/delete account, segreti cifrati, auth deployment config, request security e smoke UI per isolamento pannelli. Mancano ancora test su:
 
 - flusso import end-to-end con saldo negativo;
 - UI responsive mobile;
-- isolamento completo Settings/Upload e tab order keyboard;
 - route handler API restanti con auth/profile ownership.
 
 ## Raccomandazioni Operative
@@ -256,7 +257,6 @@ Priorita' prossima:
 
 1. Fix mobile overflow e aggiungere visual regression minima.
 2. Consentire `balanceCents` signed e aggiungere test.
-3. Isolare Settings/Upload dallo sfondo con focus management/inert e smoke keyboard completo.
 
 Poi:
 
@@ -278,3 +278,4 @@ Aggiornamento smoke 2026-05-27:
 - verificato che il bottone auth non faccia piu' auto-submit;
 - verificato visualmente che password input e submit button abbiano radius/dimensioni coerenti in Login e Register;
 - DB locale ripulito al termine dello smoke (`authUsers`, `profiles`, `sessions`, `accounts`, `rateLimits` a 0).
+- smoke Upload/Settings/Profile aggiornato: verifica isolamento `inert`/`aria-hidden`, tab order keyboard e Home libera senza auto-upload su profili vuoti.

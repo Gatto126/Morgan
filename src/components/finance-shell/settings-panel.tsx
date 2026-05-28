@@ -111,33 +111,31 @@ export function SettingsPanel({
   return (
     <div className="mx-auto flex w-full max-w-[850px] items-stretch text-left justify-start md:h-[380px] h-full">
       <div className={cn("w-full md:w-[380px] shrink-0 flex flex-col justify-between py-1 md:py-2 h-full", isOpen && "hidden md:flex")}>
-        <div className="space-y-4 md:space-y-8">
-          <div className="space-y-4 md:space-y-6">
-            <SettingsNavButton
-              eyebrow="General Settings"
-              isActive={activeSection === "general"}
-              label="Settings"
-              onClick={() => onSelectSection("general")}
-            />
+        <div className="space-y-4 md:space-y-6">
+          <SettingsNavButton
+            eyebrow="General Settings"
+            isActive={activeSection === "general"}
+            label="Settings"
+            onClick={() => onSelectSection("general")}
+          />
 
-            <SettingsNavButton
-              eyebrow="Manage API"
-              isActive={activeSection === "apiKey"}
-              label="API Key"
-              onClick={() => onSelectSection("apiKey")}
-            />
-
-            {hasActiveUser ? (
-              <SettingsNavButton
-                eyebrow="Delete account"
-                isActive={activeSection === "dangerZone"}
-                isDanger
-                label="Danger zone"
-                onClick={() => onSelectSection("dangerZone")}
-              />
-            ) : null}
-          </div>
+          <SettingsNavButton
+            eyebrow="Manage API"
+            isActive={activeSection === "apiKey"}
+            label="API Key"
+            onClick={() => onSelectSection("apiKey")}
+          />
         </div>
+
+        {hasActiveUser ? (
+          <SettingsNavButton
+            eyebrow="Delete account"
+            isActive={activeSection === "dangerZone"}
+            isDanger
+            label="Danger zone"
+            onClick={() => onSelectSection("dangerZone")}
+          />
+        ) : null}
       </div>
 
       <div

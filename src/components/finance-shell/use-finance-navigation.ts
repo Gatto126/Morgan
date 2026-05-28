@@ -10,7 +10,6 @@ type UseFinanceNavigationOptions = {
   initialStage: Stage;
   initialShowUploadView: boolean;
   hasActiveUser: boolean;
-  activeUserTransactionCount: number | null;
   hasUsers: boolean;
   resetPreview: () => void;
   clearApiKeyDraft: () => void;
@@ -25,14 +24,15 @@ function clearTimer(timerRef: MutableRefObject<ReturnType<typeof setTimeout> | n
 }
 
 export function shouldAutoOpenUpload(transactionCount: number | null, stage: Stage) {
-  return transactionCount === 0 && stage !== "settings" && stage !== "select" && stage !== "create";
+  void transactionCount;
+  void stage;
+  return false;
 }
 
 export function useFinanceNavigation({
   initialStage,
   initialShowUploadView,
   hasActiveUser,
-  activeUserTransactionCount,
   hasUsers,
   resetPreview,
   clearApiKeyDraft,
@@ -73,24 +73,29 @@ export function useFinanceNavigation({
     }, 250);
   }, [resetPreview]);
 
-  const shouldShowUploadForStage = useCallback((targetStage: Stage) => {
-    return shouldAutoOpenUpload(activeUserTransactionCount, targetStage);
-  }, [activeUserTransactionCount]);
+  const clearAllCloseTimers = useCallback(() => {
+    clearTimer(closeUploadTimerRef);
+    clearTimer(closeSettingsTimerRef);
+    clearTimer(closeUserSelectTimerRef);
+  }, []);
 
-  const triggerCloseSettings = useCallback((options?: { restoreUpload?: boolean }) => {
+  const resetClosingFlags = useCallback(() => {
+    setIsClosingUpload(false);
+    setIsClosingSettings(false);
+    setIsClosingUserSelect(false);
+  }, []);
+
+  const triggerCloseSettings = useCallback(() => {
     clearTimer(closeSettingsTimerRef);
     setIsClosingSettings(true);
     closeSettingsTimerRef.current = setTimeout(() => {
       closeSettingsTimerRef.current = null;
       setShowSettingsView(false);
       setIsClosingSettings(false);
-      if (options?.restoreUpload) {
-        setShowUploadView(shouldShowUploadForStage(stage));
-      }
     }, 250);
-  }, [shouldShowUploadForStage, stage]);
+  }, []);
 
-  const triggerCloseUserSelect = useCallback((options?: { restoreUpload?: boolean }) => {
+  const triggerCloseUserSelect = useCallback(() => {
     clearTimer(closeUserSelectTimerRef);
     setIsClosingUserSelect(true);
     closeUserSelectTimerRef.current = setTimeout(() => {
@@ -98,126 +103,89 @@ export function useFinanceNavigation({
       setShowUserSelectView(false);
       setIsClosingUserSelect(false);
       setShowCreateUserSubmenu(false);
-      if (options?.restoreUpload) {
-        setShowUploadView(shouldShowUploadForStage(stage));
-      }
     }, 250);
-  }, [shouldShowUploadForStage, stage]);
-
-  const closeUploadImmediately = useCallback(() => {
-    clearTimer(closeUploadTimerRef);
-    setIsClosingUpload(false);
-    setShowUploadView(false);
-    resetPreview();
-  }, [resetPreview]);
-
-  const closeSettingsImmediately = useCallback(() => {
-    clearTimer(closeSettingsTimerRef);
-    setIsClosingSettings(false);
-    setShowSettingsView(false);
-    setActiveSettingsSection(null);
-  }, []);
-
-  const closeUserSelectImmediately = useCallback(() => {
-    clearTimer(closeUserSelectTimerRef);
-    setIsClosingUserSelect(false);
-    setShowUserSelectView(false);
-    setShowCreateUserSubmenu(false);
   }, []);
 
   const navigateTo = useCallback((newStage: Stage) => {
+    clearAllCloseTimers();
+    resetClosingFlags();
     setStage(newStage);
-    setShowUploadView(shouldShowUploadForStage(newStage));
+    setShowUploadView(false);
     setShowSettingsView(false);
     setShowUserSelectView(false);
     setShowCreateUserSubmenu(false);
     setActiveSettingsSection(null);
     clearPanelFeedback();
-  }, [clearPanelFeedback, shouldShowUploadForStage]);
+  }, [clearAllCloseTimers, clearPanelFeedback, resetClosingFlags]);
 
   const navigateHome = useCallback(() => {
+    clearAllCloseTimers();
+    resetClosingFlags();
     setStage("welcome");
-    setShowUploadView(shouldShowUploadForStage("welcome"));
+    setShowUploadView(false);
     setShowSettingsView(false);
     setShowUserSelectView(false);
     setShowCreateUserSubmenu(false);
     setActiveSettingsSection(null);
     clearApiKeyDraft();
     clearPanelFeedback();
-  }, [clearApiKeyDraft, clearPanelFeedback, shouldShowUploadForStage]);
+  }, [clearAllCloseTimers, clearApiKeyDraft, clearPanelFeedback, resetClosingFlags]);
 
   const handlePlusClick = useCallback(() => {
-    if (showSettingsView) {
-      closeSettingsImmediately();
-    }
-    if (showUserSelectView) {
-      closeUserSelectImmediately();
-    }
-    if (activeUserTransactionCount === 0) {
-      clearTimer(closeUploadTimerRef);
-      setIsClosingUpload(false);
-      setShowUploadView(true);
-      return;
-    }
     if (showUploadView) {
       triggerCloseUpload();
-    } else {
-      clearTimer(closeUploadTimerRef);
-      setIsClosingUpload(false);
-      setShowUploadView(true);
+      return;
     }
+
+    clearAllCloseTimers();
+    resetClosingFlags();
+    setShowUploadView(true);
+    setShowSettingsView(false);
+    setActiveSettingsSection(null);
+    setShowUserSelectView(false);
+    setShowCreateUserSubmenu(false);
+    clearPanelFeedback();
   }, [
-    activeUserTransactionCount,
-    closeSettingsImmediately,
-    closeUserSelectImmediately,
-    showSettingsView,
+    clearAllCloseTimers,
+    clearPanelFeedback,
+    resetClosingFlags,
     showUploadView,
-    showUserSelectView,
     triggerCloseUpload
   ]);
 
   const handleCloseUpload = useCallback(() => {
-    if (activeUserTransactionCount === 0) {
-      clearTimer(closeUploadTimerRef);
-      setIsClosingUpload(false);
-      setShowUploadView(true);
-      return;
-    }
     triggerCloseUpload();
-  }, [activeUserTransactionCount, triggerCloseUpload]);
+  }, [triggerCloseUpload]);
 
   const handleSettingsClick = useCallback(() => {
-    if (showUploadView) {
-      closeUploadImmediately();
-    }
-    if (showUserSelectView) {
-      closeUserSelectImmediately();
-    }
     if (showSettingsView) {
-      triggerCloseSettings({ restoreUpload: true });
+      triggerCloseSettings();
       setActiveSettingsSection(null);
       clearPanelFeedback();
     } else {
-      clearTimer(closeSettingsTimerRef);
-      setIsClosingSettings(false);
+      clearAllCloseTimers();
+      resetClosingFlags();
+      setShowUploadView(false);
+      resetPreview();
+      setShowUserSelectView(false);
+      setShowCreateUserSubmenu(false);
       setActiveSettingsSection("general");
       clearPanelFeedback();
       clearApiKeyDraft();
       setShowSettingsView(true);
     }
   }, [
+    clearAllCloseTimers,
     clearApiKeyDraft,
     clearPanelFeedback,
-    closeUploadImmediately,
-    closeUserSelectImmediately,
+    resetClosingFlags,
+    resetPreview,
     showSettingsView,
-    showUploadView,
-    showUserSelectView,
     triggerCloseSettings
   ]);
 
   const handleCloseSettings = useCallback(() => {
-    triggerCloseSettings({ restoreUpload: true });
+    triggerCloseSettings();
     setActiveSettingsSection(null);
     clearPanelFeedback();
   }, [clearPanelFeedback, triggerCloseSettings]);
@@ -228,34 +196,31 @@ export function useFinanceNavigation({
       navigateTo("select");
       return;
     }
-    if (showUploadView) {
-      closeUploadImmediately();
-    }
-    if (showSettingsView) {
-      closeSettingsImmediately();
-    }
     if (showUserSelectView) {
-      triggerCloseUserSelect({ restoreUpload: true });
+      triggerCloseUserSelect();
     } else {
-      clearTimer(closeUserSelectTimerRef);
-      setIsClosingUserSelect(false);
+      clearAllCloseTimers();
+      resetClosingFlags();
+      setShowUploadView(false);
+      resetPreview();
+      setShowSettingsView(false);
+      setActiveSettingsSection(null);
       setShowCreateUserSubmenu(false);
       setShowUserSelectView(true);
     }
   }, [
-    closeSettingsImmediately,
-    closeUploadImmediately,
+    clearAllCloseTimers,
     hasActiveUser,
     hasUsers,
     navigateTo,
-    showSettingsView,
-    showUploadView,
+    resetClosingFlags,
+    resetPreview,
     showUserSelectView,
     triggerCloseUserSelect
   ]);
 
   const handleCloseUserSelect = useCallback(() => {
-    triggerCloseUserSelect({ restoreUpload: true });
+    triggerCloseUserSelect();
   }, [triggerCloseUserSelect]);
 
   const toggleSettingsSection = useCallback((section: SettingsSection) => {

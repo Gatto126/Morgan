@@ -76,10 +76,10 @@ export function DashboardTabs({
                   ? (() => {
                       const binancePoint = (activePoint.binance as number) || 0;
                       if (tab.key === "crypto") {
-                        return ((activePoint.crypto as number) || 0) + binancePoint;
+                        return typeof activePoint.crypto === "number" ? activePoint.crypto : binancePoint;
                       }
                       if (tab.key === "heritage") {
-                        return ((activePoint.heritage as number) || 0) + binancePoint;
+                        return typeof activePoint.heritage === "number" ? activePoint.heritage : binancePoint;
                       }
                       return (activePoint[tab.key] as number) || 0;
                     })()

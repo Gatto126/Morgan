@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Bitcoin, X } from "lucide-react";
 import { Line, LineChart, CartesianGrid, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
 import { cn } from "@/lib/utils";
 import type { ActiveDotProps, ChartPoint, ChartTooltipPayload } from "@/types/chart";
@@ -160,6 +161,9 @@ export function BinanceDashboard({
   const [selectedPoint, setSelectedPoint] = useState<{ month: string; seriesKey: string; value: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [balances, setBalances] = useState<BinanceBalance[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -168,15 +172,55 @@ export function BinanceDashboard({
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  const loadBalances = useCallback(async () => {
+    const response = await fetch(`/api/binance/balances?userId=${userId}`);
+    const data = await response.json();
+    if (Array.isArray(data.balances)) {
+      setBalances(data.balances);
+    }
+  }, [userId]);
+
   useEffect(() => {
     if (!shouldLoad) return;
-    fetch(`/api/binance/balances?userId=${userId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data.balances)) setBalances(data.balances);
-      })
-      .catch(() => {});
-  }, [shouldLoad, userId]);
+    const timer = window.setTimeout(() => {
+      void loadBalances().catch(() => {});
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadBalances, shouldLoad]);
+
+  async function handleSyncBalances() {
+    if (isSyncing) return;
+
+    setIsSyncing(true);
+    setSyncError(null);
+    setSyncNotice(null);
+
+    try {
+      const response = await fetch("/api/binance/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Binance sync failed.");
+      }
+
+      if (Array.isArray(data.balances)) {
+        setBalances(data.balances);
+      } else {
+        await loadBalances();
+      }
+
+      setSyncNotice("Sync complete.");
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Binance sync failed.");
+    } finally {
+      setIsSyncing(false);
+    }
+  }
 
   const totalEur = useMemo(() => balances.reduce((sum, b) => sum + b.eurValue, 0), [balances]);
 
@@ -187,18 +231,20 @@ export function BinanceDashboard({
 
   // Empty chart data (historical tracking not yet implemented)
   const allDailyData = useMemo(() => {
+    const currentBalanceCents = Math.round(totalEur * 100);
     const points = [];
     const today = new Date();
     const start = new Date();
     start.setFullYear(today.getFullYear() - 1, today.getMonth() - 4);
     for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toISOString().split("T")[0];
-      points.push({ date: dateStr, rawMonth: dateStr, balance: 0 });
+      points.push({ date: dateStr, rawMonth: dateStr, balance: currentBalanceCents });
     }
     return points;
-  }, []);
+  }, [totalEur]);
 
   const chartData = useMemo(() => filterData(allDailyData, timeRange), [allDailyData, timeRange]);
+  const hasRenderableChartData = totalEur > 0;
 
   const xAxisTicks = useMemo(() => {
     const ticks: string[] = [];
@@ -215,6 +261,11 @@ export function BinanceDashboard({
     return ticks;
   }, [chartData]);
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
+  const isPanelClosing =
+    (showUploadView && isClosingUpload) ||
+    (showSettingsView && isClosingSettings) ||
+    (showUserSelectView && isClosingUserSelect);
+  const shouldRevealChartContent = (!hasRenderableChartData || chartReady) && (!isPanelOpen || isPanelClosing);
   const panelOverlay = showUploadView ? (
     <div className={cn("absolute inset-0 z-20 flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)]", isClosingUpload ? "upload-panel-exit pointer-events-none" : "upload-panel-enter")}>
       <div role="button" onClick={onCloseUpload} className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white" title="Esci dall'importazione">
@@ -258,7 +309,23 @@ export function BinanceDashboard({
 
       {/* Chart Area */}
       <div className="relative flex w-full flex-1 flex-col justify-center overflow-hidden rounded-[18px] min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px]">
-        <div className={cn("absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", isPanelOpen && "pointer-events-none")}>
+        <div
+          className={cn("chart-content-reveal absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", isPanelOpen && "pointer-events-none")}
+          data-visible={shouldRevealChartContent ? "true" : "false"}
+        >
+            {!hasRenderableChartData ? (
+              <div className="flex h-full w-full items-center justify-center">
+                <EmptyChartAction
+                  actionLabel={isSyncing ? "Loading" : "Sync"}
+                  disabled={isSyncing}
+                  error={syncError}
+                  notice={syncNotice}
+                  onAction={() => void handleSyncBalances()}
+                  title="Binance"
+                />
+              </div>
+            ) : (
+              <>
             <div className="absolute right-0 top-0 z-10 flex items-center justify-end gap-0.5">
               {TIME_RANGES.map((range) => (
                 <button
@@ -334,6 +401,8 @@ export function BinanceDashboard({
                 </div>
               </div>
             </div>
+              </>
+            )}
         </div>
         {panelOverlay}
       </div>

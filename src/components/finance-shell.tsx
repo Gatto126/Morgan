@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Bitcoin, ChartPie, Coins, House, Landmark, Settings, Wallet, X as XIcon } from "lucide-react";
 import { AuthShell } from "./auth-shell";
@@ -12,10 +12,12 @@ import { CryptoDashboard } from "./crypto-dashboard";
 import { ReviewPanel } from "./finance-shell/review-panel";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
 import { getDeleteAccountDialogResetState } from "./finance-shell/delete-account-dialog-helpers";
+import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import { SettingsPanel, type SettingsSection } from "./finance-shell/settings-panel";
 import type { UserRecord } from "./finance-shell/types";
 import { UploadPanel } from "./finance-shell/upload-panel";
-import { shouldAutoOpenUpload, useFinanceNavigation, type Stage } from "./finance-shell/use-finance-navigation";
+import { useFinanceNavigation, type Stage } from "./finance-shell/use-finance-navigation";
+import { useInertElements, useModalFocusTrap } from "./finance-shell/use-modal-accessibility";
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
 import { UserSelectPanel } from "./finance-shell/user-select-panel";
 import PlusIcon from "./ui/plus-icon";
@@ -27,6 +29,24 @@ import { cn, getInitials } from "@/lib/utils";
 
 const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
 const restorableStages = new Set<Stage>(["welcome", "select", "create", "dashboard", "checking", "investment", "settings", "binance", "crypto"]);
+const overlayCloseButtonClass =
+  "icon-plain absolute z-50 flex h-8 w-8 cursor-pointer appearance-none items-center justify-center border-0 bg-transparent p-0 text-[color:var(--text-dim)] shadow-none transition-colors hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-[color:var(--line-strong)]";
+const panelMotionDurationMs = 250;
+
+type OverlayPanelType = "upload" | "settings" | "profile";
+type OverlayPanelConfig = {
+  closeTitle: string;
+  handleClosePanel: () => void;
+  isClosingPanel: boolean;
+  key: string;
+  panelContent: ReactNode;
+  panelLabel: string;
+  panelType: OverlayPanelType;
+  shouldShowClose: boolean;
+};
+type ExitingOverlayPanelConfig = OverlayPanelConfig & {
+  exitId: string;
+};
 
 function isRestorableStage(value: string | null): value is Stage {
   return value !== null && restorableStages.has(value as Stage);
@@ -38,7 +58,7 @@ function resolveInitialFinanceState(initialUsers: UserRecord[]) {
   if (onlyUser) {
     return {
       activeUser: onlyUser,
-      showUploadView: onlyUser.transactionCount === 0,
+      showUploadView: false,
       stage: "dashboard" as Stage
     };
   }
@@ -99,6 +119,12 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [binanceFading, setBinanceFading] = useState(false);
   const [forceApiSettingsSection, setForceApiSettingsSection] = useState(false);
+  const appContentRef = useRef<HTMLDivElement | null>(null);
+  const dashboardTabsPortalRef = useRef<HTMLDivElement | null>(null);
+  const dashboardBackgroundRef = useRef<HTMLDivElement | null>(null);
+  const dashboardCardsPortalRef = useRef<HTMLDivElement | null>(null);
+  const activeOverlayPanelRef = useRef<HTMLDivElement | null>(null);
+  const welcomeBackgroundRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const createUserInputRef = useRef<HTMLInputElement | null>(null);
   const {
@@ -155,13 +181,97 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     initialStage: initialFinanceState.stage,
     initialShowUploadView: initialFinanceState.showUploadView,
     hasActiveUser: !!activeUser,
-    activeUserTransactionCount: activeUser?.transactionCount ?? null,
     hasUsers: users.length > 0,
     resetPreview,
     clearApiKeyDraft,
     clearPanelFeedback
   });
   const isDashboardStage = dashboardStages.has(stage);
+  const isDashboardPanelModalOpen =
+    isDashboardStage && !!activeUser && (showUploadView || showSettingsView || showUserSelectView);
+  const isWelcomePanelModalOpen =
+    stage === "welcome" && (showUploadView || showSettingsView || showUserSelectView);
+  const isPanelModalOpen = isDashboardPanelModalOpen || isWelcomePanelModalOpen;
+  const isOverlayPanelClosing =
+    (showUploadView && isClosingUpload) ||
+    (showSettingsView && isClosingSettings) ||
+    (showUserSelectView && isClosingUserSelect);
+  const isDashboardBackgroundVisible = !isDashboardPanelModalOpen || isOverlayPanelClosing;
+  const isWelcomeBackgroundVisible = !isWelcomePanelModalOpen || isOverlayPanelClosing;
+  const activePanelFocusKey = isDashboardPanelModalOpen
+    ? `dashboard:${showUploadView ? "upload" : showSettingsView ? "settings" : "profile"}`
+    : isWelcomePanelModalOpen
+      ? `welcome:${showUploadView ? "upload" : showSettingsView ? "settings" : "profile"}`
+      : "closed";
+  const shellPanelBackgroundRefs = useMemo(
+    () => [dashboardTabsPortalRef, dashboardCardsPortalRef],
+    []
+  );
+  const dashboardPanelBackgroundRefs = useMemo(
+    () => [dashboardBackgroundRef],
+    []
+  );
+  const welcomePanelBackgroundRefs = useMemo(
+    () => [welcomeBackgroundRef],
+    []
+  );
+  const deleteDialogBackgroundRefs = useMemo(
+    () => [appContentRef],
+    []
+  );
+  const activeFramePanel = getFramePanelConfig();
+  const previousFramePanelRef = useRef<OverlayPanelConfig | null>(null);
+  const exitingFramePanelTimerRef = useRef<number | null>(null);
+  const pendingUserSelectionTimerRef = useRef<number | null>(null);
+  const exitingFramePanelIdRef = useRef(0);
+  const [exitingFramePanel, setExitingFramePanel] = useState<ExitingOverlayPanelConfig | null>(null);
+
+  useModalFocusTrap({
+    active: isPanelModalOpen && !showDeleteAccountConfirm,
+    containerRef: activeOverlayPanelRef,
+    focusKey: activePanelFocusKey,
+    onEscape: closeActiveOverlayPanel
+  });
+  useInertElements(isPanelModalOpen, shellPanelBackgroundRefs);
+  useInertElements(isDashboardPanelModalOpen, dashboardPanelBackgroundRefs);
+  useInertElements(isWelcomePanelModalOpen, welcomePanelBackgroundRefs);
+  useInertElements(showDeleteAccountConfirm, deleteDialogBackgroundRefs);
+
+  useLayoutEffect(() => {
+    const previousFramePanel = previousFramePanelRef.current;
+    const previousKey = previousFramePanel?.key ?? null;
+    const currentKey = activeFramePanel?.key ?? null;
+
+    if (previousFramePanel && previousKey !== currentKey && currentKey === null && !previousFramePanel.isClosingPanel) {
+      if (exitingFramePanelTimerRef.current) {
+        window.clearTimeout(exitingFramePanelTimerRef.current);
+      }
+
+      const exitId = `${previousFramePanel.key}:exit:${exitingFramePanelIdRef.current}`;
+      exitingFramePanelIdRef.current += 1;
+      setExitingFramePanel({ ...previousFramePanel, exitId });
+      exitingFramePanelTimerRef.current = window.setTimeout(() => {
+        exitingFramePanelTimerRef.current = null;
+        setExitingFramePanel(null);
+      }, panelMotionDurationMs);
+    } else if (!activeFramePanel && previousFramePanel?.isClosingPanel && exitingFramePanel) {
+      setExitingFramePanel(null);
+    }
+
+    previousFramePanelRef.current = activeFramePanel;
+  }, [activeFramePanel, exitingFramePanel]);
+
+  useEffect(() => {
+    return () => {
+      if (exitingFramePanelTimerRef.current) {
+        window.clearTimeout(exitingFramePanelTimerRef.current);
+      }
+      if (pendingUserSelectionTimerRef.current) {
+        window.clearTimeout(pendingUserSelectionTimerRef.current);
+        pendingUserSelectionTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (showCreateUserSubmenu && createUserInputRef.current) {
@@ -171,6 +281,25 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
       return () => clearTimeout(timer);
     }
   }, [showCreateUserSubmenu]);
+
+  useEffect(() => {
+    if (previewTransactions.length === 0) {
+      return;
+    }
+
+    setShowUploadView(true);
+    setShowSettingsView(false);
+    setShowUserSelectView(false);
+    setShowCreateUserSubmenu(false);
+    setActiveSettingsSection(null);
+  }, [
+    previewTransactions.length,
+    setActiveSettingsSection,
+    setShowUploadView,
+    setShowUserSelectView,
+    setShowCreateUserSubmenu,
+    setShowSettingsView
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,7 +314,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
           const restoredStage = isRestorableStage(savedStage) ? savedStage : "dashboard";
 
           setActiveUser(savedUser);
-          setShowUploadView(shouldAutoOpenUpload(savedUser.transactionCount, restoredStage));
+          setShowUploadView(false);
           setStage(restoredStage);
           setActiveSettingsSection(restoredStage === "settings" ? "general" : null);
         }
@@ -433,19 +562,17 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     );
   }
 
-  function handleUserSelect(user: UserRecord) {
+  function commitUserSelection(user: UserRecord) {
     setActiveUser(user);
     resetPreview();
-    if (showUserSelectView) {
-      setIsClosingUserSelect(false);
-      setShowUserSelectView(false);
-      setShowCreateUserSubmenu(false);
-    }
+    setIsClosingUserSelect(false);
+    setShowUserSelectView(false);
+    setShowCreateUserSubmenu(false);
     setShowSettingsView(false);
     setActiveSettingsSection(null);
     clearPanelFeedback();
     clearApiKeyDraft();
-    setShowUploadView(user.transactionCount === 0);
+    setShowUploadView(false);
     setStage("dashboard");
     setError(null);
     setNotice(null);
@@ -481,7 +608,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
       setName("");
       resetPreview();
       setNotice(null);
-      setShowUploadView(payload.user.transactionCount === 0);
+      setShowUploadView(false);
       setShowUserSelectView(false);
       setShowCreateUserSubmenu(false);
       setStage("dashboard");
@@ -500,6 +627,28 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     setShowDeleteAccountConfirm(true);
     setError(null);
     setNotice(null);
+  }
+
+  function handleUserSelect(user: UserRecord) {
+    if (activeUser?.id === user.id) {
+      return;
+    }
+
+    if (pendingUserSelectionTimerRef.current) {
+      window.clearTimeout(pendingUserSelectionTimerRef.current);
+      pendingUserSelectionTimerRef.current = null;
+    }
+
+    if (showUserSelectView) {
+      handleCloseUserSelect();
+      pendingUserSelectionTimerRef.current = window.setTimeout(() => {
+        pendingUserSelectionTimerRef.current = null;
+        commitUserSelection(user);
+      }, panelMotionDurationMs);
+      return;
+    }
+
+    commitUserSelection(user);
   }
 
   function closeDeleteAccountConfirm() {
@@ -603,6 +752,22 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     handleSettingsClick();
   }
 
+  function closeActiveOverlayPanel() {
+    if (showUploadView) {
+      handleCloseUpload();
+      return;
+    }
+
+    if (showSettingsView) {
+      handleSettingsPanelClose();
+      return;
+    }
+
+    if (showUserSelectView) {
+      handleCloseUserSelect();
+    }
+  }
+
   function renderSettingsState() {
     const isApiKeySaved = !!activeUser?.hasBinanceCredentials;
     const visibleSettingsSection =
@@ -646,6 +811,19 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     );
   }
 
+  function renderInlineUploadState() {
+    return (
+      <EmptyChartAction
+        actionLabel={parsing ? "Loading" : "Upload"}
+        disabled={parsing}
+        error={error}
+        notice={notice}
+        onAction={openFilePicker}
+        title="Upload"
+      />
+    );
+  }
+
   function renderReviewState() {
     return (
       <ReviewPanel
@@ -664,8 +842,57 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     );
   }
 
-  function renderDashboardFrameOverlay() {
-    if (!isDashboardStage || !activeUser) {
+  function renderOverlayPanel(panel: OverlayPanelConfig | ExitingOverlayPanelConfig, motionState: "active" | "exit" = "active") {
+    const isExitSnapshot = motionState === "exit";
+    const isExiting = isExitSnapshot || panel.isClosingPanel;
+
+    return (
+      <div
+        aria-hidden={isExitSnapshot ? "true" : undefined}
+        aria-label={isExitSnapshot ? undefined : panel.panelLabel}
+        className={cn(
+          "absolute inset-0 flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)] focus:outline-none",
+          isExitSnapshot ? "z-[56] pointer-events-none" : "z-[55]"
+        )}
+        data-autofocus={isExitSnapshot ? undefined : ""}
+        data-exiting-panel={isExitSnapshot ? panel.panelType : undefined}
+        data-modal-panel={isExitSnapshot ? undefined : panel.panelType}
+        inert={isExitSnapshot ? true : undefined}
+        key={isExitSnapshot ? (panel as ExitingOverlayPanelConfig).exitId : panel.key}
+        ref={isExitSnapshot ? undefined : activeOverlayPanelRef}
+        role={isExitSnapshot ? undefined : "dialog"}
+        tabIndex={isExitSnapshot ? undefined : -1}
+      >
+        <div
+          data-panel-motion={isExiting ? "exit" : "enter"}
+          className={cn(
+            "relative h-full w-full",
+            isExiting ? "panel-overlay-exit pointer-events-none" : "panel-overlay-enter"
+          )}
+        >
+          {!isExitSnapshot && panel.shouldShowClose ? (
+            <button
+              aria-label={panel.closeTitle}
+              className={cn(overlayCloseButtonClass, "right-4 top-4")}
+              onClick={panel.handleClosePanel}
+              title={panel.closeTitle}
+              type="button"
+            >
+              <XIcon className="h-5 w-5" strokeWidth={2.3} />
+            </button>
+          ) : null}
+          <div className="relative flex h-full w-full flex-col justify-center px-3 py-3 sm:px-5 sm:py-5">
+            {panel.panelContent}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function getFramePanelConfig(): OverlayPanelConfig | null {
+    const canRenderFrameOverlay = stage === "welcome" || (isDashboardStage && !!activeUser);
+
+    if (!canRenderFrameOverlay) {
       return null;
     }
 
@@ -695,90 +922,57 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         ? handleSettingsPanelClose
         : handleCloseUserSelect;
 
-    const shouldShowClose = !showUploadPanel || activeUser.transactionCount !== 0;
+    const shouldShowClose = true;
     const panelContent = showUploadPanel
       ? (previewTransactions.length > 0 ? renderReviewState() : renderUploadState())
       : showSettingsPanel
         ? renderSettingsState()
         : renderUserSelectState();
+    const panelLabel = showUploadPanel
+      ? "Import transactions"
+      : showSettingsPanel
+        ? "Settings"
+        : "Select profile";
+    const panelType = showUploadPanel ? "upload" : showSettingsPanel ? "settings" : "profile";
+
+    return {
+      closeTitle,
+      handleClosePanel,
+      isClosingPanel,
+      key: `${stage}:${panelType}`,
+      panelContent,
+      panelLabel,
+      panelType,
+      shouldShowClose
+    };
+  }
+
+  function renderMainFrameOverlay() {
+    if (!activeFramePanel && !exitingFramePanel) {
+      return null;
+    }
 
     return (
-      <div
-        className={cn(
-          "absolute inset-0 z-[55] flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)]",
-          isClosingPanel ? "upload-panel-exit pointer-events-none" : "upload-panel-enter"
-        )}
-      >
-        {shouldShowClose ? (
-          <button
-            aria-label={closeTitle}
-            className="absolute right-4 top-4 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
-            onClick={handleClosePanel}
-            title={closeTitle}
-            type="button"
-          >
-            <XIcon className="h-5 w-5" strokeWidth={2.3} />
-          </button>
-        ) : null}
-        <div className="relative flex h-full w-full flex-col justify-center px-3 py-3 sm:px-5 sm:py-5">
-          {panelContent}
-        </div>
-      </div>
+      <>
+        {activeFramePanel ? renderOverlayPanel(activeFramePanel) : null}
+        {exitingFramePanel ? renderOverlayPanel(exitingFramePanel, "exit") : null}
+      </>
     );
   }
 
   function renderStageContent() {
     if (stage === "welcome") {
-      const homeOverlay = showUploadView ? (
-        <div className={cn("relative h-full w-full flex flex-col justify-center", isClosingUpload ? "upload-panel-exit" : "upload-panel-enter")}>
-          {activeUser?.transactionCount !== 0 ? (
-            <button
-              aria-label="Close upload panel"
-              className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
-              onClick={handleCloseUpload}
-              title="Close upload panel"
-              type="button"
-            >
-              <XIcon className="h-5 w-5" strokeWidth={2.3} />
-            </button>
-          ) : null}
-          {previewTransactions.length > 0 ? renderReviewState() : renderUploadState()}
-        </div>
-      ) : showSettingsView ? (
-        <div className={cn("relative h-full w-full flex flex-col justify-center", isClosingSettings ? "upload-panel-exit" : "upload-panel-enter")}>
-          <button
-            aria-label="Close settings"
-            className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
-            onClick={handleSettingsPanelClose}
-            title="Close settings"
-            type="button"
-          >
-            <XIcon className="h-5 w-5" strokeWidth={2.3} />
-          </button>
-          {renderSettingsState()}
-        </div>
-      ) : showUserSelectView ? (
-        <div className={cn("relative h-full w-full flex flex-col justify-center", isClosingUserSelect ? "upload-panel-exit" : "upload-panel-enter")}>
-          <button
-            aria-label="Close profile panel"
-            className="absolute right-0 top-0 z-50 flex h-8 w-8 cursor-pointer items-center justify-center text-[color:var(--text-dim)] transition-colors hover:text-white"
-            onClick={handleCloseUserSelect}
-            title="Close profile panel"
-            type="button"
-          >
-            <XIcon className="h-5 w-5" strokeWidth={2.3} />
-          </button>
-          {renderUserSelectState()}
-        </div>
-      ) : null;
-
       return (
         <div className="relative h-full w-full">
           <div className="relative h-full w-full">
             <div
+              ref={welcomeBackgroundRef}
+              aria-hidden={isWelcomePanelModalOpen ? "true" : undefined}
+              data-panel-background="welcome"
+              data-visible={isWelcomeBackgroundVisible ? "true" : "false"}
               className={cn(
-                "absolute inset-0 flex items-center justify-center transition-opacity duration-150",
-                homeOverlay ? "pointer-events-none opacity-0" : "opacity-100"
+                "panel-content-reveal absolute inset-0 flex items-center justify-center",
+                isWelcomePanelModalOpen && "pointer-events-none"
               )}
             >
               <div className="mx-auto flex h-full w-full max-w-[850px] items-stretch justify-start text-left md:h-[380px]">
@@ -830,7 +1024,6 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                 </div>
               </div>
             </div>
-            {homeOverlay ? <div className="absolute inset-0">{homeOverlay}</div> : null}
           </div>
         </div>
       );
@@ -917,16 +1110,12 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     return <AuthShell />;
   }
 
-  const isUploadButtonActive =
-    showUploadView ||
-    (!!activeUser &&
-      shouldAutoOpenUpload(activeUser.transactionCount, stage) &&
-      !showSettingsView &&
-      !showUserSelectView);
+  const canUseHeaderUploadButton = (activeUser?.transactionCount ?? 0) > 0;
+  const isUploadButtonActive = canUseHeaderUploadButton && showUploadView;
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-[color:var(--page-bg)] text-[color:var(--text-main)]">
-      <div className="mx-auto flex min-h-dvh w-full max-w-[1800px] flex-col overflow-y-auto hide-scrollbar px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+      <div ref={appContentRef} className="mx-auto flex min-h-dvh w-full max-w-[1800px] flex-col overflow-y-auto hide-scrollbar px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
         <section className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_320px_auto] sm:grid-rows-[auto_480px_auto] md:grid-cols-[64px_minmax(0,1fr)] md:grid-rows-[auto_520px_auto] lg:grid-rows-[auto_600px_auto] gap-4 content-start lg:gap-5">
           <header className="grid min-h-16 grid-cols-[64px_minmax(0,1fr)] items-center gap-4 md:col-span-2 lg:gap-5">
             <div className="flex h-12 w-12 items-center justify-center justify-self-center rounded-2xl text-[2rem] font-black tracking-[-0.12em] text-white">
@@ -935,12 +1124,18 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
 
             <div className="min-w-0">
               <div className="flex h-16 w-full items-center justify-between rounded-[22px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-shell)] px-3">
-                <div id="dashboard-tabs-portal" className="flex h-full min-w-0 flex-1 items-center overflow-x-auto hide-scrollbar mr-3" />
+                <div ref={dashboardTabsPortalRef} id="dashboard-tabs-portal" className="flex h-full min-w-0 flex-1 items-center overflow-x-auto hide-scrollbar mr-3" />
                 {activeUser ? (
                   <button
                     aria-label="Add document"
-                    className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] text-[color:var(--text-main)] transition-[background-color,border-color,color,transform,opacity] duration-200 hover:bg-[color:var(--surface-elevated)] active:scale-[0.985] has-lucide"
+                    className={cn(
+                      "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] text-[color:var(--text-main)] transition-[background-color,border-color,color,transform,opacity] duration-200 has-lucide",
+                      canUseHeaderUploadButton
+                        ? "cursor-pointer hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]"
+                        : "cursor-default opacity-40"
+                    )}
                     data-active={isUploadButtonActive ? "true" : "false"}
+                    disabled={!canUseHeaderUploadButton}
                     onClick={handlePlusClick}
                     type="button"
                   >
@@ -1222,13 +1417,20 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
                 type="file"
               />
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.015),transparent_22%)]" />
-              {renderDashboardFrameOverlay()}
-              <div className="relative flex w-full min-h-0 items-center justify-center p-3 sm:p-5">
+              {renderMainFrameOverlay()}
+              <div
+                ref={dashboardBackgroundRef}
+                data-panel-background="dashboard"
+                data-visible={isDashboardBackgroundVisible ? "true" : "false"}
+                className="panel-content-reveal relative flex w-full min-h-0 items-center justify-center p-3 sm:p-5"
+              >
                 <div className="h-full w-full max-w-none">
                   <div className="relative flex h-full min-h-0 flex-col justify-center">
                     {activeUser ? (
                       <div className={cn("absolute inset-0", isDashboardStage ? "z-10" : "z-0 pointer-events-none opacity-0 invisible")}>
                         <Dashboard
+                          emptyStateElement={activeUser.transactionCount === 0 && !activeUser.hasBinanceCredentials ? renderInlineUploadState() : undefined}
+                          hasBinanceCredentials={activeUser.hasBinanceCredentials}
                           isActive={stage === "dashboard"}
                           shouldLoad={activeUser.transactionCount > 0 || stage === "dashboard"}
                           key={`dashboard-${activeUser.id}`}
@@ -1307,7 +1509,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
             </div>
           </section>
           
-          <div id="dashboard-cards-portal" className="order-4 md:col-start-2 md:row-start-3" />
+          <div ref={dashboardCardsPortalRef} id="dashboard-cards-portal" className="order-4 md:col-start-2 md:row-start-3" />
         </section>
       </div>
       <DeleteAccountDialog

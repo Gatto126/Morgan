@@ -145,6 +145,19 @@ button.has-lucide:hover {
   color: #D9D9D9 !important;
 }
 
+button.has-lucide:disabled,
+button.has-lucide:disabled:hover {
+  border-color: #4C4C4C !important;
+  color: #4C4C4C !important;
+}
+
+button.has-lucide:disabled svg.lucide,
+button.has-lucide:disabled:hover svg.lucide,
+button:disabled svg.lucide,
+button:disabled:hover svg.lucide {
+  color: #4C4C4C !important;
+}
+
 button.icon-plain:has(svg.lucide),
 button.icon-plain.has-lucide {
   background: transparent !important;
@@ -207,22 +220,48 @@ button:active *,
   transform: none !important;
 }
 
-@keyframes uploadSlideDown {
+@keyframes panelOverlayEnter {
   from { transform: translateY(-18px); opacity: 0; }
   to   { transform: translateY(0);     opacity: 1; }
 }
 
-@keyframes uploadSlideUp {
-  from { transform: translateY(0);     opacity: 1; }
-  to   { transform: translateY(-18px); opacity: 0; }
+@keyframes panelOverlayExit {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 
+.panel-overlay-enter,
 .upload-panel-enter {
-  animation: uploadSlideDown 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: panelOverlayEnter 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.panel-overlay-exit,
 .upload-panel-exit {
-  animation: uploadSlideUp 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: panelOverlayExit 0.18s ease-out both;
+}
+
+.chart-content-reveal,
+.panel-content-reveal {
+  opacity: 0;
+  transform: translateY(14px) scale(0.996);
+  filter: blur(2px);
+  transition:
+    opacity 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.52s ease-out;
+  will-change: opacity, transform, filter;
+}
+
+.chart-content-reveal[data-visible="true"],
+.panel-content-reveal[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+
+.chart-content-reveal[data-visible="false"],
+.panel-content-reveal[data-visible="false"] {
+  pointer-events: none;
 }
 
 @keyframes submenuFadeIn {
@@ -260,6 +299,17 @@ button:active *,
 @media (prefers-reduced-motion: reduce) {
   .login-welcome-enter {
     animation: none;
+    will-change: auto;
+  }
+
+  .chart-content-reveal,
+  .chart-content-reveal[data-visible="true"],
+  .panel-content-reveal,
+  .panel-content-reveal[data-visible="true"] {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
     will-change: auto;
   }
 }

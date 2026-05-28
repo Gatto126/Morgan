@@ -162,21 +162,171 @@ async function cleanupSmokeData(username) {
   }
 }
 
-async function expectUploadVisible(page, label) {
+async function expectInlineUploadPromptVisible(page, label) {
+  const uploadPanelCount = await page.locator('[role="dialog"][data-modal-panel="upload"]').count();
+  assert(uploadPanelCount === 0, `${label}: expected inline upload prompt instead of modal upload panel.`);
+
   await page.getByRole("heading", { name: "Upload", exact: true }).waitFor({
     state: "visible",
     timeout: 5_000
   });
-  const addDocumentButton = page.getByRole("button", { name: "Add document", exact: true });
-  await expectButtonActive(addDocumentButton, true, label);
+
+  const addDocumentButton = page.locator('button[aria-label="Add document"]');
+  await expectButtonActive(addDocumentButton, false, label);
+  await expectButtonEnabled(addDocumentButton, false, label);
 }
 
 async function expectUploadHidden(page, label) {
-  const uploadHeadingCount = await page.getByRole("heading", { name: "Upload", exact: true }).count();
-  assert(uploadHeadingCount === 0, `${label}: expected Upload panel to be hidden.`);
+  const uploadPanelCount = await page.locator('[role="dialog"][data-modal-panel="upload"]').count();
+  assert(uploadPanelCount === 0, `${label}: expected Upload panel to be hidden.`);
 
-  const addDocumentButton = page.getByRole("button", { name: "Add document", exact: true });
+  const addDocumentButton = page.locator('button[aria-label="Add document"]');
   await expectButtonActive(addDocumentButton, false, label);
+  await expectButtonEnabled(addDocumentButton, false, label);
+}
+
+async function expectPanelCleared(page, label) {
+  await page.locator("[role='dialog'][data-modal-panel]").waitFor({
+    state: "detached",
+    timeout: 5_000
+  });
+
+  const panelCount = await page.locator("[role='dialog'][data-modal-panel]").count();
+  assert(panelCount === 0, `${label}: expected no modal panel, received ${panelCount}.`);
+
+  const state = await page.evaluate(() => {
+    const tabsPortal = document.querySelector("#dashboard-tabs-portal");
+    const cardsPortal = document.querySelector("#dashboard-cards-portal");
+    const welcomeBackground = document.querySelector("[data-panel-background='welcome']");
+
+    return {
+      cardsInert: cardsPortal?.hasAttribute("inert") ?? false,
+      tabsInert: tabsPortal?.hasAttribute("inert") ?? false,
+      welcomeBackgroundInert: welcomeBackground?.hasAttribute("inert") ?? false
+    };
+  });
+
+  assert(
+    !state.tabsInert && !state.cardsInert && !state.welcomeBackgroundInert,
+    `${label}: expected inert attributes to be cleared, received ${JSON.stringify(state)}.`
+  );
+}
+
+async function expectElementIsolated(page, selector, label) {
+  const state = await page.locator(selector).evaluate((element) => ({
+    ariaHidden: element.getAttribute("aria-hidden"),
+    inert: element.inert === true,
+    inertAttribute: element.hasAttribute("inert")
+  }));
+
+  assert(
+    state.ariaHidden === "true" && state.inert && state.inertAttribute,
+    `${label}: expected ${selector} to be aria-hidden and inert, received ${JSON.stringify(state)}.`
+  );
+}
+
+async function expectPanelIsolation(page, { background, label, panelType }) {
+  const panel = page.locator(`[role="dialog"][data-modal-panel="${panelType}"]`);
+  const panelCount = await panel.count();
+  assert(panelCount === 1, `${label}: expected exactly one active ${panelType} panel, received ${panelCount}.`);
+  await panel.waitFor({ state: "visible", timeout: 5_000 });
+
+  await expectElementIsolated(page, "#dashboard-tabs-portal", `${label} tabs portal`);
+  await expectElementIsolated(page, "#dashboard-cards-portal", `${label} cards portal`);
+  await expectElementIsolated(page, `[data-panel-background="${background}"]`, `${label} ${background} background`);
+}
+
+async function expectPanelEnterMotion(page, { label, panelType }) {
+  const motionElement = page.locator(
+    `[role="dialog"][data-modal-panel="${panelType}"] [data-panel-motion="enter"]`
+  );
+  const count = await motionElement.count();
+  assert(count === 1, `${label}: expected one ${panelType} enter motion element, received ${count}.`);
+
+  const className = await motionElement.getAttribute("class");
+  assert(
+    className?.includes("panel-overlay-enter"),
+    `${label}: expected ${panelType} to use the shared enter animation, received ${className}.`
+  );
+}
+
+async function expectPanelTabOrder(page, { background, label, panelType }) {
+  const panelSelector = `[role="dialog"][data-modal-panel="${panelType}"]`;
+  await page.locator(panelSelector).evaluate((element) => element.focus());
+
+  for (let index = 0; index < 10; index += 1) {
+    await page.keyboard.press("Tab");
+
+    const focusState = await page.evaluate(({ backgroundName }) => {
+      const activeElement = document.activeElement;
+      const appContent = document.querySelector("main > div");
+      const backgroundElement = document.querySelector(`[data-panel-background="${backgroundName}"]`);
+      const cardsPortal = document.querySelector("#dashboard-cards-portal");
+      const tabsPortal = document.querySelector("#dashboard-tabs-portal");
+
+      return {
+        activeLabel: activeElement?.getAttribute("aria-label") ?? null,
+        activeTag: activeElement?.tagName ?? null,
+        activeText: activeElement?.textContent?.trim().slice(0, 80) ?? null,
+        inAppContent: activeElement ? appContent?.contains(activeElement) === true : false,
+        inBackground: activeElement ? backgroundElement?.contains(activeElement) === true : false,
+        inCardsPortal: activeElement ? cardsPortal?.contains(activeElement) === true : false,
+        inTabsPortal: activeElement ? tabsPortal?.contains(activeElement) === true : false
+      };
+    }, { backgroundName: background });
+
+    assert(focusState.inAppContent, `${label}: focus escaped the app content: ${JSON.stringify(focusState)}.`);
+    assert(!focusState.inBackground, `${label}: focus entered the hidden background: ${JSON.stringify(focusState)}.`);
+    assert(!focusState.inCardsPortal, `${label}: focus entered the hidden cards portal: ${JSON.stringify(focusState)}.`);
+    assert(!focusState.inTabsPortal, `${label}: focus entered the hidden tabs portal: ${JSON.stringify(focusState)}.`);
+  }
+}
+
+async function expectPanelAccessibility(page, options) {
+  await expectPanelIsolation(page, options);
+  await expectPanelEnterMotion(page, options);
+  await expectPanelTabOrder(page, options);
+}
+
+async function expectOnlyActivePanel(page, { label, panelType }) {
+  const activePanels = await page.locator("[role='dialog'][data-modal-panel]").count();
+  const exitingPanels = await page.locator("[data-exiting-panel]").count();
+  const panel = page.locator(`[role="dialog"][data-modal-panel="${panelType}"]`);
+
+  assert(activePanels === 1, `${label}: expected one active panel, received ${activePanels}.`);
+  assert(exitingPanels === 0, `${label}: expected no exiting panel during direct switch, received ${exitingPanels}.`);
+  assert(await panel.count() === 1, `${label}: expected active ${panelType} panel.`);
+}
+
+async function expectActiveProfileClickDoesNothing(page, label) {
+  const profilePanel = page.locator('[role="dialog"][data-modal-panel="profile"]');
+  const activeProfile = profilePanel.locator('button[aria-current="true"]');
+  const activeText = await activeProfile.innerText();
+
+  await activeProfile.click({ force: true });
+  await page.waitForTimeout(350);
+  await expectOnlyActivePanel(page, { label, panelType: "profile" });
+
+  const currentActiveText = await profilePanel.locator('button[aria-current="true"]').innerText();
+  assert(
+    currentActiveText === activeText,
+    `${label}: expected active profile click to keep ${activeText}, received ${currentActiveText}.`
+  );
+}
+
+async function expectProfileSwitchUsesExitMotion(page, { fromName, label, toName }) {
+  const profilePanel = page.locator('[role="dialog"][data-modal-panel="profile"]');
+
+  await profilePanel.getByRole("button", { name: toName, exact: true }).click();
+  await profilePanel.locator('[data-panel-motion="exit"]').waitFor({ state: "visible", timeout: 1_000 });
+
+  const activeTextDuringExit = await profilePanel.locator('button[aria-current="true"]').innerText();
+  assert(
+    activeTextDuringExit.includes(fromName),
+    `${label}: expected ${fromName} to remain active during exit motion, received ${activeTextDuringExit}.`
+  );
+
+  await profilePanel.waitFor({ state: "detached", timeout: 5_000 });
 }
 
 async function expectButtonActive(locator, expected, label) {
@@ -184,6 +334,14 @@ async function expectButtonActive(locator, expected, label) {
   assert(
     value === String(expected),
     `${label}: expected Add document data-active=${expected}, received ${value}.`
+  );
+}
+
+async function expectButtonEnabled(locator, expected, label) {
+  const value = await locator.isEnabled();
+  assert(
+    value === expected,
+    `${label}: expected Add document enabled=${expected}, received ${value}.`
   );
 }
 
@@ -246,7 +404,7 @@ async function runSmoke() {
     });
     await page.getByRole("button", { name: "Create profile", exact: true }).click();
 
-    await expectUploadVisible(page, "initial empty profile");
+    await expectInlineUploadPromptVisible(page, "initial empty profile");
 
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("heading", { name: "General Settings", exact: true }).waitFor({
@@ -254,9 +412,14 @@ async function runSmoke() {
       timeout: 5_000
     });
     await expectUploadHidden(page, "settings overlay");
+    await expectPanelAccessibility(page, {
+      background: "dashboard",
+      label: "settings overlay",
+      panelType: "settings"
+    });
 
     await page.getByRole("button", { name: "Dashboard", exact: true }).click();
-    await expectUploadVisible(page, "dashboard after settings");
+    await expectInlineUploadPromptVisible(page, "dashboard after settings");
 
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("heading", { name: "General Settings", exact: true }).waitFor({
@@ -264,17 +427,53 @@ async function runSmoke() {
       timeout: 5_000
     });
     await page.getByRole("button", { name: "Home", exact: true }).click();
-    await expectUploadVisible(page, "home after settings");
+    await expectUploadHidden(page, "home after settings");
+    await expectPanelCleared(page, "home after settings");
 
     await page.getByRole("button", { name: "Select profile", exact: true }).click();
-    await page.getByText("Manage profiles", { exact: true }).waitFor({
+    await page.locator('[role="dialog"][data-modal-panel="profile"]').waitFor({
       state: "visible",
       timeout: 5_000
     });
     await expectUploadHidden(page, "profile overlay");
+    await expectPanelAccessibility(page, {
+      background: "welcome",
+      label: "profile overlay",
+      panelType: "profile"
+    });
+    await expectActiveProfileClickDoesNothing(page, "active profile click");
+
+    const secondProfileName = `${username}-alt`;
+    const profilePanel = page.locator('[role="dialog"][data-modal-panel="profile"]');
+    await profilePanel.getByRole("button", { name: "New Profile" }).click();
+    await profilePanel.getByPlaceholder("Profile", { exact: true }).fill(secondProfileName);
+    await profilePanel.getByRole("button", { name: "Create profile", exact: true }).click();
+    await expectInlineUploadPromptVisible(page, "second empty profile");
+
+    await page.getByRole("button", { name: "Select profile", exact: true }).click();
+    await profilePanel.waitFor({ state: "visible", timeout: 5_000 });
+    await expectActiveProfileClickDoesNothing(page, "new active profile click");
+    await expectProfileSwitchUsesExitMotion(page, {
+      fromName: secondProfileName,
+      label: "profile switch animation",
+      toName: username
+    });
+    await expectInlineUploadPromptVisible(page, "after animated profile switch");
+
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Select profile", exact: true }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Select profile", exact: true }).click();
+    await expectOnlyActivePanel(page, {
+      label: "rapid profile/settings switch",
+      panelType: "profile"
+    });
+
+    await expectUploadHidden(page, "header upload disabled without transactions");
 
     await page.getByRole("button", { name: "Home", exact: true }).click();
-    await expectUploadVisible(page, "home after profile panel");
+    await expectUploadHidden(page, "home after profile panel");
+    await expectPanelCleared(page, "home after profile panel");
 
     console.log(JSON.stringify({ ok: true, username, baseUrl }, null, 2));
   } catch (error) {

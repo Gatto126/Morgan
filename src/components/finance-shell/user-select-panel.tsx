@@ -29,6 +29,46 @@ type UserSelectPanelProps<TUser extends ProfileOption> = {
   onSignOut: () => void;
 };
 
+type ProfileNavButtonProps = {
+  eyebrow: string;
+  isActive?: boolean;
+  label: string;
+  onClick: () => void;
+};
+
+function ProfileNavButton({
+  eyebrow,
+  isActive = false,
+  label,
+  onClick,
+}: ProfileNavButtonProps) {
+  return (
+    <button
+      aria-pressed={isActive}
+      className="group block w-full cursor-pointer select-none space-y-1 bg-transparent p-0 text-left"
+      onClick={onClick}
+      type="button"
+    >
+      <span
+        className={cn(
+          "block text-2xl font-bold tracking-[-0.06em] transition-colors duration-200 md:text-3xl sm:text-[2.2rem]",
+          isActive ? "text-white" : "text-[color:var(--text-dim)] group-hover:text-white"
+        )}
+      >
+        {label}
+      </span>
+      <span
+        className={cn(
+          "block text-[10px] font-bold uppercase tracking-[0.18em] transition-colors duration-200",
+          isActive ? "text-[color:var(--text-dim)]" : "text-[color:var(--text-dim)]/50 group-hover:text-[color:var(--text-dim)]"
+        )}
+      >
+        {eyebrow}
+      </span>
+    </button>
+  );
+}
+
 export function UserSelectPanel<TUser extends ProfileOption>({
   users,
   activeUserId,
@@ -45,130 +85,159 @@ export function UserSelectPanel<TUser extends ProfileOption>({
   onCreateUser,
   onSignOut
 }: UserSelectPanelProps<TUser>) {
+  const openCreateSection = () => {
+    if (!isCreateOpen) {
+      onToggleCreate();
+    }
+  };
+
   return (
-    <div className="mx-auto flex w-full max-w-[850px] items-stretch text-left justify-start md:h-[380px] h-full">
-      <div className={cn("w-full md:w-[380px] shrink-0 flex flex-col justify-between py-1 md:py-2 h-full", isCreateOpen && "hidden md:flex")}>
-        <div className="space-y-4 md:space-y-8 flex flex-col justify-between h-full">
+    <div className="mx-auto flex h-full w-full max-w-[850px] items-stretch justify-start text-left md:h-[380px]">
+      <div className="hidden h-full w-[380px] shrink-0 flex-col justify-between py-2 md:flex">
+        <div className="space-y-8">
           <div className="space-y-4 md:space-y-6">
-            <div className="space-y-1 select-none">
-              <div className="text-2xl md:text-3xl font-bold tracking-[-0.06em] text-white sm:text-[2.2rem]">
-                Select profile
-              </div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]/50">
-                Manage profiles
-              </div>
-            </div>
+            <ProfileNavButton
+              eyebrow="Manage profiles"
+              isActive={!isCreateOpen}
+              label="Select profile"
+              onClick={onCloseCreate}
+            />
 
-            <div className="flex flex-col gap-2 md:gap-3 overflow-y-auto max-h-[120px] md:max-h-[220px] pr-2 hide-scrollbar">
-              {users.map((user) => {
-                const isCurrentProfile = activeUserId === user.id;
-
-                return (
-                  <button
-                    key={user.id}
-                    className={cn(
-                      "w-full text-left px-4 py-2.5 md:py-3 rounded-[12px] border bg-[color:var(--surface-panel)] text-white hover:bg-[color:var(--surface-elevated)] transition-all font-semibold select-none cursor-pointer text-sm md:text-base flex items-center justify-between gap-3",
-                      isCurrentProfile
-                        ? "border-white bg-[color:var(--surface-elevated)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]"
-                        : "border-[color:var(--line-strong)]"
-                    )}
-                    onClick={() => onSelectUser(user)}
-                  >
-                    <span className="min-w-0 truncate">{user.name}</span>
-                    {isCurrentProfile ? (
-                      <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-dim)]">
-                        Active
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="space-y-5 pt-2">
-            <button
-              aria-pressed={isCreateOpen}
-              className="group block w-full cursor-pointer select-none space-y-1 bg-transparent p-0 text-left"
-              onClick={onToggleCreate}
-              type="button"
-            >
-              <span
-                className={cn(
-                  "block text-2xl font-bold tracking-[-0.06em] transition-colors duration-200 md:text-3xl sm:text-[2.2rem]",
-                  isCreateOpen ? "text-white" : "text-[color:var(--text-dim)] group-hover:text-white"
-                )}
-              >
-                New Profile
-              </span>
-              <span
-                className={cn(
-                  "block text-[10px] font-bold uppercase tracking-[0.18em] transition-colors duration-200",
-                  isCreateOpen ? "text-[color:var(--text-dim)]" : "text-[color:var(--text-dim)]/50 group-hover:text-[color:var(--text-dim)]"
-                )}
-              >
-                Create new profile
-              </span>
-            </button>
-
-            <button type="button" onClick={onSignOut} className="group block cursor-pointer select-none space-y-1 text-left">
-              <div className="text-xl md:text-2xl font-bold tracking-[-0.06em] text-[color:var(--text-dim)] transition-colors duration-200 group-hover:text-white">
-                Log out
-              </div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]/50 transition-colors duration-200 group-hover:text-[color:var(--text-dim)]">
-                Back to landing
-              </div>
-            </button>
+            <ProfileNavButton
+              eyebrow="Create new profile"
+              isActive={isCreateOpen}
+              label="New Profile"
+              onClick={openCreateSection}
+            />
           </div>
         </div>
+
+        <button type="button" onClick={onSignOut} className="group block cursor-pointer select-none space-y-1 bg-transparent p-0 text-left">
+          <div className="text-2xl font-bold tracking-[-0.06em] text-[color:var(--text-dim)] transition-colors duration-200 group-hover:text-white md:text-3xl sm:text-[2.2rem]">
+            Log out
+          </div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]/50 transition-colors duration-200 group-hover:text-[color:var(--text-dim)]">
+            Back to landing
+          </div>
+        </button>
       </div>
 
-      <div
-        className={cn(
-          "flex flex-row items-stretch transition-all duration-300 ease-in-out overflow-hidden h-full w-full md:w-auto",
-          isCreateOpen ? "w-full md:w-[470px] opacity-100 translate-x-0" : "w-0 opacity-0 -translate-x-4 pointer-events-none"
-        )}
-      >
-        {isCreateOpen ? (
-          <>
-            <div className="hidden md:block w-[2px] bg-[color:var(--line-strong)] opacity-30 self-stretch shrink-0 mx-8" />
+      <div className="flex h-full w-full flex-row items-stretch overflow-hidden md:w-[470px]">
+        <div className="hidden w-[2px] shrink-0 self-stretch bg-[color:var(--line-strong)] opacity-30 md:mx-8 md:block" />
 
-            <div className="w-full md:w-[398px] shrink-0 flex flex-col justify-between md:justify-end h-full py-1 md:py-2">
-              <div key="open" className="flex-1 flex flex-col justify-between md:justify-end h-full pb-2 animate-submenu-in">
+        <div className="flex h-full w-full shrink-0 flex-col overflow-y-auto py-3 pr-2 hide-scrollbar md:w-[398px] md:py-4">
+          <div key={isCreateOpen ? "new-profile" : "profiles"} className="flex h-full flex-1 flex-col animate-submenu-in">
+            {!isCreateOpen ? (
+              <div className="flex h-full flex-1 flex-col justify-between gap-5">
+                <div className="space-y-4 md:space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold uppercase tracking-[-0.06em] text-white md:text-2xl">Select profile</h2>
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
+                      Manage profiles
+                    </div>
+                  </div>
+
+                  <div className="flex max-h-[230px] flex-col gap-2 overflow-y-auto pr-1 hide-scrollbar md:max-h-[270px] md:gap-3">
+                    {users.map((user) => {
+                      const isCurrentProfile = activeUserId === user.id;
+
+                      return (
+                        <button
+                          key={user.id}
+                          aria-disabled={isCurrentProfile ? "true" : undefined}
+                          aria-current={isCurrentProfile ? "true" : undefined}
+                          className={cn(
+                            "flex w-full select-none items-center justify-between gap-3 rounded-[16px] border bg-[color:var(--surface-panel)] px-4 py-3 text-left text-sm font-semibold text-white transition-colors md:text-base",
+                            isCurrentProfile
+                              ? "cursor-default border-white bg-[color:var(--surface-elevated)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]"
+                              : "cursor-pointer border-[color:var(--line-strong)] hover:bg-[color:var(--surface-elevated)]"
+                          )}
+                          onClick={() => {
+                            if (!isCurrentProfile) {
+                              onSelectUser(user);
+                            }
+                          }}
+                          type="button"
+                        >
+                          <span className="min-w-0 truncate">{user.name}</span>
+                          {isCurrentProfile ? (
+                            <span className="flex shrink-0 items-center justify-center" title="Active profile">
+                              <span
+                                aria-hidden="true"
+                                className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.55)]"
+                              />
+                              <span className="sr-only">Active profile</span>
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 flex-col gap-3 md:hidden">
+                  <button
+                    className="group block w-full cursor-pointer select-none space-y-1 bg-transparent p-0 text-left"
+                    onClick={openCreateSection}
+                    type="button"
+                  >
+                    <span className="block text-2xl font-bold tracking-[-0.06em] text-[color:var(--text-dim)] transition-colors duration-200 group-hover:text-white">
+                      New Profile
+                    </span>
+                    <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]/50 transition-colors duration-200 group-hover:text-[color:var(--text-dim)]">
+                      Create new profile
+                    </span>
+                  </button>
+
+                  <button type="button" onClick={onSignOut} className="group block cursor-pointer select-none space-y-1 bg-transparent p-0 text-left">
+                    <span className="block text-2xl font-bold tracking-[-0.06em] text-[color:var(--text-dim)] transition-colors duration-200 group-hover:text-white">
+                      Log out
+                    </span>
+                    <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]/50 transition-colors duration-200 group-hover:text-[color:var(--text-dim)]">
+                      Back to landing
+                    </span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-full flex-1 flex-col justify-between pb-1 md:pb-2">
                 <button
                   type="button"
                   onClick={onCloseCreate}
-                  className="md:hidden flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-[color:var(--text-dim)] hover:text-white mb-4 self-start cursor-pointer"
+                  className="mb-4 flex cursor-pointer items-center gap-1 self-start text-xs font-bold uppercase tracking-wider text-[color:var(--text-dim)] hover:text-white md:hidden"
                 >
                   &lt; Back to profiles
                 </button>
 
                 <div className="space-y-4 md:space-y-6">
-                  <div className="space-y-1">
-                    <h2 className="text-2xl md:text-3xl font-bold tracking-[-0.06em] text-white uppercase">New Profile</h2>
-                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
+                  <div>
+                    <h2 className="text-xl font-bold uppercase tracking-[-0.06em] text-white md:text-2xl">New Profile</h2>
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
                       Profile name
                     </div>
                   </div>
-                  <div className="space-y-3 pt-1 md:pt-2">
-                    <Input
-                      ref={createInputRef}
-                      value={profileName}
-                      onChange={(event) => onProfileNameChange(event.target.value)}
-                      className="h-11 w-full border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-lg text-white focus:border-white focus:ring-0 sm:h-12 sm:text-xl"
-                      placeholder="Profile"
-                      maxLength={24}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          onCreateUser();
-                        }
-                      }}
-                    />
-                    <div className="flex min-h-11 justify-center">
+
+                  <div className="flex items-center gap-2 pt-1 md:pt-2">
+                    <div className="min-w-0 flex-1">
+                      <Input
+                        ref={createInputRef}
+                        value={profileName}
+                        onChange={(event) => onProfileNameChange(event.target.value)}
+                        className="h-11 w-full rounded-[16px] border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-lg text-white focus:border-white focus:ring-0 sm:h-12 sm:text-xl"
+                        placeholder="Profile"
+                        maxLength={24}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            onCreateUser();
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center sm:h-12 sm:w-12">
                       <button
                         type="button"
                         aria-label="Create profile"
-                        className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-[16px] border border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--text-dim)] transition-[background-color,border-color,color,transform,opacity] hover:border-white hover:bg-[color:var(--surface-elevated)] hover:text-white active:scale-[0.985] disabled:pointer-events-none disabled:opacity-40 sm:h-12 sm:w-12"
+                        className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-[16px] border border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--text-dim)] transition-[background-color,border-color,color,transform,opacity] hover:border-white hover:bg-[color:var(--surface-elevated)] hover:text-white active:scale-[0.985] disabled:pointer-events-none disabled:opacity-40 sm:h-12 sm:w-12 has-lucide"
                         disabled={saving || !profileName.trim()}
                         onClick={onCreateUser}
                       >
@@ -176,13 +245,13 @@ export function UserSelectPanel<TUser extends ProfileOption>({
                       </button>
                     </div>
                   </div>
-                  {error ? <p className="text-xs text-[color:var(--danger)] mt-1 font-semibold">{error}</p> : null}
-                  {notice ? <p className="text-xs text-emerald-400 mt-1 font-semibold">{notice}</p> : null}
+                  {error ? <p className="mt-1 text-xs font-semibold text-[color:var(--danger)]">{error}</p> : null}
+                  {notice ? <p className="mt-1 text-xs font-semibold text-emerald-400">{notice}</p> : null}
                 </div>
               </div>
-            </div>
-          </>
-        ) : null}
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
