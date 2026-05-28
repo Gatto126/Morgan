@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  DATABASE_URL: postgresql://morgan:morgan@localhost:5432/morgan?schema=public
+  DIRECT_URL: postgresql://morgan:morgan@localhost:5432/morgan?schema=public
+  SQLITE_DATABASE_URL: file:./prisma/sqlite/ci.db
+  MORGAN_DATABASE_PROVIDER: postgresql
+  MORGAN_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+  BETTER_AUTH_SECRET: ci-placeholder-secret-2026-05-28
+  BETTER_AUTH_URL: http://localhost:3000
+  BETTER_AUTH_TRUSTED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+  BETTER_AUTH_IP_HEADERS: x-forwarded-for
+  MORGAN_LOG_LEVEL: silent
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Prisma schemas
+        run: |
+          pnpm exec prisma validate --schema=prisma/schema.prisma
+          pnpm exec prisma validate --schema=prisma/sqlite/schema.prisma
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck app
+        run: pnpm run typecheck
+
+      - name: Typecheck tests
+        run: pnpm run typecheck:test
+
+      - name: Unit tests
+        run: pnpm run test:run
+
+      - name: Script tests
+        run: pnpm run test:scripts
+
+      - name: Build
+        run: pnpm run build
+

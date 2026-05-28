@@ -190,6 +190,7 @@ boundaries are:
 - `src/server/repositories/` for persistence access used by business services;
 - `scripts/e2e/` for browser flows;
 - `scripts/testing/` for local test maintenance;
+- `.github/workflows/` for repository CI checks;
 - `docs/audits/` for durable audit reports;
 - `docs/desktop/` for desktop/offline concepts and mockups that should not yet
   introduce desktop runtime code;
