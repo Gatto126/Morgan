@@ -9,6 +9,7 @@ import { ChartReferenceLabel } from "./chart-primitives/chart-reference-label";
 import { ChartTimeRangeControls } from "./chart-primitives/chart-time-range-controls";
 import { SelectableChartDot } from "./chart-primitives/selectable-chart-dot";
 import { BinanceChartTooltip } from "./binance-dashboard/binance-chart-tooltip";
+import { DashboardTopbarTab } from "./finance-shell/dashboard-topbar-tab";
 import {
   BINANCE_CHART_LEGEND_ITEMS,
   BINANCE_TIME_RANGES,
@@ -187,14 +188,12 @@ export function BinanceDashboard({
       {tabsPortalNode &&
         createPortal(
           <div className={cn("flex items-center gap-2 sm:gap-3", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
-            <button
-              type="button"
-              className="flex h-12 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[16px] border-2 px-4 sm:px-5 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors border-white bg-[color:var(--surface-panel)] text-white"
-            >
-              <Bitcoin className="h-5 w-5 flex-shrink-0" strokeWidth={2.2} />
-              <span>BINANCE</span>
-              <span className="font-bold">{formatBinanceEuro(totalEur)}</span>
-            </button>
+            <DashboardTopbarTab
+              active
+              icon={Bitcoin}
+              label="BINANCE"
+              value={formatBinanceEuro(totalEur)}
+            />
           </div>,
           tabsPortalNode
         )}
