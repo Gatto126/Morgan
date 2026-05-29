@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ACCOUNT_TABS, GRAYSCALE_PALETTE } from "./constants";
-import type { DashboardChartConfig, DashboardChartPoint } from "./dashboard-chart";
+import type { DashboardChartConfig, DashboardChartPoint } from "./dashboard-chart-types";
 import { filterData, formatProviderLabel } from "./formatters";
 import type { AccountTab, BinanceBalanceRow, DashboardData, MonthlyBucket, TimeRange } from "./types";
 
