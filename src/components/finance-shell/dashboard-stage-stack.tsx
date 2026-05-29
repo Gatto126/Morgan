@@ -1,15 +1,34 @@
+import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 
-import { BinanceDashboard } from "../binance-dashboard";
-import { CheckingDashboard } from "../checking-dashboard";
-import { CryptoDashboard } from "../crypto-dashboard";
-import { Dashboard } from "../dashboard";
-import { InvestmentDashboard } from "../investment-dashboard";
-import { getVisibleDashboardStageKeys } from "./dashboard-stage-items";
+import { getVisibleDashboardStageKeys, type DashboardStageKey } from "./dashboard-stage-items";
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
 
-import { cn } from "@/shared/utils";
+const Dashboard = dynamic(
+  () => import("../dashboard").then((mod) => mod.Dashboard),
+  { loading: DashboardStageLoading, ssr: false }
+);
+
+const CheckingDashboard = dynamic(
+  () => import("../checking-dashboard").then((mod) => mod.CheckingDashboard),
+  { loading: DashboardStageLoading, ssr: false }
+);
+
+const InvestmentDashboard = dynamic(
+  () => import("../investment-dashboard").then((mod) => mod.InvestmentDashboard),
+  { loading: DashboardStageLoading, ssr: false }
+);
+
+const CryptoDashboard = dynamic(
+  () => import("../crypto-dashboard").then((mod) => mod.CryptoDashboard),
+  { loading: DashboardStageLoading, ssr: false }
+);
+
+const BinanceDashboard = dynamic(
+  () => import("../binance-dashboard").then((mod) => mod.BinanceDashboard),
+  { loading: DashboardStageLoading, ssr: false }
+);
 
 type DashboardStageStackProps = {
   activeUser: UserRecord | null;
@@ -20,6 +39,20 @@ type DashboardStageStackProps = {
   stage: Stage;
 };
 
+function DashboardStageLoading() {
+  return (
+    <div className="absolute inset-0 flex h-full w-full items-center justify-center">
+      <div className="import-spinner" />
+    </div>
+  );
+}
+
+function resolveActiveDashboardStage(stage: Stage, visibleStageKeys: Set<DashboardStageKey>): DashboardStageKey {
+  const candidateStage = stage as DashboardStageKey;
+
+  return visibleStageKeys.has(candidateStage) ? candidateStage : "dashboard";
+}
+
 export function DashboardStageStack({
   activeUser,
   binanceRefreshKey,
@@ -28,31 +61,34 @@ export function DashboardStageStack({
   renderInlineUploadState,
   stage
 }: DashboardStageStackProps) {
-  if (!activeUser) {
+  if (!activeUser || !isDashboardStage) {
     return null;
   }
 
   const visibleStageKeys = new Set(getVisibleDashboardStageKeys(activeUser));
+  const activeDashboardStage = resolveActiveDashboardStage(stage, visibleStageKeys);
 
   return (
-    <div className={cn("absolute inset-0", isDashboardStage ? "z-10" : "z-0 pointer-events-none opacity-0 invisible")}>
-      <Dashboard
-        emptyStateElement={activeUser.transactionCount === 0 && !activeUser.hasBinanceCredentials ? renderInlineUploadState() : undefined}
-        hasBinanceCredentials={activeUser.hasBinanceCredentials}
-        isActive={stage === "dashboard"}
-        shouldLoad={activeUser.transactionCount > 0 || stage === "dashboard"}
-        key={`dashboard-${activeUser.id}`}
-        userId={activeUser.id}
-        binanceRefreshKey={binanceRefreshKey}
-        onImportRefreshComplete={stage === "dashboard" ? onImportRefreshComplete : undefined}
-        checkingCount={activeUser.checkingCount}
-        investmentCount={activeUser.investmentCount}
-        cryptoCount={activeUser.cryptoCount}
-        transactionCount={activeUser.transactionCount}
-      />
-      {visibleStageKeys.has("checking") ? (
+    <div className="absolute inset-0 z-10">
+      {activeDashboardStage === "dashboard" ? (
+        <Dashboard
+          emptyStateElement={activeUser.transactionCount === 0 && !activeUser.hasBinanceCredentials ? renderInlineUploadState() : undefined}
+          hasBinanceCredentials={activeUser.hasBinanceCredentials}
+          isActive
+          shouldLoad
+          key={`dashboard-${activeUser.id}`}
+          userId={activeUser.id}
+          binanceRefreshKey={binanceRefreshKey}
+          onImportRefreshComplete={stage === "dashboard" ? onImportRefreshComplete : undefined}
+          checkingCount={activeUser.checkingCount}
+          investmentCount={activeUser.investmentCount}
+          cryptoCount={activeUser.cryptoCount}
+          transactionCount={activeUser.transactionCount}
+        />
+      ) : null}
+      {activeDashboardStage === "checking" ? (
         <CheckingDashboard
-          isActive={stage === "checking"}
+          isActive
           shouldLoad
           key={`checking-${activeUser.id}`}
           userId={activeUser.id}
@@ -60,9 +96,9 @@ export function DashboardStageStack({
           transactionCount={activeUser.transactionCount}
         />
       ) : null}
-      {visibleStageKeys.has("investment") ? (
+      {activeDashboardStage === "investment" ? (
         <InvestmentDashboard
-          isActive={stage === "investment"}
+          isActive
           shouldLoad
           key={`investment-${activeUser.id}`}
           userId={activeUser.id}
@@ -70,9 +106,9 @@ export function DashboardStageStack({
           transactionCount={activeUser.transactionCount}
         />
       ) : null}
-      {visibleStageKeys.has("crypto") ? (
+      {activeDashboardStage === "crypto" ? (
         <CryptoDashboard
-          isActive={stage === "crypto"}
+          isActive
           shouldLoad
           key={`crypto-${activeUser.id}`}
           userId={activeUser.id}
@@ -80,9 +116,9 @@ export function DashboardStageStack({
           transactionCount={activeUser.transactionCount}
         />
       ) : null}
-      {visibleStageKeys.has("binance") ? (
+      {activeDashboardStage === "binance" ? (
         <BinanceDashboard
-          isActive={stage === "binance"}
+          isActive
           shouldLoad
           key={`binance-${activeUser.id}`}
           userId={activeUser.id}
