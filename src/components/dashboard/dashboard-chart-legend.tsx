@@ -23,6 +23,7 @@ export function DashboardChartLegend({
 
   return (
     <div
+      data-testid="dashboard-chart-legend"
       className="flex items-center justify-center gap-3 sm:gap-4 flex-wrap w-full pt-2 pb-0"
       style={{ visibility: transactionCount > 0 ? "visible" : "hidden" }}
     >

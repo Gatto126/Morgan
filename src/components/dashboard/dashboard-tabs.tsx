@@ -59,6 +59,7 @@ export function DashboardTabs({
           <button
             key={tab.key}
             type="button"
+            aria-label={`${tab.label} dashboard tab`}
             onClick={() => onActiveTabChange(tab.key)}
             data-active={tabIsActive ? "true" : "false"}
             className={`flex h-12 w-[165px] flex-shrink-0 cursor-pointer items-center justify-between rounded-[16px] border-2 px-3 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors hover:bg-[color:var(--surface-elevated)] has-lucide ${

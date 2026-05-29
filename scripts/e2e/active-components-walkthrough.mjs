@@ -441,6 +441,193 @@ async function waitForAny(locator, label, timeoutMs = 30_000) {
   throw new Error(`${label}: expected at least one matching element, found ${count}`);
 }
 
+async function clickIfVisible(locator) {
+  if (await locator.count() === 0) return false;
+  if (!(await locator.first().isVisible())) return false;
+  await locator.first().click();
+  return true;
+}
+
+async function expectTopbarTabActive(page, tabLabel) {
+  const tab = page.getByRole("button", { name: `${tabLabel} dashboard tab`, exact: true });
+  await tab.waitFor({ state: "visible", timeout: 10_000 });
+  const active = await tab.getAttribute("data-active", { timeout: 10_000 });
+  assert(active === "true", `Expected ${tabLabel} dashboard tab to be active, got ${active}`);
+}
+
+async function clickTopbarTab(page, tabLabel) {
+  await page.getByRole("button", { name: `${tabLabel} dashboard tab`, exact: true }).click();
+  await expectTopbarTabActive(page, tabLabel);
+}
+
+async function clickChartTimeRange(page, range) {
+  await page.getByTestId("dashboard-chart-controls").getByRole("button", { name: range, exact: true }).click();
+  await page.getByTestId("dashboard-chart").locator(".recharts-wrapper").first().waitFor({ state: "visible", timeout: 10_000 });
+}
+
+async function expectChartTooltip(page, label) {
+  const chart = page.locator(".recharts-wrapper:visible").first();
+  await chart.waitFor({ state: "visible", timeout: 15_000 });
+  const box = await chart.boundingBox();
+  assert(box, `${label}: chart bounding box not available`);
+
+  const hoverPoints = [
+    { x: box.x + box.width * 0.76, y: box.y + box.height * 0.36 },
+    { x: box.x + box.width * 0.62, y: box.y + box.height * 0.42 },
+    { x: box.x + box.width * 0.48, y: box.y + box.height * 0.50 },
+    { x: box.x + box.width * 0.34, y: box.y + box.height * 0.56 }
+  ];
+
+  for (const point of hoverPoints) {
+    await page.mouse.move(point.x, point.y);
+    await page.waitForTimeout(250);
+    const tooltipState = await page.evaluate(() => {
+      const wrapper = Array.from(document.querySelectorAll(".recharts-tooltip-wrapper")).find((node) =>
+        getComputedStyle(node).visibility !== "hidden" && node.textContent?.trim()
+      );
+      return {
+        visible: Boolean(wrapper && getComputedStyle(wrapper).visibility !== "hidden" && wrapper.textContent?.trim()),
+        text: wrapper?.textContent?.trim() ?? ""
+      };
+    });
+
+    if (tooltipState.visible) {
+      assert(/€|EUR|TOTAL|CHECKING|INVESTMENT|CRYPTO|BINANCE|TRADE|BBVA/i.test(tooltipState.text), `${label}: tooltip text did not include financial values: ${tooltipState.text}`);
+      return tooltipState.text;
+    }
+  }
+
+  throw new Error(`${label}: chart tooltip did not appear after hover attempts.`);
+}
+
+async function clickChartDataPoint(page, label) {
+  const chart = page.getByTestId("dashboard-chart").locator(".recharts-wrapper").first();
+  await chart.waitFor({ state: "visible", timeout: 15_000 });
+  const box = await chart.boundingBox();
+  assert(box, `${label}: chart bounding box not available`);
+
+  const hoverPoints = [
+    { x: box.x + box.width * 0.76, y: box.y + box.height * 0.36 },
+    { x: box.x + box.width * 0.62, y: box.y + box.height * 0.42 },
+    { x: box.x + box.width * 0.48, y: box.y + box.height * 0.50 },
+    { x: box.x + box.width * 0.34, y: box.y + box.height * 0.56 }
+  ];
+
+  let activeDot = null;
+  for (const point of hoverPoints) {
+    await page.mouse.move(point.x, point.y);
+    await page.waitForTimeout(250);
+    activeDot = await page.evaluate(() => {
+      const chartNode = document.querySelector("[data-testid='dashboard-chart'] .recharts-wrapper");
+      if (!chartNode) return null;
+      const candidates = Array.from(chartNode.querySelectorAll("circle"))
+        .map((circle) => {
+          const rect = circle.getBoundingClientRect();
+          const radius = Number(circle.getAttribute("r") ?? "0");
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, radius };
+        })
+        .filter((circle) => Number.isFinite(circle.x) && Number.isFinite(circle.y) && circle.radius >= 5);
+      return candidates.at(-1) ?? null;
+    });
+    if (activeDot) break;
+  }
+
+  assert(activeDot, `${label}: active chart dot not found after hover.`);
+  await page.mouse.click(activeDot.x, activeDot.y);
+  await page.waitForTimeout(300);
+
+  const hasReferenceLine = await page.evaluate(() => {
+    const overlay = document.getElementById("chart-reference-overlay");
+    const overlayText = overlay?.textContent?.trim() ?? "";
+    const dashedReference = Array.from(document.querySelectorAll("path,line")).some((node) => {
+      const strokeDasharray = node.getAttribute("stroke-dasharray") ?? "";
+      return strokeDasharray.includes("6 4");
+    });
+    return Boolean(overlayText || dashedReference);
+  });
+
+  assert(hasReferenceLine, `${label}: expected chart point click to create a reference line or value label.`);
+}
+
+async function exerciseChartLegend(page, labels, label, minimumExpected = labels.length) {
+  let exercisedCount = 0;
+
+  for (const legendLabel of labels) {
+    const legendButton = page.getByTestId("dashboard-chart-legend").getByRole("button", { name: legendLabel, exact: true });
+    if (await legendButton.count() === 0 || !(await legendButton.first().isVisible())) {
+      continue;
+    }
+
+    const visibleLegendButton = legendButton.first();
+    await visibleLegendButton.click();
+    await page.waitForTimeout(150);
+    const className = await visibleLegendButton.locator("span").first().getAttribute("class", { timeout: 10_000 });
+    assert(className?.includes("line-through"), `${label}: expected ${legendLabel} legend item to be hidden after first click.`);
+    await visibleLegendButton.click();
+    await page.waitForTimeout(150);
+    const restoredClassName = await visibleLegendButton.locator("span").first().getAttribute("class", { timeout: 10_000 });
+    assert(!restoredClassName?.includes("line-through"), `${label}: expected ${legendLabel} legend item to be restored after second click.`);
+    exercisedCount += 1;
+  }
+
+  assert(exercisedCount >= minimumExpected, `${label}: expected to exercise at least ${minimumExpected} legend items, exercised ${exercisedCount}.`);
+}
+
+async function exerciseDashboardChartInteractions(page) {
+  await clickTopbarTab(page, "HERITAGE");
+  await exerciseDashboardBinanceCardControls(page);
+  await expectChartTooltip(page, "heritage chart hover");
+  await clickChartDataPoint(page, "heritage chart point click");
+  await exerciseChartLegend(page, ["CHECKING", "INVESTMENT", "CRYPTO"], "heritage chart legend");
+  for (const range of ["1Y", "6M", "3M", "1M", "1W", "ALL"]) {
+    await clickChartTimeRange(page, range);
+  }
+  await saveScreenshot(page, "chart-interactions-heritage.png");
+
+  await clickTopbarTab(page, "CHECKING");
+  await expectChartTooltip(page, "checking chart hover");
+  await exerciseChartLegend(page, ["BBVA", "TRADE REPUBLIC"], "checking chart legend", 1);
+
+  await clickTopbarTab(page, "INVESTMENT");
+  await expectChartTooltip(page, "investment chart hover");
+  await exerciseChartLegend(page, ["Core MSCI World", "Apple Inc"], "investment chart legend", 1);
+  await page.getByTestId("dashboard-chart-controls").getByRole("button", { name: "Toggle sold assets", exact: true }).click();
+  await page.waitForTimeout(200);
+  await page.getByTestId("dashboard-chart-controls").getByRole("button", { name: "Toggle sold assets", exact: true }).click();
+  await page.waitForTimeout(200);
+
+  await clickTopbarTab(page, "CRYPTO");
+  await expectChartTooltip(page, "crypto chart hover");
+  await exerciseChartLegend(page, ["TRADE REPUBLIC", "BINANCE"], "crypto chart legend");
+  await saveScreenshot(page, "chart-interactions-tabs-legend.png");
+
+  steps.push("exercised_dashboard_chart_tooltip_legend_ranges_topbar");
+}
+
+async function exerciseDashboardBinanceCardControls(page) {
+  const filterToggle = page.locator('div[title="Nascondi token sotto 0,95 EUR"]:visible, div[title="Mostra tutti i token"]:visible').first();
+  await filterToggle.waitFor({ state: "visible", timeout: 10_000 });
+  const beforeTitle = await filterToggle.getAttribute("title", { timeout: 10_000 });
+  await filterToggle.click();
+  await page.waitForTimeout(200);
+  const afterTitle = await filterToggle.getAttribute("title", { timeout: 10_000 });
+  assert(beforeTitle !== afterTitle, `Binance filter toggle did not change title: ${beforeTitle}`);
+  await filterToggle.click();
+  await page.waitForTimeout(200);
+
+  await clickIfVisible(page.getByText("BINANCE", { exact: true }));
+  await saveScreenshot(page, "dashboard-binance-card-controls.png");
+  steps.push("exercised_dashboard_binance_card_controls");
+}
+
+async function exerciseBinanceChartInteractions(page) {
+  await page.getByRole("button", { name: "Binance", exact: true }).click();
+  await waitForAny(page.getByText("BINANCE", { exact: true }), "Binance chart header");
+  await expectChartTooltip(page, "Binance chart hover");
+  await saveScreenshot(page, "binance-interactions-active.png");
+  steps.push("exercised_binance_chart_controls");
+}
+
 async function openSettingsSection(page, buttonName, headingName) {
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const panel = page.locator('[role="dialog"][data-modal-panel="settings"]');
@@ -552,6 +739,7 @@ async function exerciseActiveComponents(page) {
   await waitForAny(page.getByText("TRADE REPUBLIC", { exact: true }), "dashboard Trade Republic provider");
   await waitForAny(page.getByText("BINANCE", { exact: true }), "dashboard Binance card");
   await saveScreenshot(page, "dashboard-heritage-active.png");
+  await exerciseDashboardChartInteractions(page);
 
   await page.getByRole("button", { name: "Checking", exact: true }).click();
   await waitForAny(page.getByText("Active checking expense", { exact: false }), "checking transaction content");
@@ -565,8 +753,7 @@ async function exerciseActiveComponents(page) {
   await waitForAny(page.getByText("Bitcoin", { exact: false }), "crypto token content");
   await saveScreenshot(page, "crypto-active.png");
 
-  await page.getByRole("button", { name: "Binance", exact: true }).click();
-  await waitForAny(page.getByText("BINANCE", { exact: true }), "Binance chart header");
+  await exerciseBinanceChartInteractions(page);
   await saveScreenshot(page, "binance-active.png");
 
   await page.getByRole("button", { name: "Add document", exact: true }).click();

@@ -19,7 +19,7 @@ export function DashboardChartControls({
   timeRange
 }: DashboardChartControlsProps) {
   return (
-    <div className="absolute top-0 right-0 z-10 flex items-center justify-end gap-0.5">
+    <div data-testid="dashboard-chart-controls" className="absolute top-0 right-0 z-10 flex items-center justify-end gap-0.5">
       {activeTab === "investment" && (
         <button
           aria-label="Toggle sold assets"
