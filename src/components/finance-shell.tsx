@@ -6,7 +6,7 @@ import { FrameOverlayPanels } from "./finance-shell/frame-overlay-panels";
 import { FinanceShellMainFrame } from "./finance-shell/main-frame";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
 import type { SettingsSection } from "./finance-shell/settings-panel";
-import { useFinanceShellContent } from "./finance-shell/shell-content";
+import { useFinanceShellContent } from "./finance-shell/use-finance-shell-content";
 import type { UserRecord } from "./finance-shell/types";
 import { useFinanceAccountActions } from "./finance-shell/use-finance-account-actions";
 import { useCreateUserInputFocus, usePreviewUploadOverlay } from "./finance-shell/use-finance-shell-effects";

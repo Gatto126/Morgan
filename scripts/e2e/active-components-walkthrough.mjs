@@ -11,6 +11,7 @@ import {
 } from "../lib/rate-limit-test-scope.mjs";
 
 const baseUrl = process.env.TEST_BASE_URL ?? "http://127.0.0.1:3000";
+const keepAccount = process.argv.includes("--keep-account") || process.env.KEEP_ACTIVE_COMPONENTS_ACCOUNT === "1";
 const postgresPort = process.env.POSTGRES_PORT ?? "5432";
 const dockerDatabaseUrl = `postgresql://morgan:morgan@localhost:${postgresPort}/morgan?schema=public`;
 const databaseUrl = process.env.TEST_DATABASE_URL ?? dockerDatabaseUrl;
@@ -694,23 +695,39 @@ try {
   assert(browserErrors.length === 0, `Browser errors/warnings found: ${JSON.stringify(browserErrors)}`);
   assert(httpErrors.length === 0, `Unexpected HTTP errors found: ${JSON.stringify(httpErrors)}`);
 
-  await deleteAccountViaUi(page);
-  await expectNoOverlay(page, "after account deletion");
-  assert(browserErrors.length === 0, `Browser errors/warnings found: ${JSON.stringify(browserErrors)}`);
-  assert(httpErrors.length === 0, `Unexpected HTTP errors found: ${JSON.stringify(httpErrors)}`);
+  let remainingUsers = 0;
+  if (keepAccount) {
+    await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+    await waitForAny(page.getByText("BBVA", { exact: true }), "kept account dashboard BBVA provider");
+    await waitForAny(page.getByText("TRADE REPUBLIC", { exact: true }), "kept account dashboard Trade Republic provider");
+    await waitForAny(page.getByText("BINANCE", { exact: true }), "kept account dashboard Binance card");
+    await saveScreenshot(page, "kept-account-ready.png");
+    steps.push("kept_account_for_manual_review");
+    remainingUsers = await prisma.authUser.count({
+      where: { username: { startsWith: "activeflow" } }
+    });
+    assert(remainingUsers > 0, "Expected activeflow test user to remain for manual review.");
+  } else {
+    await deleteAccountViaUi(page);
+    await expectNoOverlay(page, "after account deletion");
+    assert(browserErrors.length === 0, `Browser errors/warnings found: ${JSON.stringify(browserErrors)}`);
+    assert(httpErrors.length === 0, `Unexpected HTTP errors found: ${JSON.stringify(httpErrors)}`);
 
-  const remainingUsers = await prisma.authUser.count({
-    where: { username: { startsWith: "activeflow" } }
-  });
-  assert(remainingUsers === 0, `Expected activeflow test users to be deleted, found ${remainingUsers}`);
+    remainingUsers = await prisma.authUser.count({
+      where: { username: { startsWith: "activeflow" } }
+    });
+    assert(remainingUsers === 0, `Expected activeflow test users to be deleted, found ${remainingUsers}`);
+  }
 
   console.log(JSON.stringify({
     ok: true,
     baseUrl,
+    keepAccount,
     username,
     profileName,
     secondProfileName,
     primaryProfileId,
+    remainingUsers,
     steps,
     fixtureSummary,
     cleanupBeforeRun,
@@ -724,12 +741,15 @@ try {
   }, null, 2));
 } catch (error) {
   if (page) await saveScreenshot(page, "failure-active-components-walkthrough.png").catch(() => null);
-  const forcedCleanup = await cleanupUsersByPrefix(["activeflow"]).catch((cleanupError) => ({
-    error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
-  }));
+  const forcedCleanup = keepAccount
+    ? { skipped: true, reason: "--keep-account" }
+    : await cleanupUsersByPrefix(["activeflow"]).catch((cleanupError) => ({
+      error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+    }));
   console.error(JSON.stringify({
     ok: false,
     baseUrl,
+    keepAccount,
     username,
     profileName,
     secondProfileName,
