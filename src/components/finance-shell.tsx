@@ -2,52 +2,22 @@
 
 import { useRef, useState, useEffect } from "react";
 import { AuthShell } from "./auth-shell";
-import { CreateProfileStage } from "./finance-shell/create-profile-stage";
 import { FrameOverlayPanels } from "./finance-shell/frame-overlay-panels";
 import { FinanceShellMainFrame } from "./finance-shell/main-frame";
-import { ReviewPanel } from "./finance-shell/review-panel";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
-import { EmptyChartAction } from "./finance-shell/empty-chart-action";
-import { SettingsPanel, type SettingsSection } from "./finance-shell/settings-panel";
+import type { SettingsSection } from "./finance-shell/settings-panel";
+import { useFinanceShellContent } from "./finance-shell/shell-content";
 import type { UserRecord } from "./finance-shell/types";
-import { UploadPanel } from "./finance-shell/upload-panel";
 import { useFinanceAccountActions } from "./finance-shell/use-finance-account-actions";
+import { useCreateUserInputFocus, usePreviewUploadOverlay } from "./finance-shell/use-finance-shell-effects";
 import {
   resolveInitialFinanceState,
   useFinanceProfiles
 } from "./finance-shell/use-finance-profiles";
 import { useFrameOverlayLifecycle } from "./finance-shell/use-frame-overlay-lifecycle";
-import { useFinanceNavigation, type Stage } from "./finance-shell/use-finance-navigation";
+import { useFinanceNavigation } from "./finance-shell/use-finance-navigation";
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
-import { UserSelectPanel } from "./finance-shell/user-select-panel";
-import { WelcomeStage } from "./finance-shell/welcome-stage";
-
-const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
-
-function getStageTitle(stage: Stage, hasUsers: boolean) {
-  switch (stage) {
-    case "welcome":
-      return "Welcome";
-    case "select":
-      return hasUsers ? "Select profile" : "Create first profile";
-    case "create":
-      return "New profile";
-    case "dashboard":
-      return "Dashboard";
-    case "checking":
-      return "Checking";
-    case "investment":
-      return "Investments";
-    case "settings":
-      return "Settings";
-    case "binance":
-      return "Binance";
-    case "crypto":
-      return "Crypto";
-    default:
-      return "Welcome";
-  }
-}
+import { dashboardStages, getStageTitle } from "./finance-shell/stage-title";
 
 export function FinanceShell({ accountName, initialUsers }: { accountName: string; initialUsers: UserRecord[] }) {
   const [initialFinanceState] = useState(() => resolveInitialFinanceState(initialUsers));
@@ -208,6 +178,56 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     };
   }, [applyImportedTransactionCounts]);
   const isDashboardStage = dashboardStages.has(stage);
+  const title = isRestoringProfileSelection ? "Morgan" : getStageTitle(stage, hasUsers);
+  const visibleSettingsSection = getVisibleSettingsSection(activeSettingsSection, showSettingsView);
+  const shellContent = useFinanceShellContent({
+    accountName,
+    activeSection: visibleSettingsSection,
+    activeUser,
+    approving,
+    binanceKeyInput,
+    binanceSecretInput,
+    createInputRef: createUserInputRef,
+    currentTransactions,
+    error,
+    isDashboardStage,
+    isRestoringProfileSelection,
+    isTesting,
+    name,
+    newTransactionsCount,
+    notice,
+    parsing,
+    previewTransactionCount: previewTransactions.length,
+    saving,
+    showCreateUserSubmenu,
+    showDeleteApiConfirm,
+    showSecret,
+    stage,
+    title,
+    totalPages,
+    users,
+    visiblePage,
+    welcomeBackgroundRef,
+    onApproveTransactions: () => void approveTransactions(() => setShowUploadView(false)),
+    onBackToSettingsMenu: handleSettingsBackToMenu,
+    onBinanceKeyChange: setBinanceKeyInput,
+    onBinanceSecretChange: setBinanceSecretInput,
+    onCloseCreate: () => setShowCreateUserSubmenu(false),
+    onCreateUser: () => void handleCreateUser(),
+    onDeleteAccount: openDeleteAccountConfirm,
+    onDeleteApiKeys: (deleteData) => void handleDeleteApiKeys(deleteData),
+    onNextPage: goToNextPage,
+    onOpenFilePicker: openFilePicker,
+    onPreviousPage: goToPreviousPage,
+    onProfileNameChange: setName,
+    onSaveApiKeys: () => void handleSaveApiKeys(),
+    onSelectSettingsSection: handleSettingsSectionSelect,
+    onSelectUser: handleUserSelect,
+    onSignOut: () => void handleSignOut(),
+    onToggleCreate: handleToggleCreateUser,
+    onToggleDeleteApiConfirm: () => setShowDeleteApiConfirm((value) => !value),
+    onToggleSecret: () => setShowSecret((value) => !value)
+  });
   const {
     activeFramePanel,
     exitingFramePanel,
@@ -225,9 +245,9 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     isClosingUpload,
     isClosingUserSelect,
     isDashboardStage,
-    renderSettingsContent: renderSettingsState,
-    renderUploadContent: () => previewTransactions.length > 0 ? renderReviewState() : renderUploadState(),
-    renderUserSelectContent: renderUserSelectState,
+    renderSettingsContent: shellContent.renderSettingsContent,
+    renderUploadContent: shellContent.renderUploadContent,
+    renderUserSelectContent: shellContent.renderUserSelectContent,
     showDeleteAccountConfirm,
     showSettingsView,
     showUploadView,
@@ -239,36 +259,15 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     onCloseUpload: handleCloseUpload,
     onCloseUserSelect: handleCloseUserSelect
   });
-
-  useEffect(() => {
-    if (showCreateUserSubmenu && createUserInputRef.current) {
-      const timer = setTimeout(() => {
-        createUserInputRef.current?.focus({ preventScroll: true });
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [showCreateUserSubmenu]);
-
-  useEffect(() => {
-    if (previewTransactions.length === 0) {
-      return;
-    }
-
-    setShowUploadView(true);
-    setShowSettingsView(false);
-    setShowUserSelectView(false);
-    setShowCreateUserSubmenu(false);
-    setActiveSettingsSection(null);
-  }, [
-    previewTransactions.length,
+  useCreateUserInputFocus(showCreateUserSubmenu, createUserInputRef);
+  usePreviewUploadOverlay({
+    previewTransactionCount: previewTransactions.length,
     setActiveSettingsSection,
-    setShowUploadView,
-    setShowUserSelectView,
     setShowCreateUserSubmenu,
-    setShowSettingsView
-  ]);
-
-  const title = isRestoringProfileSelection ? "Morgan" : getStageTitle(stage, hasUsers);
+    setShowSettingsView,
+    setShowUploadView,
+    setShowUserSelectView
+  });
 
   function showApiSettingsPanel() {
     setShowSettingsView(true);
@@ -283,32 +282,17 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     }
   }
 
-  function renderUserSelectState() {
-    return (
-      <UserSelectPanel
-        users={users}
-        activeUserId={activeUser?.id ?? null}
-        isCreateOpen={showCreateUserSubmenu}
-        profileName={name}
-        saving={saving}
-        error={error}
-        notice={notice}
-        createInputRef={createUserInputRef}
-        onSelectUser={handleUserSelect}
-        onToggleCreate={handleToggleCreateUser}
-        onCloseCreate={() => setShowCreateUserSubmenu(false)}
-        onProfileNameChange={setName}
-        onCreateUser={() => void handleCreateUser()}
-        onSignOut={() => void handleSignOut()}
-      />
-    );
-  }
-
   function handleSettingsSectionSelect(section: SettingsSection) {
     if (section !== "apiKey") {
       clearForcedApiSettingsSection();
     }
     toggleSettingsSection(section);
+  }
+
+  function handleSettingsBackToMenu() {
+    clearForcedApiSettingsSection();
+    clearPanelFeedback();
+    setActiveSettingsSection(null);
   }
 
   function handleSettingsPanelClose() {
@@ -337,141 +321,16 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     }
   }
 
-  function renderSettingsState() {
-    const isApiKeySaved = !!activeUser?.hasBinanceCredentials;
-    const visibleSettingsSection = getVisibleSettingsSection(activeSettingsSection, showSettingsView);
-
-    return (
-      <SettingsPanel
-        accountName={accountName}
-        activeSection={visibleSettingsSection}
-        hasActiveUser={!!activeUser}
-        isApiKeySaved={isApiKeySaved}
-        binanceApiKeyPreview={activeUser?.binanceApiKeyPreview ?? null}
-        binanceKeyInput={binanceKeyInput}
-        binanceSecretInput={binanceSecretInput}
-        showSecret={showSecret}
-        isTesting={isTesting}
-        showDeleteApiConfirm={showDeleteApiConfirm}
-        error={error}
-        notice={notice}
-        onSelectSection={handleSettingsSectionSelect}
-        onBackToMenu={() => {
-          clearForcedApiSettingsSection();
-          clearPanelFeedback();
-          setActiveSettingsSection(null);
-        }}
-        onSignOut={() => void handleSignOut()}
-        onBinanceKeyChange={setBinanceKeyInput}
-        onBinanceSecretChange={setBinanceSecretInput}
-        onToggleSecret={() => setShowSecret((value) => !value)}
-        onToggleDeleteApiConfirm={() => setShowDeleteApiConfirm((value) => !value)}
-        onDeleteApiKeys={(deleteData) => void handleDeleteApiKeys(deleteData)}
-        onSaveApiKeys={() => void handleSaveApiKeys()}
-        onDeleteAccount={openDeleteAccountConfirm}
-      />
-    );
-  }
-
-  function renderUploadState() {
-    return (
-      <UploadPanel parsing={parsing} error={error} notice={notice} onUpload={openFilePicker} />
-    );
-  }
-
-  function renderInlineUploadState() {
-    return (
-      <EmptyChartAction
-        actionLabel={parsing ? "Loading" : "Upload"}
-        disabled={parsing}
-        error={error}
-        notice={notice}
-        onAction={openFilePicker}
-        title="Upload"
-      />
-    );
-  }
-
-  function renderReviewState() {
-    return (
-      <ReviewPanel
-        approving={approving}
-        transactions={currentTransactions}
-        error={error}
-        notice={notice}
-        visiblePage={visiblePage}
-        totalPages={totalPages}
-        newTransactionsCount={newTransactionsCount}
-        onUpload={openFilePicker}
-        onApprove={() => void approveTransactions(() => setShowUploadView(false))}
-        onPreviousPage={goToPreviousPage}
-        onNextPage={goToNextPage}
-      />
-    );
-  }
-
-  function renderMainFrameOverlay() {
-    return (
-      <FrameOverlayPanels
-        activePanel={activeFramePanel}
-        activePanelRef={activeOverlayPanelRef}
-        exitingPanel={exitingFramePanel}
-      />
-    );
-  }
-
-  function renderStageContent() {
-    if (isRestoringProfileSelection) {
-      return null;
-    }
-
-    if (stage === "welcome") {
-      return (
-        <WelcomeStage
-          backgroundRef={welcomeBackgroundRef}
-          isBackgroundVisible={isWelcomeBackgroundVisible}
-          isPanelModalOpen={isWelcomePanelModalOpen}
-          onSignOut={() => void handleSignOut()}
-        />
-      );
-    }
-
-    if (stage === "select") {
-      return renderUserSelectState();
-    }
-
-    if (stage === "create") {
-      return (
-        <CreateProfileStage
-          profileName={name}
-          saving={saving}
-          title={title}
-          onCreateProfile={() => void handleCreateUser()}
-          onProfileNameChange={setName}
-        />
-      );
-    }
-
-    if (stage === "settings") {
-      return renderSettingsState();
-    }
-
-    return null;
-  }
-
   if (isSignedOut) {
     return <AuthShell />;
   }
 
   const canUseHeaderUploadButton = (activeUser?.transactionCount ?? 0) > 0;
   const isUploadButtonActive = canUseHeaderUploadButton && showUploadView;
-  const nonDashboardStageContent = !isDashboardStage ? (
-    <>
-      {renderStageContent()}
-      {error ? <p className="text-sm text-[color:var(--danger)]">{error}</p> : null}
-      {notice ? <p className="text-sm text-emerald-200">{notice}</p> : null}
-    </>
-  ) : null;
+  const nonDashboardStageContent = shellContent.renderNonDashboardStageContent({
+    isWelcomeBackgroundVisible,
+    isWelcomePanelModalOpen
+  });
 
   return (
     <main
@@ -496,8 +355,14 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         isDashboardStage={isDashboardStage}
         isUploadButtonActive={isUploadButtonActive}
         nonDashboardStageContent={nonDashboardStageContent}
-        renderInlineUploadState={renderInlineUploadState}
-        renderMainFrameOverlay={renderMainFrameOverlay}
+        renderInlineUploadState={shellContent.renderInlineUploadState}
+        renderMainFrameOverlay={() => (
+          <FrameOverlayPanels
+            activePanel={activeFramePanel}
+            activePanelRef={activeOverlayPanelRef}
+            exitingPanel={exitingFramePanel}
+          />
+        )}
         showSettingsView={showSettingsView}
         showUserSelectView={showUserSelectView}
         stage={stage}
