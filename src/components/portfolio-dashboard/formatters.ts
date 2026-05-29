@@ -14,17 +14,11 @@ export function formatProviderLabel(source: string) {
 
 export function getAbbreviatedLabel(label: string) {
   const upper = label.trim().toUpperCase();
-  if (upper === "TRADE REPUBLIC") return "TR";
-  if (upper === "REVOLUT") return "REV";
-  if (upper === "BINANCE") return "BIN";
-  if (upper === "COINBASE") return "CB";
-  if (upper === "BBVA") return "BBVA";
-
   const words = upper.split(/\s+/);
   if (words.length > 1) {
     return words.map(w => w[0]).join("");
   }
-  return upper.length > 4 ? upper.slice(0, 3) : upper;
+  return upper;
 }
 
 export function getMonthLabel(month: string) {

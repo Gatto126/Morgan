@@ -42,7 +42,7 @@ export function DashboardCheckingCards({ data, timeRange }: DashboardCheckingCar
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       {checkingProviders.map((provider) => {
         const metrics = getCheckingMetrics(provider, data, timeRange);
 

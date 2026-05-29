@@ -45,7 +45,7 @@ export function DashboardTabs({
 
   return createPortal(
     <div
-      className={cn("flex items-center gap-2 sm:gap-3", !isActive && "absolute pointer-events-none opacity-0 invisible")}
+      className={cn("flex items-center gap-2", !isActive && "absolute pointer-events-none opacity-0 invisible")}
       style={{
         opacity: contentVisible ? 1 : 0,
         transform: contentVisible ? "none" : "translateY(6px)",

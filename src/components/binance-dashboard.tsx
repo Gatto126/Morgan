@@ -187,7 +187,7 @@ export function BinanceDashboard({
       {/* Tabs Portal */}
       {tabsPortalNode &&
         createPortal(
-          <div className={cn("flex items-center gap-2 sm:gap-3", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
+          <div className={cn("flex items-center gap-2", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
             <DashboardTopbarTab
               active
               icon={Bitcoin}

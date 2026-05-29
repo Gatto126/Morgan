@@ -45,7 +45,7 @@ export function DashboardCards({
 
   return createPortal(
     <div
-      className={cn("grid gap-4 w-full pb-6 lg:pb-0", !isActive && "absolute pointer-events-none opacity-0 invisible")}
+      className={cn("grid gap-5 w-full pb-6 lg:pb-0", !isActive && "absolute pointer-events-none opacity-0 invisible")}
       style={{
         gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
         alignItems: "start",

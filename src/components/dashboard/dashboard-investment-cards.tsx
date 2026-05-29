@@ -29,7 +29,7 @@ export function DashboardInvestmentCards({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       {providersWithProducts.map((provider) => (
         <DashboardCardShell
           key={`investment-${provider.sourceInstitution}`}

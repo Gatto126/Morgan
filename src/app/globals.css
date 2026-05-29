@@ -20,6 +20,7 @@
 
 html {
   background: var(--page-bg);
+  overflow-y: auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
@@ -156,6 +157,18 @@ button.has-lucide:disabled:hover svg.lucide,
 button:disabled svg.lucide,
 button:disabled:hover svg.lucide {
   color: #4C4C4C !important;
+}
+
+button.dashboard-topbar-tab[data-active="true"],
+button.dashboard-topbar-tab[data-active="true"]:hover {
+  border-color: #FFFFFF !important;
+  color: #FFFFFF !important;
+}
+
+button.dashboard-topbar-tab .dashboard-topbar-currency-icon,
+button.dashboard-topbar-tab:hover .dashboard-topbar-currency-icon {
+  color: #FFFFFF !important;
+  stroke: #FFFFFF !important;
 }
 
 button.icon-plain:has(svg.lucide),

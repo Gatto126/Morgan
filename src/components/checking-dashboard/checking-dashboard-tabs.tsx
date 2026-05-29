@@ -28,7 +28,7 @@ export function CheckingDashboardTabs({
   if (!portalNode) return null;
 
   return createPortal(
-    <div className={cn("flex items-center gap-2 sm:gap-3", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
+    <div className={cn("flex items-center gap-2", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
       {tabs.map((tab) => {
         const isSelected = activeTab === tab.key;
         const value = formatEuroCents(
