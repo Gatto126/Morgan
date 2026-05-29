@@ -21,6 +21,12 @@ export function DashboardTopbarTab({
   onClick,
   value
 }: DashboardTopbarTabProps) {
+  const valueClassName = cn(
+    "min-w-0 overflow-hidden whitespace-nowrap font-extrabold leading-none tabular-nums",
+    getDashboardTopbarValueTextClass(value),
+    !active && "opacity-70"
+  );
+
   return (
     <button
       aria-label={ariaLabel}
@@ -35,25 +41,24 @@ export function DashboardTopbarTab({
       onClick={onClick}
       type="button"
     >
-      <span
-        className={cn(
-          "flex min-w-0 items-center gap-2 overflow-hidden tracking-[0.14em]",
-          label ? "justify-start" : "justify-center"
-        )}
-      >
-        {Icon ? <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={2.2} /> : null}
-        {label ? <span className="min-w-0 truncate">{label}</span> : null}
-      </span>
-      <span
-        className={cn(
-          "min-w-0 justify-self-end overflow-hidden whitespace-nowrap text-right font-extrabold leading-none tabular-nums",
-          getDashboardTopbarValueTextClass(value),
-          !active && "opacity-70"
-        )}
-        title={value}
-      >
-        {value}
-      </span>
+      {label ? (
+        <>
+          <span className="flex min-w-0 items-center justify-start gap-2 overflow-hidden tracking-[0.14em]">
+            {Icon ? <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={2.2} /> : null}
+            <span className="min-w-0 truncate">{label}</span>
+          </span>
+          <span className={cn(valueClassName, "justify-self-end text-right")} title={value}>
+            {value}
+          </span>
+        </>
+      ) : (
+        <span className="col-span-2 flex min-w-0 -translate-x-4 items-center justify-center gap-2.5 overflow-hidden">
+          {Icon ? <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={2.2} /> : null}
+          <span className={valueClassName} title={value}>
+            {value}
+          </span>
+        </span>
+      )}
     </button>
   );
 }
