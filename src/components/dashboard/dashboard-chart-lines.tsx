@@ -1,6 +1,6 @@
 import { Line, ReferenceLine } from "recharts";
 
-import { DashboardChartReferenceLabel } from "./dashboard-chart-reference-label";
+import { ChartReferenceLabel } from "@/components/chart-primitives/chart-reference-label";
 import type { DashboardChartConfig, DashboardChartPoint } from "./dashboard-chart-types";
 import type { AccountTab } from "./types";
 
@@ -140,7 +140,7 @@ export function DashboardChartLines({
           key={`ref-line-label-${selectedValue}-${hiddenSeriesSignature}`}
           y={selectedValue}
           stroke="transparent"
-          label={<DashboardChartReferenceLabel selectedValue={selectedValue} />}
+          label={<ChartReferenceLabel selectedValue={selectedValue} />}
         />
       )}
     </>

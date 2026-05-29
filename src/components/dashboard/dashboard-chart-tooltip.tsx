@@ -1,40 +1,20 @@
-import { useEffect } from "react";
+import { ChartTooltip } from "@/components/chart-primitives/chart-tooltip";
+import type { ChartTooltipPayload } from "@/types/chart";
 
 import { formatEuroCents, formatProviderLabel, getMonthLabel } from "./formatters";
 import type { DashboardChartPoint } from "./dashboard-chart-types";
 
-type TooltipPayloadItem = {
-  name: string;
-  value: number;
-  payload?: DashboardChartPoint;
-  dataKey?: string | number;
-};
-
 type DashboardChartTooltipProps = {
   active?: boolean;
-  payload?: TooltipPayloadItem[];
+  payload?: ChartTooltipPayload<DashboardChartPoint>[];
   label?: string;
   setActivePoint: (point: DashboardChartPoint | null) => void;
 };
 
-export function DashboardChartTooltip({
-  active,
-  payload,
-  label,
-  setActivePoint
-}: DashboardChartTooltipProps) {
-  useEffect(() => {
-    if (active && payload && payload.length > 0) {
-      setActivePoint(payload[0].payload ?? null);
-    } else {
-      setActivePoint(null);
-    }
-  }, [active, payload, setActivePoint]);
+const DASHBOARD_TOOLTIP_EXCLUDED_KEYS = ["referenceLineValue"];
+const DASHBOARD_TOOLTIP_PRIORITY_NAMES = ["heritage", "checking", "investment", "crypto", "value"];
 
-  if (!active || !payload?.length) {
-    return null;
-  }
-
+function formatTooltipLabel(label?: string) {
   let formattedLabel = label || "";
   if (formattedLabel.length === 10) {
     const [year, month, day] = formattedLabel.split("-");
@@ -45,45 +25,33 @@ export function DashboardChartTooltip({
     formattedLabel = getMonthLabel(formattedLabel);
   }
 
-  return (
-    <div
-      style={{
-        background: "rgba(35,35,35,0.96)",
-        border: "1px solid rgba(154,154,154,0.4)",
-        borderRadius: 12,
-        padding: "8px 14px",
-        fontSize: 13,
-        color: "#f5f5f5"
-      }}
-    >
-      <div style={{ fontWeight: 700, marginBottom: 6 }}>{formattedLabel}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {[...payload]
-          .filter((item) => item.name !== "referenceLineValue" && item.dataKey !== "referenceLineValue")
-          .sort((a, b) => {
-            const isMainA = ["heritage", "checking", "investment", "crypto", "value"].includes(a.name);
-            const isMainB = ["heritage", "checking", "investment", "crypto", "value"].includes(b.name);
-            if (isMainA && !isMainB) return -1;
-            if (!isMainA && isMainB) return 1;
-            return (b.value || 0) - (a.value || 0);
-          })
-          .map((item, index) => {
-            const labelString = item.name === "value"
-              ? "TOTAL"
-              : ["heritage", "checking", "investment", "crypto"].includes(item.name)
-                ? String(item.name).toUpperCase()
-                : formatProviderLabel(item.name);
+  return formattedLabel;
+}
 
-            return (
-              <div key={index} className="flex justify-between gap-6 items-center">
-                <span className="text-[10px] font-bold uppercase" style={{ color: "#ffffff" }}>
-                  {labelString}
-                </span>
-                <span className="font-semibold">{formatEuroCents(item.value)}</span>
-              </div>
-            );
-          })}
-      </div>
-    </div>
+function formatTooltipSeriesLabel(name: string) {
+  if (name === "value") return "TOTAL";
+  if (["heritage", "checking", "investment", "crypto"].includes(name)) return name.toUpperCase();
+  return formatProviderLabel(name);
+}
+
+export function DashboardChartTooltip({
+  active,
+  payload,
+  label,
+  setActivePoint
+}: DashboardChartTooltipProps) {
+  return (
+    <ChartTooltip
+      active={active}
+      excludeDataKeys={DASHBOARD_TOOLTIP_EXCLUDED_KEYS}
+      excludeNames={DASHBOARD_TOOLTIP_EXCLUDED_KEYS}
+      formatLabel={formatTooltipLabel}
+      formatSeriesLabel={formatTooltipSeriesLabel}
+      formatValue={formatEuroCents}
+      label={label}
+      payload={payload}
+      priorityNames={DASHBOARD_TOOLTIP_PRIORITY_NAMES}
+      setActivePoint={setActivePoint}
+    />
   );
 }

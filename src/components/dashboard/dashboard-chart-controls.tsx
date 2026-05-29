@@ -1,5 +1,7 @@
 import { ChartBar, ChartGantt } from "lucide-react";
 
+import { ChartTimeRangeControls } from "@/components/chart-primitives/chart-time-range-controls";
+
 import { TIME_RANGES } from "./constants";
 import type { AccountTab, TimeRange } from "./types";
 
@@ -35,20 +37,12 @@ export function DashboardChartControls({
         </button>
       )}
 
-      {TIME_RANGES.map((range) => (
-        <button
-          key={range}
-          type="button"
-          onClick={() => onTimeRangeChange(range)}
-          className="cursor-pointer rounded-md px-1.5 py-0 text-[8.5px] sm:text-[10px] font-bold uppercase tracking-wider transition-colors duration-150"
-          style={{
-            background: timeRange === range ? "rgba(255,255,255,0.08)" : "transparent",
-            color: timeRange === range ? "#f5f5f5" : "#737373"
-          }}
-        >
-          {range}
-        </button>
-      ))}
+      <ChartTimeRangeControls
+        className="contents"
+        onTimeRangeChange={onTimeRangeChange}
+        ranges={TIME_RANGES}
+        timeRange={timeRange}
+      />
     </div>
   );
 }

@@ -1,9 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import type { ChartPoint, ChartTooltipPayload } from "@/types/chart";
 
-type ChartTooltipProps<TPoint extends ChartPoint> = {
+type ChartTooltipProps<TPoint extends Record<string, unknown>> = {
   active?: boolean;
+  excludeDataKeys?: string[];
+  excludeNames?: string[];
   formatLabel: (label?: string) => string;
   formatSeriesLabel: (name: string) => string;
   formatValue: (value: number) => string;
@@ -14,8 +16,12 @@ type ChartTooltipProps<TPoint extends ChartPoint> = {
   setActivePoint: (point: TPoint | null) => void;
 };
 
-export function ChartTooltip<TPoint extends ChartPoint>({
+const EMPTY_EXCLUDES: string[] = [];
+
+export function ChartTooltip<TPoint extends Record<string, unknown> = ChartPoint>({
   active,
+  excludeDataKeys = EMPTY_EXCLUDES,
+  excludeNames = EMPTY_EXCLUDES,
   formatLabel,
   formatSeriesLabel,
   formatValue,
@@ -25,15 +31,21 @@ export function ChartTooltip<TPoint extends ChartPoint>({
   priorityNames = ["heritage", "value"],
   setActivePoint
 }: ChartTooltipProps<TPoint>) {
+  const filteredPayload = useMemo(() => payload?.filter((item) => {
+    const name = String(item.name ?? "");
+    const dataKey = String(item.dataKey ?? "");
+    return !excludeNames.includes(name) && !excludeDataKeys.includes(dataKey);
+  }) ?? [], [excludeDataKeys, excludeNames, payload]);
+
   useEffect(() => {
-    if (active && payload && payload.length > 0) {
-      setActivePoint(payload[0].payload ?? null);
+    if (active && filteredPayload.length > 0) {
+      setActivePoint(filteredPayload[0].payload ?? null);
     } else {
       setActivePoint(null);
     }
-  }, [active, payload, setActivePoint]);
+  }, [active, filteredPayload, setActivePoint]);
 
-  if (!active || !payload?.length) return null;
+  if (!active || filteredPayload.length === 0) return null;
 
   const prioritySet = new Set(priorityNames);
   const formattedLabel = formatLabel(label);
@@ -42,7 +54,7 @@ export function ChartTooltip<TPoint extends ChartPoint>({
     <div className="rounded-xl border border-[rgba(154,154,154,0.4)] bg-[rgba(35,35,35,0.96)] p-2 px-3.5 text-[13px] text-[#f5f5f5]">
       <div className="mb-1.5 font-bold">{formattedLabel}</div>
       <div className="flex flex-col gap-1">
-        {[...payload]
+        {[...filteredPayload]
           .sort((left, right) => {
             const leftName = String(left.name ?? "");
             const rightName = String(right.name ?? "");

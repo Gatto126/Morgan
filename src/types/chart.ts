@@ -6,7 +6,8 @@ export type ChartPoint = {
   date?: string;
 } & Record<string, ChartPrimitive>;
 
-export type ChartTooltipPayload<TPoint extends ChartPoint = ChartPoint> = {
+export type ChartTooltipPayload<TPoint extends Record<string, unknown> = ChartPoint> = {
+  dataKey?: string | number;
   name?: string | number;
   value: number;
   payload?: TPoint;
