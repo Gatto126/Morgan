@@ -68,7 +68,11 @@ export function buildDashboardChartData({
     const checkingVal = resolveValue("checking", bucket.checking);
     const investmentVal = resolveValue("investment", bucket.investment);
     const cryptoVal = resolveValue("crypto", bucket.crypto);
-    const cryptoWithBinance = cryptoVal !== null ? cryptoVal + binanceTotalCents : null;
+    const cryptoWithBinance = cryptoVal !== null
+      ? cryptoVal + binanceTotalCents
+      : hasBinancePortfolio
+        ? binanceTotalCents
+        : null;
     const rawValue = resolveValue("value", bucket[activeTab]);
     const valueWithBinance = getTabValueWithBinance({
       activeTab,
