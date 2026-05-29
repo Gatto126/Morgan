@@ -10,7 +10,7 @@ export type ChartLegendItem = {
 type ChartLegendProps = {
   className?: string;
   hiddenSeries: Record<string, boolean>;
-  items: ChartLegendItem[];
+  items: readonly ChartLegendItem[];
   labelClassName?: string;
   onToggleSeries: (key: string) => void;
   testId?: string;

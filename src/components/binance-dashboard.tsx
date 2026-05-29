@@ -4,109 +4,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Bitcoin, X } from "lucide-react";
 import { Line, LineChart, CartesianGrid, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import { ChartLegend } from "./chart-primitives/chart-legend";
+import { ChartReferenceLabel } from "./chart-primitives/chart-reference-label";
+import { ChartTimeRangeControls } from "./chart-primitives/chart-time-range-controls";
+import { BinanceChartTooltip } from "./binance-dashboard/binance-chart-tooltip";
+import {
+  BINANCE_CHART_LEGEND_ITEMS,
+  BINANCE_TIME_RANGES,
+  buildBinanceDailyChartData,
+  filterBinanceChartData,
+  formatBinanceEuro,
+  formatBinanceEuroCents,
+  formatBinanceXAxisTick,
+  getBinanceXAxisTicks,
+  type BinanceTimeRange
+} from "./binance-dashboard/binance-chart-model";
 import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
 import { usePortalNode } from "@/hooks/use-portal-node";
 import { cn } from "@/shared/utils";
-import type { ActiveDotProps, ChartPoint, ChartTooltipPayload } from "@/types/chart";
-
-type TimeRange = "ALL" | "1Y" | "6M" | "3M" | "1M" | "1W";
-
-const TIME_RANGES: TimeRange[] = ["ALL", "1Y", "6M", "3M", "1M", "1W"];
-
-const euroFormatter = new Intl.NumberFormat("it-IT", {
-  style: "currency",
-  currency: "EUR",
-  minimumFractionDigits: 2,
-});
-
-function formatEuroCents(cents: number) {
-  return euroFormatter.format(cents / 100);
-}
-
-function formatEur(value: number) {
-  return euroFormatter.format(value);
-}
-
-function getMonthLabel(month: string) {
-  const [year, m] = month.split("-");
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const shortYear = year.slice(2);
-  return `${monthNames[Number.parseInt(m, 10) - 1]} ${shortYear}`;
-}
-
-function filterData(daily: ChartPoint[], range: TimeRange): ChartPoint[] {
-  if (range === "ALL") return daily;
-
-  const cutoff = new Date();
-  if (range === "1W") cutoff.setDate(cutoff.getDate() - 7);
-  else if (range === "1M") cutoff.setDate(cutoff.getDate() - 30);
-  else if (range === "3M") cutoff.setMonth(cutoff.getMonth() - 3);
-  else if (range === "6M") cutoff.setMonth(cutoff.getMonth() - 6);
-  else if (range === "1Y") cutoff.setFullYear(cutoff.getFullYear() - 1);
-
-  const cutoffKey = cutoff.toISOString().split("T")[0];
-  return daily.filter((d) => (d.date ?? "") >= cutoffKey);
-}
-
-type ChartTooltipProps = {
-  active?: boolean;
-  payload?: ChartTooltipPayload[];
-  label?: string;
-};
-
-function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
-  if (!active || !payload?.length) return null;
-
-  let formattedLabel = label || "";
-  if (formattedLabel.length === 10) {
-    const [year, month, day] = formattedLabel.split("-");
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const shortYear = year.slice(2);
-    formattedLabel = `${day} ${monthNames[Number.parseInt(month, 10) - 1]} ${shortYear}`;
-  } else if (formattedLabel.length === 7) {
-    formattedLabel = getMonthLabel(formattedLabel);
-  }
-
-  return (
-    <div className="rounded-xl border border-[rgba(154,154,154,0.4)] bg-[rgba(35,35,35,0.96)] p-2 px-3.5 text-[13px] text-[#f5f5f5]">
-      <div className="mb-1.5 font-bold">{formattedLabel}</div>
-      <div className="flex flex-col gap-1">
-        {payload.map((p, index) => (
-          <div key={index} className="flex items-center justify-between gap-6">
-            <span className="text-[10px] font-bold uppercase text-white truncate max-w-[150px]">BINANCE</span>
-            <span className="font-semibold">{formatEuroCents(p.value)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const CustomReferenceLabel = (props: { viewBox?: { x: number; y: number }; value?: number; selectedValue?: number | null }) => {
-  const { viewBox, value, selectedValue } = props;
-  if (!viewBox) return null;
-  const val = typeof selectedValue === "number" ? selectedValue : typeof value === "number" ? value : 0;
-  const formattedValue = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(val / 100);
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const rectWidth = isMobile ? 64 : 72;
-  const rectHeight = 24;
-  const top = viewBox.y - rectHeight / 2;
-  const left = isMobile ? Math.max(2, viewBox.x - rectWidth / 2) : viewBox.x - rectWidth + 2;
-  const overlayTarget = typeof document !== "undefined" ? document.getElementById("chart-reference-overlay") : null;
-  if (!overlayTarget) return null;
-  return createPortal(
-    <div
-      className="pointer-events-none absolute z-[100] flex items-center justify-center rounded-[12px] border-2 border-[#444444] bg-[#1a1a1a] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)]"
-      style={{ top, left, width: rectWidth, height: rectHeight }}
-    >
-      <span className="whitespace-nowrap text-[10px] font-bold text-white">
-        {isMobile ? formattedValue.replace(/\s/g, "").replace(",00", "") : formattedValue.replace(/\s/g, "")}
-      </span>
-    </div>,
-    overlayTarget
-  );
-};
+import type { ActiveDotProps } from "@/types/chart";
 
 type BinanceBalance = {
   id: string;
@@ -158,7 +75,7 @@ export function BinanceDashboard({
   onCloseUserSelect,
   userSelectElement,
 }: BinanceDashboardProps) {
-  const [timeRange, setTimeRange] = useState<TimeRange>("ALL");
+  const [timeRange, setTimeRange] = useState<BinanceTimeRange>("ALL");
   const [selectedPoint, setSelectedPoint] = useState<{ month: string; seriesKey: string; value: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [balances, setBalances] = useState<BinanceBalance[]>([]);
@@ -230,37 +147,10 @@ export function BinanceDashboard({
   const { chartContainerRef, chartReady, chartSize } = useChartContainerReady();
   const tabsPortalNode = usePortalNode("dashboard-tabs-portal");
 
-  // Empty chart data (historical tracking not yet implemented)
-  const allDailyData = useMemo(() => {
-    const currentBalanceCents = Math.round(totalEur * 100);
-    const points = [];
-    const today = new Date();
-    const start = new Date();
-    start.setFullYear(today.getFullYear() - 1, today.getMonth() - 4);
-    for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split("T")[0];
-      points.push({ date: dateStr, rawMonth: dateStr, balance: currentBalanceCents });
-    }
-    return points;
-  }, [totalEur]);
-
-  const chartData = useMemo(() => filterData(allDailyData, timeRange), [allDailyData, timeRange]);
+  const allDailyData = useMemo(() => buildBinanceDailyChartData(totalEur), [totalEur]);
+  const chartData = useMemo(() => filterBinanceChartData(allDailyData, timeRange), [allDailyData, timeRange]);
   const hasRenderableChartData = totalEur > 0;
-
-  const xAxisTicks = useMemo(() => {
-    const ticks: string[] = [];
-    const seenMonths = new Set<string>();
-    chartData.forEach((d) => {
-      const rawMonth = d.rawMonth as string;
-      if (!rawMonth) return;
-      const monthKey = rawMonth.substring(0, 7);
-      if (!seenMonths.has(monthKey)) {
-        seenMonths.add(monthKey);
-        ticks.push(rawMonth);
-      }
-    });
-    return ticks;
-  }, [chartData]);
+  const xAxisTicks = useMemo(() => getBinanceXAxisTicks(chartData), [chartData]);
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
   const isPanelClosing =
     (showUploadView && isClosingUpload) ||
@@ -302,7 +192,7 @@ export function BinanceDashboard({
             >
               <Bitcoin className="h-5 w-5 flex-shrink-0" strokeWidth={2.2} />
               <span>BINANCE</span>
-              <span className="font-bold">{formatEur(totalEur)}</span>
+              <span className="font-bold">{formatBinanceEuro(totalEur)}</span>
             </button>
           </div>,
           tabsPortalNode
@@ -327,22 +217,11 @@ export function BinanceDashboard({
               </div>
             ) : (
               <>
-            <div className="absolute right-0 top-0 z-10 flex items-center justify-end gap-0.5">
-              {TIME_RANGES.map((range) => (
-                <button
-                  key={range}
-                  type="button"
-                  onClick={() => setTimeRange(range)}
-                  className="cursor-pointer rounded-md px-1.5 py-0 text-[8.5px] font-bold uppercase tracking-wider transition-colors duration-150 sm:text-[10px]"
-                  style={{
-                    background: timeRange === range ? "rgba(255,255,255,0.08)" : "transparent",
-                    color: timeRange === range ? "#f5f5f5" : "#737373",
-                  }}
-                >
-                  {range}
-                </button>
-              ))}
-            </div>
+            <ChartTimeRangeControls
+              onTimeRangeChange={(range) => setTimeRange(range)}
+              ranges={BINANCE_TIME_RANGES}
+              timeRange={timeRange}
+            />
 
             <div className="mt-10 flex-1 min-h-0 w-full outline-none" onClick={() => setSelectedPoint(null)}>
               <div ref={chartContainerRef} className="relative h-full w-full">
@@ -358,16 +237,11 @@ export function BinanceDashboard({
                       padding={{ left: isMobile ? 16 : 0, right: isMobile ? 16 : 0 }}
                       minTickGap={isMobile ? 20 : 10}
                       ticks={xAxisTicks}
-                      tickFormatter={(value) => {
-                        if (!value) return "";
-                        if (value.length === 7) return getMonthLabel(value);
-                        const [year, month] = value.split("-");
-                        return getMonthLabel(`${year}-${month}`);
-                      }}
+                      tickFormatter={(value) => formatBinanceXAxisTick(String(value ?? ""))}
                     />
-                    <YAxis tick={{ fill: "#a8a8a8", fontSize: isMobile ? 9 : 10 }} axisLine={false} tickLine={false} mirror={isMobile} tickFormatter={(v) => formatEuroCents(v).replace(/\s/g, "").replace(",00", "")} width={yAxisWidth} />
+                    <YAxis tick={{ fill: "#a8a8a8", fontSize: isMobile ? 9 : 10 }} axisLine={false} tickLine={false} mirror={isMobile} tickFormatter={(value) => formatBinanceEuroCents(value).replace(/\s/g, "").replace(",00", "")} width={yAxisWidth} />
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,154,154,0.12)" vertical={false} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1, fill: "transparent" }} />
+                    <Tooltip content={<BinanceChartTooltip />} cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1, fill: "transparent" }} />
                     <Line
                       type="linear"
                       dataKey="balance"
@@ -388,20 +262,19 @@ export function BinanceDashboard({
                       }}
                       dot={false}
                     />
-                    {selectedPoint && <ReferenceLine y={selectedPoint.value} stroke="rgba(254,254,254,0.5)" strokeWidth={1.5} strokeDasharray="6 4" label={<CustomReferenceLabel selectedValue={selectedPoint.value} />} />}
+                    {selectedPoint && <ReferenceLine y={selectedPoint.value} stroke="rgba(254,254,254,0.5)" strokeWidth={1.5} strokeDasharray="6 4" label={<ChartReferenceLabel selectedValue={selectedPoint.value} />} />}
                   </LineChart>
                 ) : null}
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar" style={{ visibility: "visible" }}>
-              <div className="text-[#ffffff]">
-                <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider select-none outline-none whitespace-nowrap">
-                  <div className="h-[6px] w-[14px] rounded-full sm:h-[8px] sm:w-[16px] flex-shrink-0 bg-white" />
-                  <span>BALANCE</span>
-                </div>
-              </div>
-            </div>
+            <ChartLegend
+              className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar"
+              hiddenSeries={{}}
+              items={BINANCE_CHART_LEGEND_ITEMS}
+              onToggleSeries={() => undefined}
+              transactionCount={hasRenderableChartData ? 1 : 0}
+            />
               </>
             )}
         </div>
