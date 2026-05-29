@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { CircleCheckBig, Eye, EyeOff, RefreshCcwDot, Trash2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -5,39 +6,38 @@ import { cn } from "@/shared/utils";
 
 type SettingsApiKeySectionProps = {
   binanceApiKeyPreview: string | null;
-  binanceKeyInput: string;
-  binanceSecretInput: string;
   error: string | null;
   isApiKeySaved: boolean;
   isTesting: boolean;
   notice: string | null;
   showDeleteApiConfirm: boolean;
   showSecret: boolean;
-  onBinanceKeyChange: (value: string) => void;
-  onBinanceSecretChange: (value: string) => void;
   onDeleteApiKeys: (deleteData: boolean) => void;
-  onSaveApiKeys: () => void;
+  onSaveApiKeys: (apiKey: string, apiSecret: string) => void;
   onToggleDeleteApiConfirm: () => void;
   onToggleSecret: () => void;
 };
 
 export function SettingsApiKeySection({
   binanceApiKeyPreview,
-  binanceKeyInput,
-  binanceSecretInput,
   error,
   isApiKeySaved,
   isTesting,
   notice,
   showDeleteApiConfirm,
   showSecret,
-  onBinanceKeyChange,
-  onBinanceSecretChange,
   onDeleteApiKeys,
   onSaveApiKeys,
   onToggleDeleteApiConfirm,
   onToggleSecret
 }: SettingsApiKeySectionProps) {
+  const [binanceKeyInput, setBinanceKeyInput] = useState("");
+  const [binanceSecretInput, setBinanceSecretInput] = useState("");
+
+  function saveApiKeys() {
+    onSaveApiKeys(binanceKeyInput, binanceSecretInput);
+  }
+
   return (
     <div className="flex-1 flex flex-col justify-between h-full pb-1 md:pb-2">
       <div className="space-y-4 md:space-y-6">
@@ -55,7 +55,7 @@ export function SettingsApiKeySection({
               placeholder="Enter API Key"
               disabled={isApiKeySaved}
               value={isApiKeySaved ? binanceApiKeyPreview ?? "Saved securely" : binanceKeyInput}
-              onChange={(event) => onBinanceKeyChange(event.target.value)}
+              onChange={(event) => setBinanceKeyInput(event.target.value)}
             />
           </div>
 
@@ -70,7 +70,7 @@ export function SettingsApiKeySection({
                 placeholder="Enter Secret Key"
                 disabled={isApiKeySaved}
                 value={isApiKeySaved ? "Stored server-side" : binanceSecretInput}
-                onChange={(event) => onBinanceSecretChange(event.target.value)}
+                onChange={(event) => setBinanceSecretInput(event.target.value)}
               />
               {!isApiKeySaved ? (
                 <button
@@ -139,7 +139,7 @@ export function SettingsApiKeySection({
         ) : (
           <button
             type="button"
-            onClick={onSaveApiKeys}
+            onClick={saveApiKeys}
             title="Save API Keys"
             className="flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--text-dim)] hover:text-white hover:bg-[color:var(--surface-elevated)] hover:border-white transition-colors cursor-pointer"
           >

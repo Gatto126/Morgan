@@ -1,23 +1,29 @@
+import { useState } from "react";
+
 import PlusIcon from "../ui/plus-icon";
 
 import { Input } from "@/components/ui/input";
 import { cn } from "@/shared/utils";
 
 type CreateProfileStageProps = {
-  profileName: string;
+  initialProfileName: string;
   saving: boolean;
   title: string;
-  onCreateProfile: () => void;
-  onProfileNameChange: (value: string) => void;
+  onCreateProfile: (profileName: string) => void;
 };
 
 export function CreateProfileStage({
-  profileName,
+  initialProfileName,
   saving,
   title,
-  onCreateProfile,
-  onProfileNameChange
+  onCreateProfile
 }: CreateProfileStageProps) {
+  const [profileName, setProfileName] = useState(initialProfileName);
+
+  function submitProfile() {
+    onCreateProfile(profileName);
+  }
+
   return (
     <div className="mx-auto flex h-full w-full max-w-[1164px] items-center justify-center text-left md:relative md:h-[526px] md:max-h-[526px]">
       <div className="hidden md:absolute md:left-1/4 md:top-1/2 md:block md:w-[320px] md:-translate-x-1/2 md:-translate-y-1/2">
@@ -52,10 +58,10 @@ export function CreateProfileStage({
             autoFocus
             className="w-full border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-xl text-white focus:border-white focus:ring-0 sm:h-12"
             maxLength={24}
-            onChange={(event) => onProfileNameChange(event.target.value)}
+            onChange={(event) => setProfileName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
-                onCreateProfile();
+                submitProfile();
               }
             }}
             placeholder="Profile"
@@ -69,7 +75,7 @@ export function CreateProfileStage({
                 "flex h-12 w-12 cursor-pointer items-center justify-center rounded-[16px] border border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--text-dim)] transition-[background-color,border-color,color,transform,opacity] duration-200 hover:border-[color:var(--text-dim)] hover:bg-[color:var(--surface-elevated)] active:scale-[0.985] disabled:pointer-events-none disabled:opacity-40 has-lucide"
               )}
               disabled={saving || !profileName.trim()}
-              onClick={onCreateProfile}
+              onClick={submitProfile}
             >
               <PlusIcon className="h-5 w-5" strokeWidth={2.3} />
             </button>

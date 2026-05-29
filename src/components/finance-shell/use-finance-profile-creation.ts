@@ -12,14 +12,11 @@ type CreateUserPayload = {
 };
 
 type UseFinanceProfileCreationParams = {
-  accountName: string;
-  name: string;
   saving: boolean;
   users: UserRecord[];
   resetPreview: () => void;
   setActiveUser: Dispatch<SetStateAction<UserRecord | null>>;
   setError: Dispatch<SetStateAction<string | null>>;
-  setName: Dispatch<SetStateAction<string>>;
   setNotice: Dispatch<SetStateAction<string | null>>;
   setSaving: Dispatch<SetStateAction<boolean>>;
   setShowCreateUserSubmenu: Dispatch<SetStateAction<boolean>>;
@@ -30,14 +27,11 @@ type UseFinanceProfileCreationParams = {
 };
 
 export function useFinanceProfileCreation({
-  accountName,
-  name,
   saving,
   users,
   resetPreview,
   setActiveUser,
   setError,
-  setName,
   setNotice,
   setSaving,
   setShowCreateUserSubmenu,
@@ -46,8 +40,8 @@ export function useFinanceProfileCreation({
   setStage,
   setUsers
 }: UseFinanceProfileCreationParams) {
-  const handleCreateUser = useCallback(async () => {
-    const trimmed = name.trim();
+  const handleCreateUser = useCallback(async (profileName: string) => {
+    const trimmed = profileName.trim();
     if (!trimmed || saving) {
       return;
     }
@@ -73,7 +67,6 @@ export function useFinanceProfileCreation({
       const updatedUsers = payload.users ?? [...users, payload.user];
       setUsers(updatedUsers);
       setActiveUser(payload.user);
-      setName("");
       resetPreview();
       setNotice(null);
       setShowUploadView(false);
@@ -86,12 +79,10 @@ export function useFinanceProfileCreation({
       setSaving(false);
     }
   }, [
-    name,
     resetPreview,
     saving,
     setActiveUser,
     setError,
-    setName,
     setNotice,
     setSaving,
     setShowCreateUserSubmenu,
@@ -104,17 +95,9 @@ export function useFinanceProfileCreation({
 
   const handleToggleCreateUser = useCallback(() => {
     setShowCreateUserSubmenu((prev) => !prev);
-    setName(users.length === 0 ? accountName : "");
     setError(null);
     setNotice(null);
-  }, [
-    accountName,
-    setError,
-    setName,
-    setNotice,
-    setShowCreateUserSubmenu,
-    users.length
-  ]);
+  }, [setError, setNotice, setShowCreateUserSubmenu]);
 
   return {
     handleCreateUser,

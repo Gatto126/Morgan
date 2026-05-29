@@ -11,7 +11,7 @@ type UserSelectPanelProps<TUser extends ProfileOption> = {
   users: TUser[];
   activeUserId: string | null;
   isCreateOpen: boolean;
-  profileName: string;
+  initialProfileName: string;
   saving: boolean;
   error: string | null;
   notice: string | null;
@@ -19,8 +19,7 @@ type UserSelectPanelProps<TUser extends ProfileOption> = {
   onSelectUser: (user: TUser) => void;
   onToggleCreate: () => void;
   onCloseCreate: () => void;
-  onProfileNameChange: (value: string) => void;
-  onCreateUser: () => void;
+  onCreateUser: (profileName: string) => void;
   onSignOut: () => void;
 };
 
@@ -28,7 +27,7 @@ export function UserSelectPanel<TUser extends ProfileOption>({
   users,
   activeUserId,
   isCreateOpen,
-  profileName,
+  initialProfileName,
   saving,
   error,
   notice,
@@ -36,7 +35,6 @@ export function UserSelectPanel<TUser extends ProfileOption>({
   onSelectUser,
   onToggleCreate,
   onCloseCreate,
-  onProfileNameChange,
   onCreateUser,
   onSignOut
 }: UserSelectPanelProps<TUser>) {
@@ -64,12 +62,11 @@ export function UserSelectPanel<TUser extends ProfileOption>({
               <ProfileCreateSection
                 createInputRef={createInputRef}
                 error={error}
+                initialProfileName={initialProfileName}
                 notice={notice}
-                profileName={profileName}
                 saving={saving}
                 onCloseCreate={onCloseCreate}
                 onCreateUser={onCreateUser}
-                onProfileNameChange={onProfileNameChange}
               />
             ) : (
               <ProfileListSection

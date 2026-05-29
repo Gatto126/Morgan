@@ -27,7 +27,7 @@ type UseFinanceShellContentParams = {
   isDashboardStage: boolean;
   isRestoringProfileSelection: boolean;
   isTesting: boolean;
-  name: string;
+  initialProfileName: string;
   newTransactionsCount: number;
   notice: string | null;
   parsing: boolean;
@@ -42,21 +42,16 @@ type UseFinanceShellContentParams = {
   users: UserRecord[];
   visiblePage: number;
   welcomeBackgroundRef: RefObject<HTMLDivElement | null>;
-  binanceKeyInput: string;
-  binanceSecretInput: string;
   onApproveTransactions: () => void;
   onBackToSettingsMenu: () => void;
-  onBinanceKeyChange: (value: string) => void;
-  onBinanceSecretChange: (value: string) => void;
   onCloseCreate: () => void;
-  onCreateUser: () => void;
+  onCreateUser: (profileName: string) => void;
   onDeleteAccount: () => void;
   onDeleteApiKeys: (deleteData: boolean) => void;
   onNextPage: () => void;
   onOpenFilePicker: () => void;
   onPreviousPage: () => void;
-  onProfileNameChange: (value: string) => void;
-  onSaveApiKeys: () => void;
+  onSaveApiKeys: (apiKey: string, apiSecret: string) => void;
   onSelectSettingsSection: (section: SettingsSection) => void;
   onSelectUser: (user: UserRecord) => void;
   onSignOut: () => void;
@@ -75,15 +70,13 @@ export function useFinanceShellContent({
   activeSection,
   activeUser,
   approving,
-  binanceKeyInput,
-  binanceSecretInput,
   createInputRef,
   currentTransactions,
   error,
   isDashboardStage,
   isRestoringProfileSelection,
   isTesting,
-  name,
+  initialProfileName,
   newTransactionsCount,
   notice,
   parsing,
@@ -100,8 +93,6 @@ export function useFinanceShellContent({
   welcomeBackgroundRef,
   onApproveTransactions,
   onBackToSettingsMenu,
-  onBinanceKeyChange,
-  onBinanceSecretChange,
   onCloseCreate,
   onCreateUser,
   onDeleteAccount,
@@ -109,7 +100,6 @@ export function useFinanceShellContent({
   onNextPage,
   onOpenFilePicker,
   onPreviousPage,
-  onProfileNameChange,
   onSaveApiKeys,
   onSelectSettingsSection,
   onSelectUser,
@@ -123,16 +113,12 @@ export function useFinanceShellContent({
       accountName={accountName}
       activeSection={activeSection}
       activeUser={activeUser}
-      binanceKeyInput={binanceKeyInput}
-      binanceSecretInput={binanceSecretInput}
       error={error}
       isTesting={isTesting}
       notice={notice}
       showDeleteApiConfirm={showDeleteApiConfirm}
       showSecret={showSecret}
       onBackToMenu={onBackToSettingsMenu}
-      onBinanceKeyChange={onBinanceKeyChange}
-      onBinanceSecretChange={onBinanceSecretChange}
       onDeleteAccount={onDeleteAccount}
       onDeleteApiKeys={onDeleteApiKeys}
       onSaveApiKeys={onSaveApiKeys}
@@ -172,12 +158,11 @@ export function useFinanceShellContent({
       error={error}
       isCreateOpen={showCreateUserSubmenu}
       notice={notice}
-      profileName={name}
+      initialProfileName={users.length === 0 ? initialProfileName : ""}
       saving={saving}
       users={users}
       onCloseCreate={onCloseCreate}
       onCreateUser={onCreateUser}
-      onProfileNameChange={onProfileNameChange}
       onSelectUser={onSelectUser}
       onSignOut={onSignOut}
       onToggleCreate={onToggleCreate}
@@ -185,11 +170,10 @@ export function useFinanceShellContent({
   );
   const createProfileContent = (
     <FinanceShellCreateProfileContent
-      profileName={name}
+      initialProfileName={initialProfileName}
       saving={saving}
       title={title}
       onCreateProfile={onCreateUser}
-      onProfileNameChange={onProfileNameChange}
     />
   );
 

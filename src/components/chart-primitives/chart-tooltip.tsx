@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import type { ChartPoint, ChartTooltipPayload } from "@/types/chart";
 
@@ -43,14 +43,32 @@ export function ChartTooltip<TPoint extends Record<string, unknown> = ChartPoint
     () => getSortedTooltipPayload(filteredPayload, priorityNames),
     [filteredPayload, priorityNames]
   );
+  const activePointMarker = useMemo(() => {
+    if (!active || filteredPayload.length === 0) {
+      return "inactive";
+    }
+
+    const payloadMarker = filteredPayload
+      .map((item) => `${String(item.dataKey ?? item.name ?? "")}:${String(item.value)}`)
+      .join("|");
+
+    return `${String(label ?? "")}:${payloadMarker}`;
+  }, [active, filteredPayload, label]);
+  const lastActivePointMarkerRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (active && filteredPayload.length > 0) {
+    if (lastActivePointMarkerRef.current === activePointMarker) {
+      return;
+    }
+
+    lastActivePointMarkerRef.current = activePointMarker;
+
+    if (activePointMarker !== "inactive" && filteredPayload.length > 0) {
       setActivePoint(filteredPayload[0].payload ?? null);
     } else {
       setActivePoint(null);
     }
-  }, [active, filteredPayload, setActivePoint]);
+  }, [activePointMarker, filteredPayload, setActivePoint]);
 
   if (!active || filteredPayload.length === 0) return null;
 

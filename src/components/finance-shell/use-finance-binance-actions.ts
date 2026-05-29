@@ -32,8 +32,6 @@ export function useFinanceBinanceActions({
 }: UseFinanceBinanceActionsParams) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [binanceKeyInput, setBinanceKeyInput] = useState("");
-  const [binanceSecretInput, setBinanceSecretInput] = useState("");
   const [showSecret, setShowSecret] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [binanceRefreshKey, setBinanceRefreshKey] = useState(0);
@@ -42,8 +40,6 @@ export function useFinanceBinanceActions({
   const [forceApiSettingsSection, setForceApiSettingsSection] = useState(false);
 
   const clearApiKeyDraft = useCallback(() => {
-    setBinanceKeyInput("");
-    setBinanceSecretInput("");
     setShowSecret(false);
   }, []);
 
@@ -72,7 +68,7 @@ export function useFinanceBinanceActions({
     }
   }, [notice, error, isTesting]);
 
-  const handleSaveApiKeys = useCallback(async () => {
+  const handleSaveApiKeys = useCallback(async (apiKey: string, apiSecret: string) => {
     if (!activeUser) return;
 
     try {
@@ -84,8 +80,8 @@ export function useFinanceBinanceActions({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          apiKey: binanceKeyInput.trim() || null,
-          apiSecret: binanceSecretInput.trim() || null
+          apiKey: apiKey.trim() || null,
+          apiSecret: apiSecret.trim() || null
         })
       });
 
@@ -139,8 +135,6 @@ export function useFinanceBinanceActions({
     }
   }, [
     activeUser,
-    binanceKeyInput,
-    binanceSecretInput,
     clearApiKeyDraft,
     keepApiSettingsOpen,
     setActiveUser,
@@ -212,9 +206,7 @@ export function useFinanceBinanceActions({
 
   return {
     binanceFading,
-    binanceKeyInput,
     binanceRefreshKey,
-    binanceSecretInput,
     clearApiKeyDraft,
     clearForcedApiSettingsSection,
     clearPanelFeedback,
@@ -224,8 +216,6 @@ export function useFinanceBinanceActions({
     handleSaveApiKeys,
     isTesting,
     notice,
-    setBinanceKeyInput,
-    setBinanceSecretInput,
     setError,
     setNotice,
     setShowDeleteApiConfirm,

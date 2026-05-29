@@ -14,11 +14,9 @@ export {
 } from "./use-finance-profile-persistence";
 
 type UseFinanceProfilesParams = {
-  accountName: string;
   activeUser: UserRecord | null;
   hasRestoredClientState: boolean;
   initialUsers: UserRecord[];
-  name: string;
   saving: boolean;
   showUserSelectView: boolean;
   stage: Stage;
@@ -32,7 +30,6 @@ type UseFinanceProfilesParams = {
   setError: Dispatch<SetStateAction<string | null>>;
   setHasRestoredClientState: Dispatch<SetStateAction<boolean>>;
   setIsClosingUserSelect: Dispatch<SetStateAction<boolean>>;
-  setName: Dispatch<SetStateAction<string>>;
   setNotice: Dispatch<SetStateAction<string | null>>;
   setSaving: Dispatch<SetStateAction<boolean>>;
   setShowCreateUserSubmenu: Dispatch<SetStateAction<boolean>>;
@@ -44,11 +41,9 @@ type UseFinanceProfilesParams = {
 };
 
 export function useFinanceProfiles({
-  accountName,
   activeUser,
   hasRestoredClientState,
   initialUsers,
-  name,
   saving,
   showUserSelectView,
   stage,
@@ -62,7 +57,6 @@ export function useFinanceProfiles({
   setError,
   setHasRestoredClientState,
   setIsClosingUserSelect,
-  setName,
   setNotice,
   setSaving,
   setShowCreateUserSubmenu,
@@ -93,14 +87,11 @@ export function useFinanceProfiles({
     handleCreateUser,
     handleToggleCreateUser
   } = useFinanceProfileCreation({
-    accountName,
-    name,
     saving,
     users,
     resetPreview,
     setActiveUser,
     setError,
-    setName,
     setNotice,
     setSaving,
     setShowCreateUserSubmenu,

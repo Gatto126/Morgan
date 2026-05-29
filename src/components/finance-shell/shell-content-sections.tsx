@@ -18,12 +18,11 @@ type UserSelectContentProps = {
   error: string | null;
   isCreateOpen: boolean;
   notice: string | null;
-  profileName: string;
+  initialProfileName: string;
   saving: boolean;
   users: UserRecord[];
   onCloseCreate: () => void;
-  onCreateUser: () => void;
-  onProfileNameChange: (value: string) => void;
+  onCreateUser: (profileName: string) => void;
   onSelectUser: (user: UserRecord) => void;
   onSignOut: () => void;
   onToggleCreate: () => void;
@@ -33,19 +32,15 @@ type SettingsContentProps = {
   accountName: string;
   activeSection: SettingsSection | null;
   activeUser: UserRecord | null;
-  binanceKeyInput: string;
-  binanceSecretInput: string;
   error: string | null;
   isTesting: boolean;
   notice: string | null;
   showDeleteApiConfirm: boolean;
   showSecret: boolean;
   onBackToMenu: () => void;
-  onBinanceKeyChange: (value: string) => void;
-  onBinanceSecretChange: (value: string) => void;
   onDeleteAccount: () => void;
   onDeleteApiKeys: (deleteData: boolean) => void;
-  onSaveApiKeys: () => void;
+  onSaveApiKeys: (apiKey: string, apiSecret: string) => void;
   onSelectSection: (section: SettingsSection) => void;
   onSignOut: () => void;
   onToggleDeleteApiConfirm: () => void;
@@ -83,11 +78,10 @@ type WelcomeContentProps = {
 };
 
 type CreateProfileContentProps = {
-  profileName: string;
+  initialProfileName: string;
   saving: boolean;
   title: string;
-  onCreateProfile: () => void;
-  onProfileNameChange: (value: string) => void;
+  onCreateProfile: (profileName: string) => void;
 };
 
 type NonDashboardStageContentProps = {
@@ -119,19 +113,17 @@ export function FinanceShellWelcomeContent({
 }
 
 export function FinanceShellCreateProfileContent({
-  profileName,
+  initialProfileName,
   saving,
   title,
-  onCreateProfile,
-  onProfileNameChange
+  onCreateProfile
 }: CreateProfileContentProps) {
   return (
     <CreateProfileStage
-      profileName={profileName}
+      initialProfileName={initialProfileName}
       saving={saving}
       title={title}
       onCreateProfile={onCreateProfile}
-      onProfileNameChange={onProfileNameChange}
     />
   );
 }
@@ -142,12 +134,11 @@ export function FinanceShellUserSelectContent({
   error,
   isCreateOpen,
   notice,
-  profileName,
+  initialProfileName,
   saving,
   users,
   onCloseCreate,
   onCreateUser,
-  onProfileNameChange,
   onSelectUser,
   onSignOut,
   onToggleCreate
@@ -159,12 +150,11 @@ export function FinanceShellUserSelectContent({
       error={error}
       isCreateOpen={isCreateOpen}
       notice={notice}
-      profileName={profileName}
+      initialProfileName={initialProfileName}
       saving={saving}
       users={users}
       onCloseCreate={onCloseCreate}
       onCreateUser={onCreateUser}
-      onProfileNameChange={onProfileNameChange}
       onSelectUser={onSelectUser}
       onSignOut={onSignOut}
       onToggleCreate={onToggleCreate}
@@ -176,16 +166,12 @@ export function FinanceShellSettingsContent({
   accountName,
   activeSection,
   activeUser,
-  binanceKeyInput,
-  binanceSecretInput,
   error,
   isTesting,
   notice,
   showDeleteApiConfirm,
   showSecret,
   onBackToMenu,
-  onBinanceKeyChange,
-  onBinanceSecretChange,
   onDeleteAccount,
   onDeleteApiKeys,
   onSaveApiKeys,
@@ -198,9 +184,8 @@ export function FinanceShellSettingsContent({
     <SettingsPanel
       accountName={accountName}
       activeSection={activeSection}
+      activeUserId={activeUser?.id ?? null}
       binanceApiKeyPreview={activeUser?.binanceApiKeyPreview ?? null}
-      binanceKeyInput={binanceKeyInput}
-      binanceSecretInput={binanceSecretInput}
       error={error}
       hasActiveUser={!!activeUser}
       isApiKeySaved={!!activeUser?.hasBinanceCredentials}
@@ -209,8 +194,6 @@ export function FinanceShellSettingsContent({
       showDeleteApiConfirm={showDeleteApiConfirm}
       showSecret={showSecret}
       onBackToMenu={onBackToMenu}
-      onBinanceKeyChange={onBinanceKeyChange}
-      onBinanceSecretChange={onBinanceSecretChange}
       onDeleteAccount={onDeleteAccount}
       onDeleteApiKeys={onDeleteApiKeys}
       onSaveApiKeys={onSaveApiKeys}

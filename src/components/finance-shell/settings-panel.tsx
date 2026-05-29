@@ -13,11 +13,10 @@ export type { SettingsSection } from "./settings-panel-types";
 type SettingsPanelProps = {
   accountName: string;
   activeSection: SettingsSection | null;
+  activeUserId: string | null;
   hasActiveUser: boolean;
   isApiKeySaved: boolean;
   binanceApiKeyPreview: string | null;
-  binanceKeyInput: string;
-  binanceSecretInput: string;
   showSecret: boolean;
   isTesting: boolean;
   showDeleteApiConfirm: boolean;
@@ -26,23 +25,20 @@ type SettingsPanelProps = {
   onSelectSection: (section: SettingsSection) => void;
   onBackToMenu: () => void;
   onSignOut: () => void;
-  onBinanceKeyChange: (value: string) => void;
-  onBinanceSecretChange: (value: string) => void;
   onToggleSecret: () => void;
   onToggleDeleteApiConfirm: () => void;
   onDeleteApiKeys: (deleteData: boolean) => void;
-  onSaveApiKeys: () => void;
+  onSaveApiKeys: (apiKey: string, apiSecret: string) => void;
   onDeleteAccount: () => void;
 };
 
 export function SettingsPanel({
   accountName,
   activeSection,
+  activeUserId,
   hasActiveUser,
   isApiKeySaved,
   binanceApiKeyPreview,
-  binanceKeyInput,
-  binanceSecretInput,
   showSecret,
   isTesting,
   showDeleteApiConfirm,
@@ -51,8 +47,6 @@ export function SettingsPanel({
   onSelectSection,
   onBackToMenu,
   onSignOut,
-  onBinanceKeyChange,
-  onBinanceSecretChange,
   onToggleSecret,
   onToggleDeleteApiConfirm,
   onDeleteApiKeys,
@@ -99,17 +93,14 @@ export function SettingsPanel({
 
                 {activeSection === "apiKey" ? (
                   <SettingsApiKeySection
+                    key={`${activeUserId ?? "no-profile"}:${isApiKeySaved ? "saved" : "editable"}`}
                     binanceApiKeyPreview={binanceApiKeyPreview}
-                    binanceKeyInput={binanceKeyInput}
-                    binanceSecretInput={binanceSecretInput}
                     error={error}
                     isApiKeySaved={isApiKeySaved}
                     isTesting={isTesting}
                     notice={notice}
                     showDeleteApiConfirm={showDeleteApiConfirm}
                     showSecret={showSecret}
-                    onBinanceKeyChange={onBinanceKeyChange}
-                    onBinanceSecretChange={onBinanceSecretChange}
                     onDeleteApiKeys={onDeleteApiKeys}
                     onSaveApiKeys={onSaveApiKeys}
                     onToggleDeleteApiConfirm={onToggleDeleteApiConfirm}
