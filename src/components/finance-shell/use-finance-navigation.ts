@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useState } from "react";
 
-import type { SettingsSection } from "./settings-panel";
+import type { SettingsSection } from "./settings-panel-types";
+import { useFinanceOverlayNavigation } from "./use-finance-overlay-navigation";
+import { useFinancePanelCloseTimers } from "./use-finance-panel-close-timers";
+import { useFinanceStageNavigation } from "./use-finance-stage-navigation";
 
 export type Stage = "welcome" | "select" | "create" | "dashboard" | "checking" | "investment" | "settings" | "binance" | "crypto";
 
@@ -15,13 +18,6 @@ type UseFinanceNavigationOptions = {
   clearApiKeyDraft: () => void;
   clearPanelFeedback: () => void;
 };
-
-function clearTimer(timerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>) {
-  if (timerRef.current) {
-    clearTimeout(timerRef.current);
-    timerRef.current = null;
-  }
-}
 
 export function shouldAutoOpenUpload(transactionCount: number | null, stage: Stage) {
   void transactionCount;
@@ -50,186 +46,67 @@ export function useFinanceNavigation({
   const [isClosingUserSelect, setIsClosingUserSelect] = useState(false);
   const [showCreateUserSubmenu, setShowCreateUserSubmenu] = useState(false);
 
-  const closeUploadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const closeSettingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const closeUserSelectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      clearTimer(closeUploadTimerRef);
-      clearTimer(closeSettingsTimerRef);
-      clearTimer(closeUserSelectTimerRef);
-    };
-  }, []);
-
-  const triggerCloseUpload = useCallback(() => {
-    clearTimer(closeUploadTimerRef);
-    setIsClosingUpload(true);
-    closeUploadTimerRef.current = setTimeout(() => {
-      closeUploadTimerRef.current = null;
-      setShowUploadView(false);
-      resetPreview();
-      setIsClosingUpload(false);
-    }, 250);
-  }, [resetPreview]);
-
-  const clearAllCloseTimers = useCallback(() => {
-    clearTimer(closeUploadTimerRef);
-    clearTimer(closeSettingsTimerRef);
-    clearTimer(closeUserSelectTimerRef);
-  }, []);
-
-  const resetClosingFlags = useCallback(() => {
-    setIsClosingUpload(false);
-    setIsClosingSettings(false);
-    setIsClosingUserSelect(false);
-  }, []);
-
-  const triggerCloseSettings = useCallback(() => {
-    clearTimer(closeSettingsTimerRef);
-    setIsClosingSettings(true);
-    closeSettingsTimerRef.current = setTimeout(() => {
-      closeSettingsTimerRef.current = null;
-      setShowSettingsView(false);
-      setIsClosingSettings(false);
-    }, 250);
-  }, []);
-
-  const triggerCloseUserSelect = useCallback(() => {
-    clearTimer(closeUserSelectTimerRef);
-    setIsClosingUserSelect(true);
-    closeUserSelectTimerRef.current = setTimeout(() => {
-      closeUserSelectTimerRef.current = null;
-      setShowUserSelectView(false);
-      setIsClosingUserSelect(false);
-      setShowCreateUserSubmenu(false);
-    }, 250);
-  }, []);
-
-  const navigateTo = useCallback((newStage: Stage) => {
-    clearAllCloseTimers();
-    resetClosingFlags();
-    setStage(newStage);
-    setShowUploadView(false);
-    setShowSettingsView(false);
-    setShowUserSelectView(false);
-    setShowCreateUserSubmenu(false);
-    setActiveSettingsSection(null);
-    clearPanelFeedback();
-  }, [clearAllCloseTimers, clearPanelFeedback, resetClosingFlags]);
-
-  const navigateHome = useCallback(() => {
-    clearAllCloseTimers();
-    resetClosingFlags();
-    setStage("welcome");
-    setShowUploadView(false);
-    setShowSettingsView(false);
-    setShowUserSelectView(false);
-    setShowCreateUserSubmenu(false);
-    setActiveSettingsSection(null);
-    clearApiKeyDraft();
-    clearPanelFeedback();
-  }, [clearAllCloseTimers, clearApiKeyDraft, clearPanelFeedback, resetClosingFlags]);
-
-  const handlePlusClick = useCallback(() => {
-    if (showUploadView) {
-      triggerCloseUpload();
-      return;
-    }
-
-    clearAllCloseTimers();
-    resetClosingFlags();
-    setShowUploadView(true);
-    setShowSettingsView(false);
-    setActiveSettingsSection(null);
-    setShowUserSelectView(false);
-    setShowCreateUserSubmenu(false);
-    clearPanelFeedback();
-  }, [
+  const {
     clearAllCloseTimers,
-    clearPanelFeedback,
     resetClosingFlags,
-    showUploadView,
-    triggerCloseUpload
-  ]);
-
-  const handleCloseUpload = useCallback(() => {
-    triggerCloseUpload();
-  }, [triggerCloseUpload]);
-
-  const handleSettingsClick = useCallback(() => {
-    if (showSettingsView) {
-      triggerCloseSettings();
-      setActiveSettingsSection(null);
-      clearPanelFeedback();
-    } else {
-      clearAllCloseTimers();
-      resetClosingFlags();
-      setShowUploadView(false);
-      resetPreview();
-      setShowUserSelectView(false);
-      setShowCreateUserSubmenu(false);
-      setActiveSettingsSection("general");
-      clearPanelFeedback();
-      clearApiKeyDraft();
-      setShowSettingsView(true);
-    }
-  }, [
+    triggerCloseSettings,
+    triggerCloseUpload,
+    triggerCloseUserSelect
+  } = useFinancePanelCloseTimers({
+    resetPreview,
+    setIsClosingSettings,
+    setIsClosingUpload,
+    setIsClosingUserSelect,
+    setShowCreateUserSubmenu,
+    setShowSettingsView,
+    setShowUploadView,
+    setShowUserSelectView
+  });
+  const {
+    navigateHome,
+    navigateTo
+  } = useFinanceStageNavigation({
     clearAllCloseTimers,
     clearApiKeyDraft,
     clearPanelFeedback,
     resetClosingFlags,
-    resetPreview,
-    showSettingsView,
-    triggerCloseSettings
-  ]);
-
-  const handleCloseSettings = useCallback(() => {
-    triggerCloseSettings();
-    setActiveSettingsSection(null);
-    clearPanelFeedback();
-  }, [clearPanelFeedback, triggerCloseSettings]);
-
-  const handleUserSelectClick = useCallback(() => {
-    if (!hasActiveUser) {
-      if (!hasUsers) return;
-      navigateTo("select");
-      return;
-    }
-    if (showUserSelectView) {
-      triggerCloseUserSelect();
-    } else {
-      clearAllCloseTimers();
-      resetClosingFlags();
-      setShowUploadView(false);
-      resetPreview();
-      setShowSettingsView(false);
-      setActiveSettingsSection(null);
-      setShowCreateUserSubmenu(false);
-      setShowUserSelectView(true);
-    }
-  }, [
-    clearAllCloseTimers,
+    setActiveSettingsSection,
+    setShowCreateUserSubmenu,
+    setShowSettingsView,
+    setShowUploadView,
+    setShowUserSelectView,
+    setStage
+  });
+  const {
+    handleCloseSettings,
+    handleCloseUpload,
+    handleCloseUserSelect,
+    handlePlusClick,
+    handleSettingsClick,
+    handleUserSelectClick,
+    toggleSettingsSection
+  } = useFinanceOverlayNavigation({
+    activeSettingsSection,
     hasActiveUser,
     hasUsers,
+    showSettingsView,
+    showUploadView,
+    showUserSelectView,
+    clearAllCloseTimers,
+    clearApiKeyDraft,
+    clearPanelFeedback,
     navigateTo,
     resetClosingFlags,
     resetPreview,
-    showUserSelectView,
+    setActiveSettingsSection,
+    setShowCreateUserSubmenu,
+    setShowSettingsView,
+    setShowUploadView,
+    setShowUserSelectView,
+    triggerCloseSettings,
+    triggerCloseUpload,
     triggerCloseUserSelect
-  ]);
-
-  const handleCloseUserSelect = useCallback(() => {
-    triggerCloseUserSelect();
-  }, [triggerCloseUserSelect]);
-
-  const toggleSettingsSection = useCallback((section: SettingsSection) => {
-    clearPanelFeedback();
-    if (section === "apiKey" && activeSettingsSection !== "apiKey") {
-      clearApiKeyDraft();
-    }
-    setActiveSettingsSection(section);
-  }, [activeSettingsSection, clearApiKeyDraft, clearPanelFeedback]);
+  });
 
   return {
     stage,
