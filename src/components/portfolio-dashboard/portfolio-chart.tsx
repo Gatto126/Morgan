@@ -1,34 +1,19 @@
 import { useEffect } from "react";
-import { createPortal } from "react-dom";
 import { ChartBar, ChartGantt } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 
+import { ChartLegend } from "@/components/chart-primitives/chart-legend";
+import { ChartReferenceLabel } from "@/components/chart-primitives/chart-reference-label";
+import { ChartTimeRangeControls } from "@/components/chart-primitives/chart-time-range-controls";
+import { ChartTooltip } from "@/components/chart-primitives/chart-tooltip";
 import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
-import { cn } from "@/shared/utils";
-import type { ActiveDotProps, ChartPoint, ChartTooltipPayload } from "@/types/chart";
+import type { ActiveDotProps, ChartPoint } from "@/types/chart";
 
 import { GRAYSCALE_PALETTE, TIME_RANGES } from "./constants";
 import { formatEuroCents, formatProviderLabel, getMonthLabel } from "./formatters";
 import type { PortfolioData, PortfolioProviderSummary, PortfolioSelectedPoint, TimeRange } from "./types";
 
-type CustomTooltipProps = {
-  active?: boolean;
-  payload?: ChartTooltipPayload[];
-  label?: string;
-  setActivePoint: (point: ChartPoint | null) => void;
-};
-
-function ChartTooltip({ active, payload, label, setActivePoint }: CustomTooltipProps) {
-  useEffect(() => {
-    if (active && payload && payload.length > 0) {
-      setActivePoint(payload[0].payload ?? null);
-    } else {
-      setActivePoint(null);
-    }
-  }, [active, payload, setActivePoint]);
-
-  if (!active || !payload?.length) return null;
-
+function formatTooltipLabel(label?: string) {
   let formattedLabel = label || "";
   if (formattedLabel.length === 10) {
     const [year, month, day] = formattedLabel.split("-");
@@ -39,48 +24,14 @@ function ChartTooltip({ active, payload, label, setActivePoint }: CustomTooltipP
     formattedLabel = getMonthLabel(formattedLabel);
   }
 
-  return (
-    <div className="rounded-xl border border-[rgba(154,154,154,0.4)] bg-[rgba(35,35,35,0.96)] p-2 px-3.5 text-[13px] text-[#f5f5f5]">
-      <div className="mb-1.5 font-bold">{formattedLabel}</div>
-      <div className="flex flex-col gap-1">
-        {[...payload].sort((left, right) => {
-          if (left.name === "heritage" || left.name === "value" || left.name === "balance") return -1;
-          if (right.name === "heritage" || right.name === "value" || right.name === "balance") return 1;
-          return (right.value || 0) - (left.value || 0);
-        }).map((payloadItem, index) => {
-          const name = String(payloadItem.name ?? "");
-          const labelStr = (name === "value" || name === "balance") ? "BALANCE" : name === "heritage" ? "HERITAGE" : formatProviderLabel(name);
-          return (
-            <div key={index} className="flex items-center justify-between gap-6">
-              <span className="text-[10px] font-bold uppercase text-white truncate max-w-[150px]">{labelStr}</span>
-              <span className="font-semibold">{formatEuroCents(payloadItem.value)}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+  return formattedLabel;
 }
 
-const CustomReferenceLabel = (props: { viewBox?: { x: number; y: number }; value?: number; selectedValue?: number | null }) => {
-  const { viewBox, value, selectedValue } = props;
-  if (!viewBox) return null;
-  const val = typeof selectedValue === "number" ? selectedValue : (typeof value === "number" ? value : 0);
-  const formattedValue = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(val / 100);
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const rectWidth = isMobile ? 64 : 72;
-  const rectHeight = 24;
-  const top = viewBox.y - rectHeight / 2;
-  const left = isMobile ? Math.max(2, viewBox.x - rectWidth / 2) : viewBox.x - rectWidth + 2;
-  const overlayTarget = typeof document !== "undefined" ? document.getElementById("chart-reference-overlay") : null;
-  if (!overlayTarget) return null;
-  return createPortal(
-    <div className="pointer-events-none absolute z-[100] flex items-center justify-center rounded-[12px] border-2 border-[#444444] bg-[#1a1a1a] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)]" style={{ top, left, width: rectWidth, height: rectHeight }}>
-      <span className="whitespace-nowrap text-[10px] font-bold text-white">{isMobile ? formattedValue.replace(/\s/g, "").replace(",00", "") : formattedValue.replace(/\s/g, "")}</span>
-    </div>,
-    overlayTarget
-  );
-};
+function formatTooltipSeriesLabel(name: string) {
+  if (name === "value" || name === "balance") return "BALANCE";
+  if (name === "heritage") return "HERITAGE";
+  return formatProviderLabel(name);
+}
 
 type PortfolioChartProps = {
   data: PortfolioData;
@@ -144,11 +95,11 @@ export function PortfolioChart({
           </button>
         </div>
       )}
-      <div className="absolute right-0 top-0 z-10 flex items-center justify-end gap-0.5">
-        {TIME_RANGES.map((range) => (
-          <button key={range} type="button" onClick={() => onSetTimeRange(range)} className="cursor-pointer rounded-md px-1.5 py-0 text-[8.5px] font-bold uppercase tracking-wider transition-colors duration-150 sm:text-[10px]" style={{ background: timeRange === range ? "rgba(255,255,255,0.08)" : "transparent", color: timeRange === range ? "#f5f5f5" : "#737373" }}>{range}</button>
-        ))}
-      </div>
+      <ChartTimeRangeControls
+        onTimeRangeChange={onSetTimeRange}
+        ranges={TIME_RANGES}
+        timeRange={timeRange}
+      />
 
       <div className="mt-10 flex-1 min-h-0 w-full outline-none" onClick={() => onSelectPoint(null)}>
         <div ref={chartContainerRef} className="relative h-full w-full">
@@ -175,7 +126,19 @@ export function PortfolioChart({
               />
               <YAxis tick={{ fill: "#a8a8a8", fontSize: isMobile ? 9 : 10 }} axisLine={false} tickLine={false} mirror={isMobile} tickFormatter={(value) => formatEuroCents(value).replace(/\s/g, "").replace(",00", "")} width={yAxisWidth} />
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,154,154,0.12)" vertical={false} />
-              <Tooltip content={<ChartTooltip setActivePoint={onSetActiveChartPoint} />} cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1, fill: "transparent" }} />
+              <Tooltip
+                content={(
+                  <ChartTooltip
+                    formatLabel={formatTooltipLabel}
+                    formatSeriesLabel={formatTooltipSeriesLabel}
+                    formatValue={formatEuroCents}
+                    labelClassName="truncate max-w-[150px]"
+                    priorityNames={["heritage", "value", "balance"]}
+                    setActivePoint={onSetActiveChartPoint}
+                  />
+                )}
+                cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1, fill: "transparent" }}
+              />
 
               {activeTab === "ALL" ? (
                 <>
@@ -286,46 +249,28 @@ export function PortfolioChart({
                   />
                 </>
               )}
-              {selectedPoint && <ReferenceLine y={selectedPoint.value} stroke="rgba(254, 254, 254, 0.5)" strokeWidth={1.5} strokeDasharray="6 4" label={<CustomReferenceLabel selectedValue={selectedPoint.value} />} />}
+              {selectedPoint && <ReferenceLine y={selectedPoint.value} stroke="rgba(254, 254, 254, 0.5)" strokeWidth={1.5} strokeDasharray="6 4" label={<ChartReferenceLabel selectedValue={selectedPoint.value} />} />}
             </LineChart>
           ) : null}
         </div>
       </div>
 
-      <div
-        className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar"
-        style={{ visibility: transactionCount > 0 ? "visible" : "hidden" }}
-      >
-        {activeTab === "ALL" ? (() => {
+      {activeTab === "ALL" ? (() => {
           const allSeriesKeys = ["heritage", ...data.providers.map(provider => provider.sourceInstitution)];
-          const visibleCount = allSeriesKeys.filter(key => !hiddenSeries[key]).length;
 
-          return allSeriesKeys.map((key, index) => {
-            const color = key === "heritage" ? "#ffffff" : GRAYSCALE_PALETTE[(index - 1) % GRAYSCALE_PALETTE.length];
-            const isLastVisible = !hiddenSeries[key] && visibleCount <= 1;
-            return (
-              <div key={key} style={{ color: hiddenSeries[key] ? "#4C4C4C" : color }}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    if (isLastVisible) return;
-                    onToggleSeries(key);
-                  }}
-                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { if (isLastVisible) return; onToggleSeries(key); } }}
-                  className={`flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider select-none outline-none whitespace-nowrap ${
-                    isLastVisible ? "cursor-not-allowed" : "cursor-pointer"
-                  }`}
-                  style={{ WebkitTapHighlightColor: "transparent", color: "inherit" }}
-                >
-                  <div className="h-[6px] w-[14px] rounded-full sm:h-[8px] sm:w-[16px]" style={{ backgroundColor: hiddenSeries[key] ? "#4C4C4C" : color }} />
-                  <span className={cn(hiddenSeries[key] && "line-through")}>
-                    {key === "heritage" ? "HERITAGE" : formatProviderLabel(key)}
-                  </span>
-                </div>
-              </div>
-            );
-          });
+          return (
+            <ChartLegend
+              className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar"
+              hiddenSeries={hiddenSeries}
+              items={allSeriesKeys.map((key, index) => ({
+                key,
+                label: key === "heritage" ? "HERITAGE" : formatProviderLabel(key),
+                color: key === "heritage" ? "#ffffff" : GRAYSCALE_PALETTE[(index - 1) % GRAYSCALE_PALETTE.length]
+              }))}
+              onToggleSeries={onToggleSeries}
+              transactionCount={transactionCount}
+            />
+          );
         })() : (() => {
           let metricKeys = ["balance", ...(activeProvider?.products.map(product => product.productName) || [])];
 
@@ -338,36 +283,25 @@ export function PortfolioChart({
             });
           }
 
-          const visibleCount = metricKeys.filter(key => !hiddenSeries[key]).length;
-
-          return metricKeys.map((key, index) => {
-            const isBalance = key === "balance";
-            const color = isBalance ? "#ffffff" : GRAYSCALE_PALETTE[(index - 1) % GRAYSCALE_PALETTE.length];
-            const isLastVisible = !hiddenSeries[key] && visibleCount <= 1;
-
-            return (
-              <div key={key} style={{ color: hiddenSeries[key] ? "#4C4C4C" : color }}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    if (isLastVisible) return;
-                    onToggleSeries(key);
-                  }}
-                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { if (isLastVisible) return; onToggleSeries(key); } }}
-                  className={`flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider select-none outline-none whitespace-nowrap max-w-[150px] ${
-                    isLastVisible ? "cursor-not-allowed" : "cursor-pointer"
-                  }`}
-                  style={{ WebkitTapHighlightColor: "transparent", color: "inherit" }}
-                >
-                  <div className="h-[6px] w-[14px] rounded-full sm:h-[8px] sm:w-[16px] flex-shrink-0" style={{ backgroundColor: hiddenSeries[key] ? "#4C4C4C" : color }} />
-                  <span className={cn("truncate", hiddenSeries[key] && "line-through")}>{isBalance ? "BALANCE" : key}</span>
-                </div>
-              </div>
-            );
-          });
+          return (
+            <ChartLegend
+              className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar"
+              hiddenSeries={hiddenSeries}
+              items={metricKeys.map((key, index) => {
+                const isBalance = key === "balance";
+                return {
+                  key,
+                  label: isBalance ? "BALANCE" : key,
+                  color: isBalance ? "#ffffff" : GRAYSCALE_PALETTE[(index - 1) % GRAYSCALE_PALETTE.length],
+                  labelClassName: "truncate"
+                };
+              })}
+              labelClassName="max-w-[150px]"
+              onToggleSeries={onToggleSeries}
+              transactionCount={transactionCount}
+            />
+          );
         })()}
-      </div>
     </>
   );
 }
