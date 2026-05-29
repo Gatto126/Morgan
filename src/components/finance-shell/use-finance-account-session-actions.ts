@@ -7,7 +7,7 @@ import { authClient } from "@/client/auth-client";
 
 import { getDeleteAccountDialogResetState } from "./delete-account-dialog-helpers";
 import type { UserRecord } from "./types";
-import { clearPersistedFinanceProfileSelection } from "./use-finance-profiles";
+import { clearPersistedFinanceProfileSelection } from "./use-finance-profile-persistence";
 
 type DeleteAccountPayload = {
   error?: string;
