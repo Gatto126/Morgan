@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, useEffect, useLayoutEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { AuthShell } from "./auth-shell";
 import { CreateProfileStage } from "./finance-shell/create-profile-stage";
 import {
@@ -14,13 +13,12 @@ import {
 import { FinanceShellMainFrame } from "./finance-shell/main-frame";
 import { ReviewPanel } from "./finance-shell/review-panel";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
-import { getDeleteAccountDialogResetState } from "./finance-shell/delete-account-dialog-helpers";
 import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import { SettingsPanel, type SettingsSection } from "./finance-shell/settings-panel";
 import type { UserRecord } from "./finance-shell/types";
 import { UploadPanel } from "./finance-shell/upload-panel";
+import { useFinanceAccountActions } from "./finance-shell/use-finance-account-actions";
 import {
-  clearPersistedFinanceProfileSelection,
   resolveInitialFinanceState,
   useFinanceProfiles
 } from "./finance-shell/use-finance-profiles";
@@ -29,8 +27,6 @@ import { useInertElements, useModalFocusTrap } from "./finance-shell/use-modal-a
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
 import { UserSelectPanel } from "./finance-shell/user-select-panel";
 import { WelcomeStage } from "./finance-shell/welcome-stage";
-
-import { authClient } from "@/client/auth-client";
 
 const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
 
@@ -60,29 +56,52 @@ function getStageTitle(stage: Stage, hasUsers: boolean) {
 }
 
 export function FinanceShell({ accountName, initialUsers }: { accountName: string; initialUsers: UserRecord[] }) {
-  const router = useRouter();
   const [initialFinanceState] = useState(() => resolveInitialFinanceState(initialUsers));
   const suggestedFirstProfileName = initialUsers.length === 0 ? accountName : "";
-  const [isSignedOut, setIsSignedOut] = useState(false);
   const [hasRestoredClientState, setHasRestoredClientState] = useState(false);
   const [users, setUsers] = useState<UserRecord[]>(initialUsers);
   const [name, setName] = useState(suggestedFirstProfileName);
   const [activeUser, setActiveUser] = useState<UserRecord | null>(initialFinanceState.activeUser);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [binanceKeyInput, setBinanceKeyInput] = useState("");
-  const [binanceSecretInput, setBinanceSecretInput] = useState("");
-  const [showSecret, setShowSecret] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
-  const [binanceRefreshKey, setBinanceRefreshKey] = useState(0);
-  const [showDeleteApiConfirm, setShowDeleteApiConfirm] = useState(false);
-  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
-  const [deleteAccountPassword, setDeleteAccountPassword] = useState("");
-  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [binanceFading, setBinanceFading] = useState(false);
-  const [forceApiSettingsSection, setForceApiSettingsSection] = useState(false);
+  const {
+    binanceFading,
+    binanceKeyInput,
+    binanceRefreshKey,
+    binanceSecretInput,
+    clearApiKeyDraft,
+    clearForcedApiSettingsSection,
+    clearPanelFeedback,
+    closeDeleteAccountConfirm,
+    deleteAccountError,
+    deleteAccountPassword,
+    error,
+    getVisibleSettingsSection,
+    handleDeleteAccount,
+    handleDeleteApiKeys,
+    handleSaveApiKeys,
+    handleSignOut,
+    isDeletingAccount,
+    isSignedOut,
+    isTesting,
+    notice,
+    openDeleteAccountConfirm,
+    setBinanceKeyInput,
+    setBinanceSecretInput,
+    setDeleteAccountPassword,
+    setError,
+    setNotice,
+    setShowDeleteApiConfirm,
+    setShowSecret,
+    showDeleteAccountConfirm,
+    showDeleteApiConfirm,
+    showSecret
+  } = useFinanceAccountActions({
+    activeUser,
+    onBinanceCredentialsDeleted: handleBinanceCredentialsDeleted,
+    showApiSettingsPanel,
+    setActiveUser,
+    setUsers
+  });
   const appContentRef = useRef<HTMLDivElement | null>(null);
   const dashboardTabsPortalRef = useRef<HTMLDivElement | null>(null);
   const dashboardBackgroundRef = useRef<HTMLDivElement | null>(null);
@@ -320,237 +339,18 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     setShowSettingsView
   ]);
 
-  function clearApiKeyDraft() {
-    setBinanceKeyInput("");
-    setBinanceSecretInput("");
-    setShowSecret(false);
-  }
+  const title = isRestoringProfileSelection ? "Morgan" : getStageTitle(stage, hasUsers);
 
-  function clearPanelFeedback() {
-    setError(null);
-    setNotice(null);
-    setShowDeleteApiConfirm(false);
-  }
-
-  // Automatically dismiss success notices/errors after 3.5 seconds (not while testing)
-  useEffect(() => {
-    if ((notice || error) && !isTesting) {
-      const timer = setTimeout(() => {
-        setNotice(null);
-        setError(null);
-      }, 3500);
-      return () => clearTimeout(timer);
-    }
-  }, [notice, error, isTesting]);
-
-  useEffect(() => {
-    if (!isTesting) {
-      return;
-    }
-
+  function showApiSettingsPanel() {
     setShowSettingsView(true);
     setActiveSettingsSection("apiKey");
     setShowUserSelectView(false);
     setShowCreateUserSubmenu(false);
-  }, [
-    isTesting,
-    setActiveSettingsSection,
-    setShowCreateUserSubmenu,
-    setShowSettingsView,
-    setShowUserSelectView
-  ]);
-
-  async function handleSaveApiKeys() {
-    if (!activeUser) return;
-
-    const keepApiSettingsOpen = () => {
-      setForceApiSettingsSection(true);
-      setShowSettingsView(true);
-      setActiveSettingsSection("apiKey");
-      setShowUserSelectView(false);
-      setShowCreateUserSubmenu(false);
-    };
-
-    try {
-      keepApiSettingsOpen();
-      setError(null);
-      setNotice(null);
-
-      // Phase 1: persist keys
-      const response = await fetch(`/api/users/${activeUser.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey: binanceKeyInput.trim() || null,
-          apiSecret: binanceSecretInput.trim() || null,
-        }),
-      });
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to save API keys.");
-      }
-
-      const updatedUser = {
-        ...activeUser,
-        hasBinanceCredentials: payload.user.hasBinanceCredentials,
-        binanceApiKeyPreview: payload.user.binanceApiKeyPreview,
-      };
-      setActiveUser(updatedUser);
-      setBinanceKeyInput("");
-      setBinanceSecretInput("");
-      setShowSecret(false);
-      setUsers((prevUsers) =>
-        prevUsers.map((u) => (u.id === activeUser.id ? updatedUser : u))
-      );
-
-      // Phase 2: sync all wallets against Binance (Spot + Funding + Earn)
-      keepApiSettingsOpen();
-      setIsTesting(true);
-      setNotice("Testing endpoint...");
-
-      const testResponse = await fetch("/api/binance/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: activeUser.id }),
-      });
-
-      const testPayload = await testResponse.json();
-
-      if (!testResponse.ok) {
-        throw new Error(testPayload.error ?? "Binance connection failed.");
-      }
-
-      const tokenCount: number = testPayload.balances?.length ?? 0;
-      setNotice(
-        tokenCount > 0
-          ? `Connected! ${tokenCount} token${tokenCount !== 1 ? "s" : ""} found.`
-          : "Connected! Empty wallet."
-      );
-      keepApiSettingsOpen();
-      setBinanceRefreshKey((k) => k + 1);
-    } catch (err) {
-      keepApiSettingsOpen();
-      setError(err instanceof Error ? err.message : "Error saving API keys.");
-    } finally {
-      keepApiSettingsOpen();
-      setIsTesting(false);
-    }
   }
 
-  async function handleDeleteApiKeys(deleteData: boolean) {
-    if (!activeUser) return;
-
-    setShowDeleteApiConfirm(false);
-    setError(null);
-    setNotice(null);
-    setBinanceFading(true);
-
-    try {
-      const response = await fetch(`/api/users/${activeUser.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey: null,
-          apiSecret: null,
-          deleteBalances: deleteData,
-        }),
-      });
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to delete API keys.");
-      }
-
-      // Let the CSS fade-out transition complete before removing the element from the DOM
-      await new Promise<void>((resolve) => setTimeout(resolve, 300));
-
-      const updatedUser = { ...activeUser, hasBinanceCredentials: false, binanceApiKeyPreview: null };
-      setActiveUser(updatedUser);
-      setBinanceKeyInput("");
-      setBinanceSecretInput("");
-      setUsers((prev) => prev.map((u) => (u.id === activeUser.id ? updatedUser : u)));
-
-      if (deleteData) setBinanceRefreshKey((k) => k + 1);
-      if (stage === "binance") setStage("dashboard");
-
-      setNotice(deleteData ? "API keys and data deleted." : "API keys deleted.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error deleting API keys.");
-    } finally {
-      setBinanceFading(false);
-    }
-  }
-
-  async function handleSignOut() {
-    try {
-      await authClient.signOut();
-    } finally {
-      clearPersistedFinanceProfileSelection();
-      setIsSignedOut(true);
-      router.refresh();
-    }
-  }
-
-  const title = isRestoringProfileSelection ? "Morgan" : getStageTitle(stage, hasUsers);
-
-  function openDeleteAccountConfirm() {
-    const resetState = getDeleteAccountDialogResetState();
-
-    setDeleteAccountPassword(resetState.password);
-    setDeleteAccountError(resetState.error);
-    setShowDeleteAccountConfirm(true);
-    setError(null);
-    setNotice(null);
-  }
-
-  function closeDeleteAccountConfirm() {
-    if (isDeletingAccount) return;
-
-    setShowDeleteAccountConfirm(false);
-    const resetState = getDeleteAccountDialogResetState();
-    setDeleteAccountPassword(resetState.password);
-    setDeleteAccountError(resetState.error);
-  }
-
-  async function handleDeleteAccount() {
-    if (isDeletingAccount) return;
-
-    try {
-      setIsDeletingAccount(true);
-      setDeleteAccountError(null);
-      const response = await fetch("/api/account", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: deleteAccountPassword })
-      });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Error during account deletion.");
-      }
-
-      try {
-        await authClient.signOut();
-      } catch {
-        // The account and session may already be gone after the server-side delete.
-      }
-
-      clearPersistedFinanceProfileSelection();
-      setUsers([]);
-      setActiveUser(null);
-      setIsSignedOut(true);
-      setShowDeleteAccountConfirm(false);
-      const resetState = getDeleteAccountDialogResetState();
-      setDeleteAccountPassword(resetState.password);
-      setDeleteAccountError(resetState.error);
-      router.refresh();
-    } catch (err) {
-      setDeleteAccountError(err instanceof Error ? err.message : "Error during account deletion.");
-    } finally {
-      setIsDeletingAccount(false);
+  function handleBinanceCredentialsDeleted() {
+    if (stage === "binance") {
+      setStage("dashboard");
     }
   }
 
@@ -577,18 +377,18 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
 
   function handleSettingsSectionSelect(section: SettingsSection) {
     if (section !== "apiKey") {
-      setForceApiSettingsSection(false);
+      clearForcedApiSettingsSection();
     }
     toggleSettingsSection(section);
   }
 
   function handleSettingsPanelClose() {
-    setForceApiSettingsSection(false);
+    clearForcedApiSettingsSection();
     handleCloseSettings();
   }
 
   function handleSettingsNavClick() {
-    setForceApiSettingsSection(false);
+    clearForcedApiSettingsSection();
     handleSettingsClick();
   }
 
@@ -610,8 +410,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
 
   function renderSettingsState() {
     const isApiKeySaved = !!activeUser?.hasBinanceCredentials;
-    const visibleSettingsSection =
-      forceApiSettingsSection && showSettingsView ? "apiKey" : activeSettingsSection;
+    const visibleSettingsSection = getVisibleSettingsSection(activeSettingsSection, showSettingsView);
 
     return (
       <SettingsPanel
@@ -629,7 +428,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         notice={notice}
         onSelectSection={handleSettingsSectionSelect}
         onBackToMenu={() => {
-          setForceApiSettingsSection(false);
+          clearForcedApiSettingsSection();
           clearPanelFeedback();
           setActiveSettingsSection(null);
         }}
