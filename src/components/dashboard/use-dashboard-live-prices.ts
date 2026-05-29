@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { globalLivePricesCache, saveLivePricesToCache } from "@/shared/live-prices";
+import { fetchAndCacheLivePrices, globalLivePricesCache } from "@/shared/live-prices";
 import type { ProviderSummary } from "./types";
 
 type UseDashboardLivePricesOptions = {
@@ -59,24 +59,11 @@ export function useDashboardLivePrices(
       return;
     }
 
-    try {
-      const params = new URLSearchParams();
-      if (allIsins.size > 0) {
-        params.set("isins", [...allIsins].join(","));
-      }
-      if (allCryptos.size > 0) {
-        params.set("cryptos", [...allCryptos].join(","));
-      }
-
-      const response = await fetch(`/api/prices?${params.toString()}`);
-      if (response.ok) {
-        const prices = await response.json() as Record<string, number | null>;
-        saveLivePricesToCache(prices);
-        setLivePrices((previousPrices) => ({ ...previousPrices, ...prices }));
-      }
-    } catch {
-      // Price updates are opportunistic; cached/dashboard values remain usable.
-    }
+    const prices = await fetchAndCacheLivePrices({
+      cryptos: [...allCryptos],
+      isins: [...allIsins]
+    });
+    setLivePrices((previousPrices) => ({ ...previousPrices, ...prices }));
   }, []);
 
   useEffect(() => {

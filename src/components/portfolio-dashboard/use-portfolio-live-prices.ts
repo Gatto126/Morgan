@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { globalLivePricesCache, saveLivePricesToCache } from "@/shared/live-prices";
+import { fetchAndCacheLivePrices, globalLivePricesCache } from "@/shared/live-prices";
 
 import type { PortfolioDashboardConfig, PortfolioProviderSummary } from "./types";
 
@@ -29,16 +29,10 @@ export function usePortfolioLivePrices({
     }
     if (allIsins.size === 0) return;
 
-    try {
-      const response = await fetch(`/api/prices?${priceQueryParam}=${[...allIsins].join(",")}`);
-      if (response.ok) {
-        const prices = await response.json();
-        saveLivePricesToCache(prices);
-        setLivePrices(prev => ({ ...prev, ...prices }));
-      }
-    } catch {
-      // Live prices are opportunistic; cached or invested values remain visible on failure.
-    }
+    const prices = await fetchAndCacheLivePrices({
+      [priceQueryParam]: [...allIsins]
+    });
+    setLivePrices(prev => ({ ...prev, ...prices }));
   }, [priceQueryParam]);
 
   useEffect(() => {

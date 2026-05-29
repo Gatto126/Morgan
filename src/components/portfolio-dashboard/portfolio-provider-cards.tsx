@@ -1,9 +1,10 @@
 import { createPortal } from "react-dom";
+import { useMemo, useState } from "react";
 
 import { cn } from "@/shared/utils";
 
 import { formatEuroCents, formatProviderLabel } from "./formatters";
-import type { PortfolioDashboardConfig, PortfolioProviderSummary } from "./types";
+import type { PortfolioDashboardConfig, PortfolioProviderSummary, PortfolioTransaction } from "./types";
 
 type PortfolioProviderCardsProps = {
   portalNode: HTMLElement | null;
@@ -13,6 +14,8 @@ type PortfolioProviderCardsProps = {
   isActive: boolean;
   getProviderLiveTotal: (provider: PortfolioProviderSummary) => number;
 };
+
+const INITIAL_TRANSACTION_ROWS = 100;
 
 export function PortfolioProviderCards({
   portalNode,
@@ -107,44 +110,78 @@ export function PortfolioProviderCards({
             </div>
 
             <div className="flex flex-col min-h-[280px] lg:h-[400px] flex-1 overflow-hidden rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[#1f1f1f]">
-              <div className="h-full overflow-auto rounded-[20px] hide-scrollbar">
-                <table className="min-w-full border-separate border-spacing-0 text-[11px] sm:text-sm">
-                  <thead>
-                    <tr className="text-left text-[10px] uppercase tracking-[0.12em] text-[#D9D9D9] sm:text-[11px] sm:tracking-[0.18em]">
-                      <th className="sticky top-0 z-20 rounded-tl-[18px] border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-1.5 py-2 font-medium sm:px-4 sm:py-3">Date</th>
-                      <th className="sticky top-0 z-20 border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-4 py-2 font-medium hidden md:table-cell sm:py-3 text-center">Type</th>
-                      <th className="sticky top-0 z-20 border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-1.5 py-2 font-medium sm:px-4 sm:py-3 text-left w-full">Asset</th>
-                      <th className="sticky top-0 z-20 rounded-tr-[18px] border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-1.5 py-2 text-right font-medium sm:px-4 sm:py-3">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {provider.transactions
-                      .filter(config.transactionFilter)
-                      .slice(0, 50)
-                      .map((transaction) => (
-                        <tr key={transaction.id} className="border-b border-[color:rgba(255,255,255,0.08)] align-middle last:border-b-0 hover:bg-[color:rgba(255,255,255,0.03)] transition-colors duration-150">
-                          <td className="px-1.5 py-2 text-[color:var(--text-main)] sm:px-4">
-                            <div className="font-semibold whitespace-nowrap">{new Date(transaction.bookingDate).toISOString().split("T")[0]}</div>
-                          </td>
-                          <td className="px-4 py-2 text-[color:var(--text-main)] hidden md:table-cell whitespace-nowrap text-center opacity-70">{transaction.typeLabel}</td>
-                          <td className="px-1.5 py-2 text-[color:var(--text-main)] sm:px-4 w-full max-w-0">
-                            <div className="leading-5 truncate capitalize font-medium">
-                              {transaction.productName || transaction.description}
-                              {transaction.isin && <span className="ml-1"> - {transaction.isin}</span>}
-                            </div>
-                          </td>
-                          <td className="px-1.5 py-2 text-right font-bold whitespace-nowrap sm:px-4 text-white">
-                            {(transaction.tradeType?.toUpperCase() === "SELL" || transaction.typeLabel?.toUpperCase() === "SELL") ? "-" : "+"}{formatEuroCents(transaction.amountCents)}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
+              <PortfolioTransactionTable
+                transactionFilter={config.transactionFilter}
+                transactions={provider.transactions}
+              />
             </div>
           </div>
       ))}
     </div>,
     portalNode
+  );
+}
+
+function PortfolioTransactionTable({
+  transactions,
+  transactionFilter
+}: {
+  transactions: PortfolioTransaction[];
+  transactionFilter: (transaction: PortfolioTransaction) => boolean;
+}) {
+  const [showAllRows, setShowAllRows] = useState(false);
+  const filteredTransactions = useMemo(
+    () => transactions.filter(transactionFilter),
+    [transactionFilter, transactions]
+  );
+  const visibleTransactions = showAllRows
+    ? filteredTransactions
+    : filteredTransactions.slice(0, INITIAL_TRANSACTION_ROWS);
+  const hiddenRows = filteredTransactions.length - visibleTransactions.length;
+
+  return (
+    <>
+      <div className="min-h-0 flex-1 overflow-auto rounded-t-[20px] hide-scrollbar">
+        <table className="min-w-full border-separate border-spacing-0 text-[11px] sm:text-sm">
+          <thead>
+            <tr className="text-left text-[10px] uppercase tracking-[0.12em] text-[#D9D9D9] sm:text-[11px] sm:tracking-[0.18em]">
+              <th className="sticky top-0 z-20 rounded-tl-[18px] border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-1.5 py-2 font-medium sm:px-4 sm:py-3">Date</th>
+              <th className="sticky top-0 z-20 border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-4 py-2 font-medium hidden md:table-cell sm:py-3 text-center">Type</th>
+              <th className="sticky top-0 z-20 border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-1.5 py-2 font-medium sm:px-4 sm:py-3 text-left w-full">Asset</th>
+              <th className="sticky top-0 z-20 rounded-tr-[18px] border-b border-[color:var(--line-strong)] bg-[#1f1f1f] px-1.5 py-2 text-right font-medium sm:px-4 sm:py-3">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleTransactions.map((transaction) => (
+              <tr key={transaction.id} className="border-b border-[color:rgba(255,255,255,0.08)] align-middle last:border-b-0 hover:bg-[color:rgba(255,255,255,0.03)] transition-colors duration-150">
+                <td className="px-1.5 py-2 text-[color:var(--text-main)] sm:px-4">
+                  <div className="font-semibold whitespace-nowrap">{new Date(transaction.bookingDate).toISOString().split("T")[0]}</div>
+                </td>
+                <td className="px-4 py-2 text-[color:var(--text-main)] hidden md:table-cell whitespace-nowrap text-center opacity-70">{transaction.typeLabel}</td>
+                <td className="px-1.5 py-2 text-[color:var(--text-main)] sm:px-4 w-full max-w-0">
+                  <div className="leading-5 truncate capitalize font-medium">
+                    {transaction.productName || transaction.description}
+                    {transaction.isin && <span className="ml-1"> - {transaction.isin}</span>}
+                  </div>
+                </td>
+                <td className="px-1.5 py-2 text-right font-bold whitespace-nowrap sm:px-4 text-white">
+                  {(transaction.tradeType?.toUpperCase() === "SELL" || transaction.typeLabel?.toUpperCase() === "SELL") ? "-" : "+"}{formatEuroCents(transaction.amountCents)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {filteredTransactions.length > INITIAL_TRANSACTION_ROWS ? (
+        <button
+          className="border-t border-[color:var(--line-strong)] px-4 py-3 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)] transition-colors hover:text-white"
+          onClick={() => setShowAllRows((value) => !value)}
+          type="button"
+        >
+          {showAllRows ? "Show latest" : `Show all ${filteredTransactions.length}`}
+          {hiddenRows > 0 ? <span className="ml-2 text-[color:var(--text-dim)]/60">+{hiddenRows}</span> : null}
+        </button>
+      ) : null}
+    </>
   );
 }
