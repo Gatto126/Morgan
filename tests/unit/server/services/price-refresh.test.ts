@@ -50,7 +50,67 @@ describe("price refresh service", () => {
       BTC: 6200000,
       ETH: 250000
     });
-    expect(repository.listLatestHistoricalPrices).toHaveBeenCalledWith(["IE00B4L5Y983", "ETH"]);
+    expect(repository.listLatestHistoricalPrices).toHaveBeenCalledWith(["IE00B4L5Y983", "BTC", "ETH"]);
+  });
+
+  it("uses historical fallback quickly when a live price is slow", async () => {
+    vi.useFakeTimers();
+    try {
+      const repository = {
+        listLatestHistoricalPrices: vi.fn(async () => new Map([
+          ["IE00B4L5Y983", 12345]
+        ]))
+      };
+      const service = createPriceRefreshService({
+        repository,
+        rateLimiter: { getRetryAfterMs: () => null },
+        isinFetcher: vi.fn(() => new Promise<number | null>(() => {})),
+        cryptoFetcher: vi.fn(async () => null),
+        historicalFallbackGraceMs: 25,
+        logger: silentLogger
+      });
+
+      const request = service.fetchPrices({ isins: ["IE00B4L5Y983"], cryptos: [] });
+      await vi.advanceTimersByTimeAsync(25);
+
+      await expect(request).resolves.toEqual({
+        IE00B4L5Y983: 12345
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not serially wait on every historical key beyond the live concurrency window", async () => {
+    vi.useFakeTimers();
+    try {
+      const keys = ["IE00B4L5Y983", "IE00BKM4GZ66", "IE00B3XXRP09"];
+      const repository = {
+        listLatestHistoricalPrices: vi.fn(async () => new Map(keys.map((key, index) => [key, 100 + index])))
+      };
+      const isinFetcher = vi.fn(() => new Promise<number | null>(() => {}));
+      const service = createPriceRefreshService({
+        repository,
+        rateLimiter: { getRetryAfterMs: () => null },
+        isinFetcher,
+        cryptoFetcher: vi.fn(async () => null),
+        isinConcurrency: 1,
+        historicalFallbackGraceMs: 25,
+        logger: silentLogger
+      });
+
+      const request = service.fetchPrices({ isins: keys, cryptos: [] });
+      await vi.advanceTimersByTimeAsync(25);
+
+      await expect(request).resolves.toEqual({
+        IE00B4L5Y983: 100,
+        IE00BKM4GZ66: 101,
+        IE00B3XXRP09: 102
+      });
+      expect(isinFetcher).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("deduplicates concurrent live fetches for the same key", async () => {

@@ -7,7 +7,7 @@ export function filterCheckingData(
   range: TimeRange
 ): CheckingBucket[] {
   if (range === "ALL") {
-    return data.daily;
+    return data.monthly.length > 1 ? data.monthly : data.daily;
   }
 
   const cutoff = new Date();

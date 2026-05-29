@@ -190,6 +190,46 @@ describe("dashboard chart data model", () => {
     expect(points[3].Bitcoin).toBe(0);
   });
 
+  it("uses monthly buckets for long ALL ranges", () => {
+    const points = buildDashboardChartData({
+      activeTab: "heritage",
+      binanceTotalCents: 0,
+      checkingProviders: ["bbva"],
+      cryptoInstitutions: [],
+      cryptoTokens: [],
+      data: {
+        ...dashboardData,
+        monthlyData: [
+          {
+            month: "2026-01",
+            checking: 10000,
+            investment: 0,
+            crypto: 0,
+            heritage: 10000,
+            providerChecking: { bbva: 10000 },
+            providerProducts: {},
+            providerCryptoTokens: {}
+          },
+          {
+            month: "2026-02",
+            checking: 15000,
+            investment: 0,
+            crypto: 0,
+            heritage: 15000,
+            providerChecking: { bbva: 15000 },
+            providerProducts: {},
+            providerCryptoTokens: {}
+          }
+        ]
+      },
+      hasBinancePortfolio: false,
+      investmentProducts: [],
+      timeRange: "ALL"
+    });
+
+    expect(points.map((point) => point.rawMonth)).toEqual(["2026-01", "2026-02"]);
+  });
+
   it("adds Binance to heritage, crypto and the dedicated Binance series", () => {
     const points = buildHeritageData();
 

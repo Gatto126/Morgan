@@ -72,6 +72,34 @@ describe("checking chart data", () => {
     expect(points[1].expenses).toBe(8650);
   });
 
+  it("uses monthly buckets for long ALL ranges", () => {
+    const points = buildCheckingChartData({
+      data: {
+        ...checkingData,
+        monthlyData: [
+          {
+            month: "2026-03",
+            total: 241350,
+            providers: { bbva: 241350 },
+            providerIncome: { bbva: 250000 },
+            providerExpenses: { bbva: 8650 }
+          },
+          {
+            month: "2026-04",
+            total: 241475,
+            providers: { bbva: 241475 },
+            providerIncome: { bbva: 125 },
+            providerExpenses: {}
+          }
+        ]
+      },
+      activeTab: "ALL",
+      timeRange: "ALL"
+    });
+
+    expect(points.map((point) => point.rawMonth)).toEqual(["2026-03", "2026-04"]);
+  });
+
   it("uses the first visible point for each month as x-axis tick", () => {
     const points = buildCheckingChartData({
       data: checkingData,

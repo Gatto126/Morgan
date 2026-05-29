@@ -25,6 +25,7 @@
     "test:scripts": "vitest run scripts",
     "test:run": "vitest run",
     "test:rate-limit:clear": "node scripts/testing/clear-rate-limits.mjs",
+    "seed:performance": "node scripts/testing/seed-dashboard-performance-data.mjs",
     "smoke:upload-panel": "node scripts/e2e/smoke-upload-panel.mjs",
     "smoke:upload-panel:docker": "node scripts/e2e/smoke-upload-panel.mjs --base-url=http://127.0.0.1:3001 --no-start-server",
     "e2e:docker:full": "node scripts/e2e/full-browser-flow.mjs",

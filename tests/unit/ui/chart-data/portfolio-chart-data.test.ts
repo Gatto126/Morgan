@@ -86,6 +86,41 @@ describe("portfolio chart data", () => {
     expect(points[2]["iShares Core MSCI World UCITS ETF USD (Acc)"]).toBe(0);
   });
 
+  it("uses monthly buckets for long ALL ranges", () => {
+    const points = buildPortfolioChartData({
+      data: {
+        ...portfolioData,
+        monthlyData: [
+          {
+            month: "2026-03",
+            total: 35000,
+            providers: { trade_republic: 35000 },
+            providerProducts: {
+              trade_republic: {
+                "iShares Core MSCI World UCITS ETF USD (Acc)": 35000
+              }
+            }
+          },
+          {
+            month: "2026-04",
+            total: 0,
+            providers: { trade_republic: 0 },
+            providerProducts: {
+              trade_republic: {
+                "iShares Core MSCI World UCITS ETF USD (Acc)": 0
+              }
+            }
+          }
+        ]
+      },
+      activeTab: "ALL",
+      timeRange: "ALL",
+      activeProvider: null
+    });
+
+    expect(points.map((point) => point.rawMonth)).toEqual(["2026-03", "2026-04"]);
+  });
+
   it("uses the first visible point for each month as x-axis tick", () => {
     const points = buildPortfolioChartData({
       data: portfolioData,

@@ -10,6 +10,7 @@ const log = apiLogger("Prices");
 const BINANCE_TIMEOUT_MS = 5_000;
 const DEFAULT_ISIN_PRICE_CONCURRENCY = 5;
 const DEFAULT_CRYPTO_PRICE_CONCURRENCY = 10;
+const DEFAULT_HISTORICAL_FALLBACK_GRACE_MS = 1_200;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 12;
 
@@ -93,6 +94,7 @@ type CreatePriceRefreshServiceOptions = {
   cryptoFetcher?: PriceFetcher;
   isinConcurrency?: number;
   cryptoConcurrency?: number;
+  historicalFallbackGraceMs?: number;
   inFlightIsinPrices?: Map<string, Promise<number | null>>;
   inFlightCryptoPrices?: Map<string, Promise<number | null>>;
   logger?: PriceLogger;
@@ -135,6 +137,36 @@ function fetchInFlightDeduped(
   });
   map.set(key, request);
   return request;
+}
+
+async function resolveWithHistoricalFallbackDeadline(
+  livePrice: Promise<number | null>,
+  key: string,
+  historicalPrices: Map<string, number>,
+  graceMs: number,
+  logger: PriceLogger
+) {
+  if (!historicalPrices.has(key)) {
+    return livePrice;
+  }
+
+  let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      livePrice,
+      new Promise<null>((resolve) => {
+        fallbackTimer = setTimeout(() => {
+          fallbackTimer = undefined;
+          logger.info(`[${key}] Falling back to asset history after ${graceMs}ms.`);
+          resolve(null);
+        }, graceMs);
+      })
+    ]);
+  } finally {
+    if (fallbackTimer) {
+      clearTimeout(fallbackTimer);
+    }
+  }
 }
 
 function fetchLivePrice(isin: string, timeoutMs = 6_000, logger: PriceLogger = log): Promise<number | null> {
@@ -226,18 +258,43 @@ async function fetchPriceResults(
   concurrency: number,
   fetcher: PriceFetcher,
   inFlightPrices: Map<string, Promise<number | null>>,
+  historicalPrices: Map<string, number>,
+  historicalFallbackGraceMs: number,
   logger: PriceLogger
 ) {
-  return mapWithConcurrency(keys, concurrency, async (key): Promise<PriceFetchResult> => {
+  const safeConcurrency = Math.max(1, concurrency);
+  const liveAttemptLimit = safeConcurrency;
+  const liveKeys = keys.filter((key, index) => !historicalPrices.has(key) || index < liveAttemptLimit);
+  const historicalOnlyKeys = keys.filter((key, index) => historicalPrices.has(key) && index >= liveAttemptLimit);
+
+  const liveResults = await mapWithConcurrency(liveKeys, safeConcurrency, async (key): Promise<PriceFetchResult> => {
     try {
       logger.info(`[${key}] Fetching ${kind} live price.`);
-      const price = await fetchInFlightDeduped(inFlightPrices, key, () => fetcher(key));
+      const livePrice = fetchInFlightDeduped(inFlightPrices, key, () => fetcher(key));
+      const price = await resolveWithHistoricalFallbackDeadline(
+        livePrice,
+        key,
+        historicalPrices,
+        historicalFallbackGraceMs,
+        logger
+      );
       return { key, price };
     } catch (error) {
       logger.error("GET", `/api/prices?${kind}=${key}`, error);
       return { key, price: null };
     }
   });
+
+  for (const key of historicalOnlyKeys) {
+    logger.info(`[${key}] Using queued historical fallback without live fetch.`);
+  }
+
+  const resultByKey = new Map([
+    ...liveResults.map((result) => [result.key, result] as const),
+    ...historicalOnlyKeys.map((key) => [key, { key, price: null }] as const)
+  ]);
+
+  return keys.map((key) => resultByKey.get(key) ?? { key, price: null });
 }
 
 export function createPriceRefreshService({
@@ -247,6 +304,7 @@ export function createPriceRefreshService({
   cryptoFetcher,
   isinConcurrency = DEFAULT_ISIN_PRICE_CONCURRENCY,
   cryptoConcurrency = DEFAULT_CRYPTO_PRICE_CONCURRENCY,
+  historicalFallbackGraceMs = DEFAULT_HISTORICAL_FALLBACK_GRACE_MS,
   inFlightIsinPrices = new Map<string, Promise<number | null>>(),
   inFlightCryptoPrices = new Map<string, Promise<number | null>>(),
   logger = log
@@ -260,16 +318,32 @@ export function createPriceRefreshService({
     },
 
     async fetchPrices({ isins, cryptos }: PriceRefreshRequest) {
+      const requestKeys = [...isins, ...cryptos];
+      const historicalPrices = await repository.listLatestHistoricalPrices(requestKeys);
       const [isinResults, cryptoResults] = await Promise.all([
-        fetchPriceResults("isin", isins, isinConcurrency, fetchIsinPrice, inFlightIsinPrices, logger),
-        fetchPriceResults("crypto", cryptos, cryptoConcurrency, fetchCryptoPrice, inFlightCryptoPrices, logger)
+        fetchPriceResults(
+          "isin",
+          isins,
+          isinConcurrency,
+          fetchIsinPrice,
+          inFlightIsinPrices,
+          historicalPrices,
+          historicalFallbackGraceMs,
+          logger
+        ),
+        fetchPriceResults(
+          "crypto",
+          cryptos,
+          cryptoConcurrency,
+          fetchCryptoPrice,
+          inFlightCryptoPrices,
+          historicalPrices,
+          historicalFallbackGraceMs,
+          logger
+        )
       ]);
 
       const fetchResults = [...isinResults, ...cryptoResults];
-      const missingLiveKeys = fetchResults
-        .filter((result) => result.price === null)
-        .map((result) => result.key);
-      const historicalPrices = await repository.listLatestHistoricalPrices(missingLiveKeys);
       const prices: Record<string, number | null> = {};
 
       for (const result of fetchResults) {

@@ -31,7 +31,7 @@ export function getMonthLabel(month: string) {
 
 export function filterData(data: { monthly: MonthlyBucket[]; daily: DailyBucket[] }, range: TimeRange): (MonthlyBucket & { date?: string })[] {
   if (range === "ALL") {
-    return data.daily;
+    return data.monthly.length > 1 ? data.monthly : data.daily;
   }
 
   const cutoff = new Date();
