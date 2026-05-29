@@ -125,6 +125,10 @@ describe("transaction import repository", () => {
     });
 
     expect(mocks.checkingCreateMany).toHaveBeenCalledOnce();
+    expect(mocks.checkingCreateMany).toHaveBeenCalledWith({
+      data: expect.any(Array),
+      skipDuplicates: true
+    });
     expect(mocks.transaction).toHaveBeenCalledWith(["checking-query"]);
   });
 
@@ -141,5 +145,16 @@ describe("transaction import repository", () => {
       })
     }));
     expect(mocks.assetHistoryCreateMany).not.toHaveBeenCalled();
+  });
+
+  it("skips duplicate asset history points created by concurrent enrichments", async () => {
+    await transactionImportRepository.createAssetHistory([
+      { isin: "IE00B4L5Y983", date: "2026-01-01", value: 42, currency: "EUR" }
+    ]);
+
+    expect(mocks.assetHistoryCreateMany).toHaveBeenCalledWith({
+      data: [{ isin: "IE00B4L5Y983", date: "2026-01-01", value: 42, currency: "EUR" }],
+      skipDuplicates: true
+    });
   });
 });

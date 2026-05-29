@@ -2,6 +2,9 @@ import { parse } from "node-html-parser";
 import { apiLogger } from "@/server/logging/logger";
 
 const log = apiLogger("JustETF");
+const JUSTETF_PAGE_TIMEOUT_MS = 10_000;
+const JUSTETF_AJAX_TIMEOUT_MS = 8_000;
+const JUSTETF_HISTORY_TIMEOUT_MS = 10_000;
 
 /**
  * Metadata retrieved from an ETF or Stock page via ISIN.
@@ -102,7 +105,8 @@ export async function fetchAssetMetadata(isin: string): Promise<AssetMetadata> {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36"
-      }
+      },
+      signal: AbortSignal.timeout(JUSTETF_PAGE_TIMEOUT_MS)
     });
 
     if (!response.ok) {
@@ -251,7 +255,10 @@ export async function fetchAssetMetadata(isin: string): Promise<AssetMetadata> {
             headers["Cookie"] = cookieStr;
           }
 
-          const ajaxResponse = await fetch(ajaxUrl, { headers });
+          const ajaxResponse = await fetch(ajaxUrl, {
+            headers,
+            signal: AbortSignal.timeout(JUSTETF_AJAX_TIMEOUT_MS)
+          });
           if (ajaxResponse.ok) {
             const ajaxText = await ajaxResponse.text();
             log.info(`AJAX ${pattern} → ${ajaxText.length} chars`);
@@ -366,7 +373,8 @@ export async function fetchAssetMetadata(isin: string): Promise<AssetMetadata> {
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36"
-        }
+        },
+        signal: AbortSignal.timeout(JUSTETF_PAGE_TIMEOUT_MS)
       });
 
       if (stockResponse.ok) {
@@ -527,6 +535,7 @@ export async function fetchAssetHistory(
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "application/json",
       },
+      signal: AbortSignal.timeout(JUSTETF_HISTORY_TIMEOUT_MS)
     });
 
     if (!res.ok) {

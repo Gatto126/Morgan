@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
+import { authGuardResponse, requireAuth, requireOwnedProfile } from "@/server/auth/auth-guard";
 import { assertUserExists, getExistingFingerprints, markPreviewTransactions } from "@/server/services/transaction-import";
 import { parseTradeRepublicCsv } from "@/domain/imports/trade-republic-csv-parser";
 import { parseBbvaXlsxStatement } from "@/domain/imports/bbva-xlsx-parser";
@@ -24,6 +24,8 @@ function getSupportedExtension(fileName: string) {
 export async function POST(request: Request) {
   try {
     requireSameOriginMutation(request);
+    await requireAuth(request);
+
     const formData = await request.formData();
     const userId = formData.get("userId");
     const file = formData.get("file");

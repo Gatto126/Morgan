@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   logError: vi.fn(),
   logRequest: vi.fn(),
   logResponse: vi.fn(),
+  clearScopedRateLimit: vi.fn(),
+  consumeScopedRateLimit: vi.fn(),
   verifyPassword: vi.fn()
 }));
 
@@ -48,6 +50,11 @@ vi.mock("@/server/logging/logger", () => ({
     request: mocks.logRequest,
     response: mocks.logResponse
   })
+}));
+
+vi.mock("@/server/services/rate-limit", () => ({
+  clearScopedRateLimit: mocks.clearScopedRateLimit,
+  consumeScopedRateLimit: mocks.consumeScopedRateLimit
 }));
 
 import { DELETE } from "@/app/api/account/route";
@@ -93,6 +100,8 @@ describe("DELETE /api/account", () => {
       deletedCryptoAssets: 0,
       deletedPriceCache: 0
     });
+    mocks.consumeScopedRateLimit.mockResolvedValue(null);
+    mocks.clearScopedRateLimit.mockResolvedValue(undefined);
     mocks.verifyPassword.mockResolvedValue(true);
   });
 
@@ -166,6 +175,11 @@ describe("DELETE /api/account", () => {
   it("rate limits repeated failed password confirmations", async () => {
     mocks.requireAuth.mockResolvedValue({ user: { id: "owner-rate", name: "Luca" } });
     mocks.verifyPassword.mockResolvedValue(false);
+    let attempts = 0;
+    mocks.consumeScopedRateLimit.mockImplementation(async () => {
+      attempts += 1;
+      return attempts > 5 ? 15_000 : null;
+    });
 
     for (let index = 0; index < 5; index++) {
       const response = await DELETE(makeRequest({ password: "Wrong1" }));
@@ -201,6 +215,10 @@ describe("DELETE /api/account", () => {
       isinsToDelete: [],
       tokensToDelete: [],
       scopedPriceCacheKeys: ["binance_sync_profile-1"]
+    });
+    expect(mocks.clearScopedRateLimit).toHaveBeenCalledWith({
+      namespace: "account-delete",
+      subject: "owner-1"
     });
   });
 });

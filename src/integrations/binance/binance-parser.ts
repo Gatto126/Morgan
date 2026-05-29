@@ -3,6 +3,8 @@ export interface AssetHistoryPoint {
   value: number;  // prezzo in EUR o convertito
 }
 
+const BINANCE_HISTORY_TIMEOUT_MS = 10_000;
+
 /**
  * Fetches klines from Binance public API for a given pair.
  */
@@ -14,7 +16,8 @@ async function fetchKlines(binanceSymbol: string): Promise<AssetHistoryPoint[]> 
     headers: {
       "Accept": "application/json",
       "User-Agent": "Mozilla/5.0"
-    }
+    },
+    signal: AbortSignal.timeout(BINANCE_HISTORY_TIMEOUT_MS)
   });
 
   if (!res.ok) {

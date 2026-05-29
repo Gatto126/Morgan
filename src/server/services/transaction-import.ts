@@ -17,6 +17,26 @@ export { markPreviewTransactions, previewTransactionSchema } from "@/domain/impo
 export type { PreviewTransactionPayload } from "@/domain/imports/transaction-preview";
 
 const log = apiLogger("Import");
+const MARKET_ENRICHMENT_CONCURRENCY = 3;
+
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<void>
+) {
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        await mapper(items[currentIndex]);
+      }
+    })
+  );
+}
 
 export async function getExistingFingerprints(
   userId: string,
@@ -213,8 +233,10 @@ export async function importPreviewTransactions(
       const missingIsins = Array.from(isinsToProcess).filter((isin) => !existingIsins.has(isin));
 
       if (missingIsins.length > 0) {
-        await Promise.all(
-          missingIsins.map(async (isin) => {
+        await mapWithConcurrency(
+          missingIsins,
+          MARKET_ENRICHMENT_CONCURRENCY,
+          async (isin) => {
             try {
               log.info(`Fetching metadata JustETF per nuovo ISIN: ${isin}`);
               const metadata = await fetchAssetMetadata(isin);
@@ -236,7 +258,7 @@ export async function importPreviewTransactions(
             } catch (err) {
               log.error("AssetSync", `Errore durante il fetch dei dettagli per ISIN: ${isin}`, err);
             }
-          })
+          }
         );
       }
     })();
@@ -253,8 +275,10 @@ export async function importPreviewTransactions(
       const missingTokens = Array.from(tokensToProcess).filter((symbol) => !existingTokens.has(symbol));
 
       if (missingTokens.length > 0) {
-        await Promise.all(
-          missingTokens.map(async (symbol) => {
+        await mapWithConcurrency(
+          missingTokens,
+          MARKET_ENRICHMENT_CONCURRENCY,
+          async (symbol) => {
             try {
               log.info(`Creazione metadati crypto per: ${symbol}`);
               await repository.upsertCryptoAsset(symbol, tokenNames.get(symbol) || symbol);
@@ -275,7 +299,7 @@ export async function importPreviewTransactions(
             } catch (err) {
               log.error("CryptoAssetSync", `Errore durante la creazione dei metadati/storico crypto per: ${symbol}`, err);
             }
-          })
+          }
         );
       }
     })();

@@ -26,6 +26,7 @@ export type AssetHistorySeriesPoint = Prisma.AssetHistoryGetPayload<{
 export type MarketDataRepository = {
   listPortfolioHistory(priceKeys: string[]): Promise<PortfolioHistoryPrice[]>;
   listLatestHistoricalPrices(keys: string[]): Promise<Map<string, number>>;
+  profileHasMarketKey(userId: string, key: string): Promise<boolean>;
   listAssetHistorySeries(isin: string, currency: string): Promise<AssetHistorySeriesPoint[]>;
 };
 
@@ -68,6 +69,25 @@ export const marketDataRepository: MarketDataRepository = {
     }
 
     return prices;
+  },
+
+  async profileHasMarketKey(userId, key) {
+    const [investmentCount, cryptoCount] = await Promise.all([
+      prisma.investmentTransaction.count({
+        where: {
+          userId,
+          isin: key
+        }
+      }),
+      prisma.cryptoTransaction.count({
+        where: {
+          userId,
+          tokenSymbol: key
+        }
+      })
+    ]);
+
+    return investmentCount > 0 || cryptoCount > 0;
   },
 
   async listAssetHistorySeries(isin, currency) {

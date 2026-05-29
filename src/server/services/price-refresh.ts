@@ -3,6 +3,7 @@ import {
   marketDataRepository,
   type MarketDataRepository
 } from "@/server/repositories/market-data-repository";
+import { consumeScopedRateLimit } from "@/server/services/rate-limit";
 
 const log = apiLogger("Prices");
 
@@ -31,7 +32,7 @@ export type PriceRefreshRequest = {
 export type PriceRefreshRepository = Pick<MarketDataRepository, "listLatestHistoricalPrices">;
 
 export type PriceRateLimiter = {
-  getRetryAfterMs(key: string): number | null;
+  getRetryAfterMs(key: string): number | null | Promise<number | null>;
 };
 
 export class InMemoryPriceRateLimiter implements PriceRateLimiter {
@@ -63,6 +64,25 @@ export class InMemoryPriceRateLimiter implements PriceRateLimiter {
 
   clear() {
     this.buckets.clear();
+  }
+}
+
+export class PersistentPriceRateLimiter implements PriceRateLimiter {
+  constructor(
+    private readonly options: {
+      namespace?: string;
+      windowMs?: number;
+      maxRequests?: number;
+    } = {}
+  ) {}
+
+  getRetryAfterMs(key: string) {
+    return consumeScopedRateLimit({
+      namespace: this.options.namespace ?? "price-refresh",
+      subject: key,
+      windowMs: this.options.windowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS,
+      maxAttempts: this.options.maxRequests ?? DEFAULT_RATE_LIMIT_MAX_REQUESTS
+    });
   }
 }
 
@@ -235,7 +255,7 @@ export function createPriceRefreshService({
   const fetchCryptoPrice: PriceFetcher = cryptoFetcher ?? ((symbol) => fetchBinancePrice(symbol, BINANCE_TIMEOUT_MS, logger));
 
   return {
-    getRetryAfterMs(userId: string) {
+    async getRetryAfterMs(userId: string) {
       return rateLimiter.getRetryAfterMs(userId);
     },
 
@@ -273,7 +293,7 @@ export function createPriceRefreshService({
   };
 }
 
-export const priceRefreshRateLimiter = new InMemoryPriceRateLimiter();
+export const priceRefreshRateLimiter = new PersistentPriceRateLimiter();
 export const priceRefreshService = createPriceRefreshService({
   rateLimiter: priceRefreshRateLimiter
 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { authGuardResponse, requireAuth } from "@/server/auth/auth-guard";
+
+import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
 import { apiLogger } from "@/server/logging/logger";
 import { marketDataRepository } from "@/server/repositories/market-data-repository";
 
@@ -10,12 +11,23 @@ export async function GET(
   { params }: { params: Promise<{ isin: string }> }
 ) {
   try {
-    await requireAuth(request);
     const isin = (await params).isin;
     const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId")?.trim();
     const currency = searchParams.get("currency") || "EUR";
 
-    log.info(`Fetching asset history for ${isin} (currency: ${currency})`);
+    if (!userId) {
+      return NextResponse.json({ error: "Profile id is required." }, { status: 400 });
+    }
+
+    await requireOwnedProfile(request, userId);
+
+    const profileHasAsset = await marketDataRepository.profileHasMarketKey(userId, isin);
+    if (!profileHasAsset) {
+      return NextResponse.json({ error: "Asset history not found." }, { status: 404 });
+    }
+
+    log.info(`Fetching asset history for ${isin} (currency: ${currency}, profile: ${userId})`);
 
     const history = await marketDataRepository.listAssetHistorySeries(isin, currency);
 
@@ -23,7 +35,7 @@ export async function GET(
       isin,
       currency,
       count: history.length,
-      series: history,
+      series: history
     });
   } catch (error) {
     const response = authGuardResponse(error);

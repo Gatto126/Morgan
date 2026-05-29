@@ -12,34 +12,34 @@ import {
   requestSecurityResponse,
   requireSameOriginMutation
 } from "@/server/security/request-security";
+import {
+  clearScopedRateLimit,
+  consumeScopedRateLimit
+} from "@/server/services/rate-limit";
 
 const log = apiLogger("Account");
 const DELETE_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const DELETE_RATE_LIMIT_MAX_FAILURES = 5;
-const deleteFailureBuckets = new Map<string, number[]>();
+const DELETE_RATE_LIMIT_NAMESPACE = "account-delete";
 
 function getAccountDeleteRetryAfterMs(userId: string) {
-  const now = Date.now();
-  const bucket = (deleteFailureBuckets.get(userId) ?? []).filter(
-    (timestamp) => now - timestamp < DELETE_RATE_LIMIT_WINDOW_MS
-  );
-
-  if (bucket.length >= DELETE_RATE_LIMIT_MAX_FAILURES) {
-    deleteFailureBuckets.set(userId, bucket);
-    return DELETE_RATE_LIMIT_WINDOW_MS - (now - bucket[0]);
-  }
-
-  bucket.push(now);
-  deleteFailureBuckets.set(userId, bucket);
-  return null;
+  return consumeScopedRateLimit({
+    namespace: DELETE_RATE_LIMIT_NAMESPACE,
+    subject: userId,
+    windowMs: DELETE_RATE_LIMIT_WINDOW_MS,
+    maxAttempts: DELETE_RATE_LIMIT_MAX_FAILURES
+  });
 }
 
 function clearAccountDeleteFailures(userId: string) {
-  deleteFailureBuckets.delete(userId);
+  return clearScopedRateLimit({
+    namespace: DELETE_RATE_LIMIT_NAMESPACE,
+    subject: userId
+  });
 }
 
-function validationResponse(error: AccountDeleteValidationError, ownerId: string) {
-  const retryAfterMs = getAccountDeleteRetryAfterMs(ownerId);
+async function validationResponse(error: AccountDeleteValidationError, ownerId: string) {
+  const retryAfterMs = await getAccountDeleteRetryAfterMs(ownerId);
   if (retryAfterMs !== null) {
     const retryAfterSeconds = Math.ceil(retryAfterMs / 1000);
     return NextResponse.json(
@@ -76,7 +76,7 @@ export async function DELETE(request: Request) {
       throw error;
     }
 
-    clearAccountDeleteFailures(ownerId);
+    await clearAccountDeleteFailures(ownerId);
 
     const result = await deleteAccount(ownerId);
 

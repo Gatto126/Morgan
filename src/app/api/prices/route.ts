@@ -10,7 +10,7 @@ const log = apiLogger("Prices");
 export async function GET(request: NextRequest) {
   try {
     const session = await requireAuth(request);
-    const retryAfterMs = priceRefreshService.getRetryAfterMs(session.user.id);
+    const retryAfterMs = await priceRefreshService.getRetryAfterMs(session.user.id);
     if (retryAfterMs !== null) {
       log.response("GET", "/api/prices", 429, { retryAfterMs });
       return NextResponse.json(

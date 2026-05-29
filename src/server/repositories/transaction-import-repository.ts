@@ -113,13 +113,13 @@ export const transactionImportRepository: TransactionImportRepository = {
   async createTransactions(batch) {
     const queries: Prisma.PrismaPromise<Prisma.BatchPayload>[] = [];
     if (batch.investmentData.length > 0) {
-      queries.push(prisma.investmentTransaction.createMany({ data: batch.investmentData }));
+      queries.push(prisma.investmentTransaction.createMany({ data: batch.investmentData, skipDuplicates: true }));
     }
     if (batch.cryptoData.length > 0) {
-      queries.push(prisma.cryptoTransaction.createMany({ data: batch.cryptoData }));
+      queries.push(prisma.cryptoTransaction.createMany({ data: batch.cryptoData, skipDuplicates: true }));
     }
     if (batch.checkingData.length > 0) {
-      queries.push(prisma.checkingTransaction.createMany({ data: batch.checkingData }));
+      queries.push(prisma.checkingTransaction.createMany({ data: batch.checkingData, skipDuplicates: true }));
     }
 
     if (queries.length > 0) {
@@ -158,7 +158,7 @@ export const transactionImportRepository: TransactionImportRepository = {
   async createAssetHistory(points) {
     if (points.length === 0) return;
 
-    await prisma.assetHistory.createMany({ data: points });
+    await prisma.assetHistory.createMany({ data: points, skipDuplicates: true });
   },
 
   async listExistingCryptoTokens(tokens) {

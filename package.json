@@ -17,7 +17,7 @@
     "start": "next start",
     "postinstall": "prisma generate --schema=prisma/schema.prisma",
     "vercel-build": "prisma generate --schema=prisma/schema.prisma && prisma migrate deploy --schema=prisma/schema.prisma && next build",
-    "lint": "eslint . --ignore-pattern .next --ignore-pattern next-env.d.ts --ignore-pattern prisma/*.db --ignore-pattern prisma/*.db-journal --ignore-pattern artifacts",
+    "lint": "eslint . --ignore-pattern .next --ignore-pattern .next-* --ignore-pattern next-env.d.ts --ignore-pattern prisma/*.db --ignore-pattern prisma/*.db-journal --ignore-pattern artifacts",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
     "test": "vitest",
