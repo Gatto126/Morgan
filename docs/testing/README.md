@@ -18,6 +18,9 @@ Date: 2026-05-28
 - App tests should not be added under `src/`.
 - Script helper tests live under `scripts/**/*.test.mjs`.
 - Browser smoke and E2E scripts live under `scripts/e2e/`.
+- Browser E2E helpers for shared fixtures, cleanup, polling, profile waits,
+  overlay checks, and import UI interactions live in
+  `scripts/e2e/e2e-helpers.mjs`.
 - Local maintenance scripts live under `scripts/testing/`.
 
 Vitest is configured to include `tests/**/*.test.ts` and
@@ -85,8 +88,12 @@ The active-components walkthrough uses `TEST_BASE_URL` when provided, otherwise
 `http://127.0.0.1:3000`. It creates a disposable account, imports Trade Republic
 and BBVA files through the UI, exercises Dashboard, Checking, Investments,
 Crypto, Binance, Upload, Settings, API Key, Danger zone, Select profile, and New
-Profile panels, saves screenshots under `artifacts/e2e/active-components-walkthrough/`,
-then deletes the account through the UI.
+Profile panels. It also interacts with dashboard controls that are easy to break
+during UI refactors: topbar dashboard tabs, chart time ranges, chart hover
+tooltip, chart point/reference-line selection, legend toggles, and the Binance
+summary card. Screenshots are saved under
+`artifacts/e2e/active-components-walkthrough/`, then the account is deleted
+through the UI unless the run explicitly keeps it for manual inspection.
 
 Binance API checks are opt-in for local testing. Set
 `BINANCE_TEST_API_KEY` and `BINANCE_TEST_API_SECRET` in the process environment

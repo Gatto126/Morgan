@@ -7,6 +7,10 @@ import { PrismaClient } from "@prisma/client";
 import { chromium } from "playwright";
 
 import {
+  assert,
+  cleanupUsersByPrefix
+} from "./e2e-helpers.mjs";
+import {
   applyEnvFileDatabaseUrl,
   restoreRateLimits,
   snapshotAndClearRateLimits
@@ -39,12 +43,6 @@ const shouldStartServer = !process.argv.includes("--no-start-server") && !config
 
 if (!shouldStartServer && !configuredBaseUrl) {
   throw new Error("--no-start-server requires --base-url.");
-}
-
-function assert(condition, message) {
-  if (!condition) {
-    throw new Error(message);
-  }
 }
 
 function onceAvailable(port) {
@@ -142,26 +140,8 @@ async function cleanupSmokeData(username) {
   const prisma = new PrismaClient();
 
   try {
-    const authUsers = await prisma.authUser.findMany({
-      where: {
-        OR: [
-          { username },
-          { name: username },
-          { email: { startsWith: username } }
-        ]
-      },
-      select: { id: true }
-    });
-    const ownerIds = authUsers.map((user) => user.id);
-
-    if (ownerIds.length > 0) {
-      await prisma.authSession.deleteMany({ where: { userId: { in: ownerIds } } });
-      await prisma.authAccount.deleteMany({ where: { userId: { in: ownerIds } } });
-      await prisma.user.deleteMany({ where: { ownerId: { in: ownerIds } } });
-      await prisma.authUser.deleteMany({ where: { id: { in: ownerIds } } });
-    }
-
-    return ownerIds.length;
+    const cleanup = await cleanupUsersByPrefix(prisma, [username]);
+    return cleanup.ownerIds.length;
   } finally {
     await prisma.$disconnect();
   }

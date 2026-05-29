@@ -1,10 +1,21 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 
 import { PrismaClient } from "@prisma/client";
 import { chromium } from "playwright";
-import { strToU8, zipSync } from "fflate";
 
+import {
+  assert,
+  authUserPrefixWhere,
+  buildXlsxBufferFromRows,
+  cleanupUsersByPrefix,
+  expectNoNextOverlay,
+  importFileThroughUi,
+  getProfiles,
+  saveScreenshot as saveE2eScreenshot,
+  toTradeRepublicCsv,
+  waitForHealthCheck,
+  waitForProfile
+} from "./e2e-helpers.mjs";
 import {
   applyEnvFileDatabaseUrl,
   restoreRateLimits,
@@ -29,42 +40,6 @@ const username = `browseraudit${runId}`;
 const password = "Temporary audit password 2026!";
 const profileName = `Audit ${runId.slice(-6)}`;
 const outDir = path.resolve("artifacts", "e2e", "browser-flow");
-
-const HEADERS = [
-  "datetime",
-  "date",
-  "account_type",
-  "category",
-  "type",
-  "asset_class",
-  "name",
-  "symbol",
-  "shares",
-  "price",
-  "amount",
-  "fee",
-  "tax",
-  "currency",
-  "original_amount",
-  "original_currency",
-  "fx_rate",
-  "description",
-  "transaction_id",
-  "counterparty_name",
-  "counterparty_iban",
-  "payment_reference",
-  "mcc_code"
-];
-
-function assert(condition, message) {
-  if (!condition) {
-    throw new Error(message);
-  }
-}
-
-function csvEscape(value) {
-  return JSON.stringify(value ?? "");
-}
 
 function buildTradeRepublicCsv() {
   const rows = [
@@ -102,64 +77,7 @@ function buildTradeRepublicCsv() {
     }
   ];
 
-  return [
-    HEADERS.join(","),
-    ...rows.map((row) => HEADERS.map((header) => csvEscape(row[header])).join(","))
-  ].join("\n");
-}
-
-function escapeXml(value) {
-  return String(value).replace(/[<>&"']/g, (char) => {
-    switch (char) {
-      case "<":
-        return "&lt;";
-      case ">":
-        return "&gt;";
-      case "&":
-        return "&amp;";
-      case "\"":
-        return "&quot;";
-      default:
-        return "&apos;";
-    }
-  });
-}
-
-function columnName(index) {
-  let column = "";
-  let current = index + 1;
-
-  while (current > 0) {
-    const remainder = (current - 1) % 26;
-    column = String.fromCharCode(65 + remainder) + column;
-    current = Math.floor((current - 1) / 26);
-  }
-
-  return column;
-}
-
-function cellXml(cell, rowIndex, columnIndex) {
-  if (cell === null || cell === undefined) return "";
-
-  const reference = `${columnName(columnIndex)}${rowIndex + 1}`;
-  if (typeof cell === "number") return `<c r="${reference}"><v>${cell}</v></c>`;
-  if (typeof cell === "boolean") return `<c r="${reference}" t="b"><v>${cell ? 1 : 0}</v></c>`;
-
-  return `<c r="${reference}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(cell)}</t></is></c>`;
-}
-
-function worksheetXml(rows) {
-  const sheetRows = rows
-    .map((row, rowIndex) => {
-      const cells = row.map((cell, columnIndex) => cellXml(cell, rowIndex, columnIndex)).join("");
-      return `<row r="${rowIndex + 1}">${cells}</row>`;
-    })
-    .join("");
-
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <sheetData>${sheetRows}</sheetData>
-</worksheet>`;
+  return toTradeRepublicCsv(rows);
 }
 
 function buildBbvaXlsxBuffer() {
@@ -170,174 +88,59 @@ function buildBbvaXlsxBuffer() {
     ["05/01/2026", "Bonifico ricevuto", "50,00", "37,50", "Audit bonifico"]
   ];
 
-  return Buffer.from(zipSync({
-    "[Content_Types].xml": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-</Types>`),
-    "_rels/.rels": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>`),
-    "xl/workbook.xml": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets>
-    <sheet name="Informe BBVA" sheetId="1" r:id="rId1"/>
-  </sheets>
-</workbook>`),
-    "xl/_rels/workbook.xml.rels": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-</Relationships>`),
-    "xl/worksheets/sheet1.xml": strToU8(worksheetXml(rows))
-  }));
+  return buildXlsxBufferFromRows(rows);
 }
 
 async function saveScreenshot(page, name) {
-  await fs.mkdir(outDir, { recursive: true });
-  const screenshotPath = path.join(outDir, name);
-  await page.screenshot({ path: screenshotPath, fullPage: false });
-  return screenshotPath;
+  return saveE2eScreenshot(page, outDir, name);
 }
 
 async function waitForServer() {
-  const deadline = Date.now() + 45_000;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(`${baseUrl}/api/health`);
-      if (response.ok) return;
-    } catch {
-      // Keep polling until the container is ready.
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error(`Timed out waiting for ${baseUrl}.`);
+  await waitForHealthCheck(baseUrl);
 }
 
 async function expectNoHydrationOverlay(page, label) {
-  const overlay = await page.evaluate(() => {
-    const text = document.body?.innerText ?? "";
-    return {
-      hasOverlay: Boolean(document.querySelector("[data-nextjs-dialog-overlay], nextjs-portal")) ||
-        /Hydration failed|Console Error|Recoverable Error/.test(text),
-      excerpt: text.slice(0, 500)
-    };
-  });
-
-  assert(!overlay.hasOverlay, `${label}: unexpected Next hydration/error overlay: ${overlay.excerpt}`);
-}
-
-async function getProfiles(page) {
-  return page.evaluate(async () => {
-    const response = await fetch("/api/users");
-    if (!response.ok) {
-      throw new Error(`GET /api/users failed: ${response.status}`);
-    }
-    return response.json();
+  await expectNoNextOverlay(page, label, {
+    includePortal: true,
+    message: "unexpected Next hydration/error overlay:"
   });
 }
 
 async function waitForProfileCounts(page, expected) {
-  const deadline = Date.now() + 20_000;
-  let lastProfile = null;
-
-  while (Date.now() < deadline) {
-    const payload = await getProfiles(page);
-    lastProfile = payload.users?.find((user) => user.name === profileName) ?? null;
-    if (
-      lastProfile &&
-      lastProfile.transactionCount === expected.transactionCount &&
-      lastProfile.checkingCount === expected.checkingCount &&
-      lastProfile.investmentCount === expected.investmentCount
-    ) {
-      return lastProfile;
-    }
-    await page.waitForTimeout(500);
-  }
-
-  throw new Error(`Timed out waiting for counts ${JSON.stringify(expected)}; last=${JSON.stringify(lastProfile)}`);
+  return waitForProfile(
+    page,
+    profileName,
+    (profile) =>
+      profile.transactionCount === expected.transactionCount &&
+      profile.checkingCount === expected.checkingCount &&
+      profile.investmentCount === expected.investmentCount,
+    `counts ${JSON.stringify(expected)}`,
+    { timeoutMs: 20_000 }
+  );
 }
 
 async function importFile(page, filePayload, expectedNewCount, triggerName) {
-  if (triggerName === "Add document") {
-    await page.getByRole("button", { name: "Add document", exact: true }).waitFor({ state: "visible", timeout: 15_000 });
-    await page.waitForFunction(() => {
-      const button = document.querySelector('button[aria-label="Add document"]');
-      return button instanceof HTMLButtonElement && !button.disabled;
-    });
-    await page.getByRole("button", { name: "Add document", exact: true }).click();
-    await page.locator('[role="dialog"][data-modal-panel="upload"]').waitFor({ state: "visible", timeout: 10_000 });
-  }
-
-  const [fileChooser] = await Promise.all([
-    page.waitForEvent("filechooser"),
-    page.getByRole("button", { name: "Upload", exact: true }).click()
-  ]);
-
-  await fileChooser.setFiles(filePayload);
-  await page.getByRole("heading", { name: "Review import", exact: true }).waitFor({ state: "visible", timeout: 15_000 });
-  const approveButton = page.locator("button[aria-label^='Approve and save']");
-  await approveButton.waitFor({ state: "visible", timeout: 10_000 });
-  const approveLabel = await approveButton.getAttribute("aria-label");
-  assert(
-    approveLabel?.includes(`${expectedNewCount} transactions`),
-    `Expected ${expectedNewCount} new transactions, received button label "${approveLabel}".`
-  );
-  await approveButton.click();
-  await page.locator(".import-spinner").waitFor({ state: "detached", timeout: 20_000 }).catch(() => {});
+  await importFileThroughUi(page, filePayload, expectedNewCount, {
+    label: triggerName,
+    openAddDocument: triggerName === "Add document",
+    addDocumentTimeoutMs: 15_000,
+    reviewTimeoutMs: 15_000,
+    spinnerTimeoutMs: 20_000,
+    waitForAddDocumentEnabled: triggerName === "Add document"
+  });
 }
 
 async function deleteTestAccountIfPresent() {
-  const authUsers = await prisma.authUser.findMany({
-    where: {
-      OR: [
-        { username },
-        { name: username },
-        { email: { startsWith: username } }
-      ]
-    },
-    select: { id: true }
-  });
-  const ownerIds = authUsers.map((user) => user.id);
-
-  if (ownerIds.length === 0) {
-    return { forcedCleanup: false, ownerIds: [] };
-  }
-
-  const profiles = await prisma.user.findMany({
-    where: { ownerId: { in: ownerIds } },
-    select: { id: true }
-  });
-  const profileIds = profiles.map((profile) => profile.id);
-
-  await prisma.$transaction(async (tx) => {
-    if (profileIds.length > 0) {
-      await tx.checkingTransaction.deleteMany({ where: { userId: { in: profileIds } } });
-      await tx.investmentTransaction.deleteMany({ where: { userId: { in: profileIds } } });
-      await tx.cryptoTransaction.deleteMany({ where: { userId: { in: profileIds } } });
-      await tx.binanceBalance.deleteMany({ where: { userId: { in: profileIds } } });
-      await tx.user.deleteMany({ where: { ownerId: { in: ownerIds } } });
-    }
-    await tx.authSession.deleteMany({ where: { userId: { in: ownerIds } } });
-    await tx.authAccount.deleteMany({ where: { userId: { in: ownerIds } } });
-    await tx.authUser.deleteMany({ where: { id: { in: ownerIds } } });
-  });
-
-  return { forcedCleanup: true, ownerIds };
+  const cleanup = await cleanupUsersByPrefix(prisma, [username]);
+  return {
+    forcedCleanup: cleanup.ownerIds.length > 0,
+    ownerIds: cleanup.ownerIds
+  };
 }
 
 async function collectDbState(profileId) {
   const authUsers = await prisma.authUser.count({
-    where: {
-      OR: [
-        { username },
-        { name: username },
-        { email: { startsWith: username } }
-      ]
-    }
+    where: authUserPrefixWhere([username])
   });
 
   return {

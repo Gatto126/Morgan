@@ -15,6 +15,11 @@ Use package scripts from `package.json` for normal workflows. Direct script
 execution is fine for debugging, but package scripts keep paths stable when
 files move.
 
+Shared browser-flow helpers live in `scripts/e2e/e2e-helpers.mjs`. Keep common
+fixture generation, app readiness polling, disposable-user cleanup, profile
+waits, overlay checks, and import UI interactions there instead of duplicating
+them across individual E2E entrypoints.
+
 ## E2E
 
 - `pnpm run smoke:upload-panel` starts a temporary local Next dev server and
@@ -41,7 +46,9 @@ files move.
   frontend refactors. It creates a disposable account, imports Trade Republic and
   BBVA files through the browser, exercises the dashboard sections, upload
   overlay, Settings submenus, API Key panel, Danger zone, Select profile, and New
-  Profile panel, then deletes the account. Binance uses
+  Profile panel. It also checks dashboard topbar tabs, chart time ranges, chart
+  hover tooltip, chart point/reference-line selection, legend toggles, and the
+  Binance summary card before deleting the account. Binance uses
   `BINANCE_TEST_API_KEY`/`BINANCE_TEST_API_SECRET` when present; otherwise the
   script seeds cached balances in the test database to keep the Binance UI
   covered without committing secrets.
