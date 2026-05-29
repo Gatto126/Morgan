@@ -1,9 +1,15 @@
 "use client";
 
-import { useRef, useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from "react";
+import { useRef, useState, useEffect, useLayoutEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { X as XIcon } from "lucide-react";
 import { AuthShell } from "./auth-shell";
+import {
+  FrameOverlayPanels,
+  frameOverlayPanelMotionDurationMs,
+  resolveFrameOverlayPanel,
+  type ExitingFrameOverlayPanelConfig,
+  type FrameOverlayPanelConfig
+} from "./finance-shell/frame-overlay-panels";
 import { FinanceShellMainFrame } from "./finance-shell/main-frame";
 import { ReviewPanel } from "./finance-shell/review-panel";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
@@ -24,24 +30,6 @@ import { cn } from "@/shared/utils";
 
 const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
 const restorableStages = new Set<Stage>(["welcome", "select", "create", "dashboard", "checking", "investment", "settings", "binance", "crypto"]);
-const overlayCloseButtonClass =
-  "icon-plain absolute z-50 flex h-8 w-8 cursor-pointer appearance-none items-center justify-center border-0 bg-transparent p-0 text-[color:var(--text-dim)] shadow-none transition-colors hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-[color:var(--line-strong)]";
-const panelMotionDurationMs = 250;
-
-type OverlayPanelType = "upload" | "settings" | "profile";
-type OverlayPanelConfig = {
-  closeTitle: string;
-  handleClosePanel: () => void;
-  isClosingPanel: boolean;
-  key: string;
-  panelContent: ReactNode;
-  panelLabel: string;
-  panelType: OverlayPanelType;
-  shouldShowClose: boolean;
-};
-type ExitingOverlayPanelConfig = OverlayPanelConfig & {
-  exitId: string;
-};
 
 function isRestorableStage(value: string | null): value is Stage {
   return value !== null && restorableStages.has(value as Stage);
@@ -222,12 +210,28 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     () => [appContentRef],
     []
   );
-  const activeFramePanel = getFramePanelConfig();
-  const previousFramePanelRef = useRef<OverlayPanelConfig | null>(null);
+  const activeFramePanel = resolveFrameOverlayPanel({
+    activeUserPresent: !!activeUser,
+    isClosingSettings,
+    isClosingUpload,
+    isClosingUserSelect,
+    isDashboardStage,
+    renderSettingsContent: renderSettingsState,
+    renderUploadContent: () => previewTransactions.length > 0 ? renderReviewState() : renderUploadState(),
+    renderUserSelectContent: renderUserSelectState,
+    showSettingsView,
+    showUploadView,
+    showUserSelectView,
+    stage,
+    onCloseSettings: handleSettingsPanelClose,
+    onCloseUpload: handleCloseUpload,
+    onCloseUserSelect: handleCloseUserSelect
+  });
+  const previousFramePanelRef = useRef<FrameOverlayPanelConfig | null>(null);
   const exitingFramePanelTimerRef = useRef<number | null>(null);
   const pendingUserSelectionTimerRef = useRef<number | null>(null);
   const exitingFramePanelIdRef = useRef(0);
-  const [exitingFramePanel, setExitingFramePanel] = useState<ExitingOverlayPanelConfig | null>(null);
+  const [exitingFramePanel, setExitingFramePanel] = useState<ExitingFrameOverlayPanelConfig | null>(null);
 
   useModalFocusTrap({
     active: isPanelModalOpen && !showDeleteAccountConfirm,
@@ -256,7 +260,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
       exitingFramePanelTimerRef.current = window.setTimeout(() => {
         exitingFramePanelTimerRef.current = null;
         setExitingFramePanel(null);
-      }, panelMotionDurationMs);
+      }, frameOverlayPanelMotionDurationMs);
     } else if (!activeFramePanel && previousFramePanel?.isClosingPanel && exitingFramePanel) {
       setExitingFramePanel(null);
     }
@@ -652,7 +656,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
       pendingUserSelectionTimerRef.current = window.setTimeout(() => {
         pendingUserSelectionTimerRef.current = null;
         commitUserSelection(user);
-      }, panelMotionDurationMs);
+      }, frameOverlayPanelMotionDurationMs);
       return;
     }
 
@@ -850,121 +854,13 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     );
   }
 
-  function renderOverlayPanel(panel: OverlayPanelConfig | ExitingOverlayPanelConfig, motionState: "active" | "exit" = "active") {
-    const isExitSnapshot = motionState === "exit";
-    const isExiting = isExitSnapshot || panel.isClosingPanel;
-
-    return (
-      <div
-        aria-hidden={isExitSnapshot ? "true" : undefined}
-        aria-label={isExitSnapshot ? undefined : panel.panelLabel}
-        className={cn(
-          "absolute inset-0 flex h-full w-full flex-col justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)] focus:outline-none",
-          isExitSnapshot ? "z-[56] pointer-events-none" : "z-[55]"
-        )}
-        data-autofocus={isExitSnapshot ? undefined : ""}
-        data-exiting-panel={isExitSnapshot ? panel.panelType : undefined}
-        data-modal-panel={isExitSnapshot ? undefined : panel.panelType}
-        inert={isExitSnapshot ? true : undefined}
-        key={isExitSnapshot ? (panel as ExitingOverlayPanelConfig).exitId : panel.key}
-        ref={isExitSnapshot ? undefined : activeOverlayPanelRef}
-        role={isExitSnapshot ? undefined : "dialog"}
-        tabIndex={isExitSnapshot ? undefined : -1}
-      >
-        <div
-          data-panel-motion={isExiting ? "exit" : "enter"}
-          className={cn(
-            "relative h-full w-full",
-            isExiting ? "panel-overlay-exit pointer-events-none" : "panel-overlay-enter"
-          )}
-        >
-          {!isExitSnapshot && panel.shouldShowClose ? (
-            <button
-              aria-label={panel.closeTitle}
-              className={cn(overlayCloseButtonClass, "right-4 top-4")}
-              onClick={panel.handleClosePanel}
-              title={panel.closeTitle}
-              type="button"
-            >
-              <XIcon className="h-5 w-5" strokeWidth={2.3} />
-            </button>
-          ) : null}
-          <div className="relative flex h-full w-full flex-col justify-center px-3 py-3 sm:px-5 sm:py-5">
-            {panel.panelContent}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function getFramePanelConfig(): OverlayPanelConfig | null {
-    const canRenderFrameOverlay = stage === "welcome" || (isDashboardStage && !!activeUser);
-
-    if (!canRenderFrameOverlay) {
-      return null;
-    }
-
-    const showUploadPanel = showUploadView;
-    const showSettingsPanel = !showUploadPanel && showSettingsView;
-    const showUserSelectPanel = !showUploadPanel && !showSettingsPanel && showUserSelectView;
-
-    if (!showUploadPanel && !showSettingsPanel && !showUserSelectPanel) {
-      return null;
-    }
-
-    const isClosingPanel = showUploadPanel
-      ? isClosingUpload
-      : showSettingsPanel
-        ? isClosingSettings
-        : isClosingUserSelect;
-
-    const closeTitle = showUploadPanel
-      ? "Esci dall'importazione"
-      : showSettingsPanel
-        ? "Esci dalle impostazioni"
-        : "Esci dalla selezione utente";
-
-    const handleClosePanel = showUploadPanel
-      ? handleCloseUpload
-      : showSettingsPanel
-        ? handleSettingsPanelClose
-        : handleCloseUserSelect;
-
-    const shouldShowClose = true;
-    const panelContent = showUploadPanel
-      ? (previewTransactions.length > 0 ? renderReviewState() : renderUploadState())
-      : showSettingsPanel
-        ? renderSettingsState()
-        : renderUserSelectState();
-    const panelLabel = showUploadPanel
-      ? "Import transactions"
-      : showSettingsPanel
-        ? "Settings"
-        : "Select profile";
-    const panelType = showUploadPanel ? "upload" : showSettingsPanel ? "settings" : "profile";
-
-    return {
-      closeTitle,
-      handleClosePanel,
-      isClosingPanel,
-      key: `${stage}:${panelType}`,
-      panelContent,
-      panelLabel,
-      panelType,
-      shouldShowClose
-    };
-  }
-
   function renderMainFrameOverlay() {
-    if (!activeFramePanel && !exitingFramePanel) {
-      return null;
-    }
-
     return (
-      <>
-        {activeFramePanel ? renderOverlayPanel(activeFramePanel) : null}
-        {exitingFramePanel ? renderOverlayPanel(exitingFramePanel, "exit") : null}
-      </>
+      <FrameOverlayPanels
+        activePanel={activeFramePanel}
+        activePanelRef={activeOverlayPanelRef}
+        exitingPanel={exitingFramePanel}
+      />
     );
   }
 
