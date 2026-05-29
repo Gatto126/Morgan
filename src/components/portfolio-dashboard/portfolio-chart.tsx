@@ -10,28 +10,16 @@ import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
 import type { ActiveDotProps, ChartPoint } from "@/types/chart";
 
 import { GRAYSCALE_PALETTE, TIME_RANGES } from "./constants";
-import { formatEuroCents, formatProviderLabel, getMonthLabel } from "./formatters";
+import {
+  formatPortfolioTooltipLabel,
+  formatPortfolioTooltipSeriesLabel,
+  formatPortfolioXAxisTick,
+  getPortfolioAllLegendItems,
+  getPortfolioProviderLegendItems,
+  PORTFOLIO_TOOLTIP_PRIORITY_NAMES
+} from "./portfolio-chart-model";
+import { formatEuroCents } from "./formatters";
 import type { PortfolioData, PortfolioProviderSummary, PortfolioSelectedPoint, TimeRange } from "./types";
-
-function formatTooltipLabel(label?: string) {
-  let formattedLabel = label || "";
-  if (formattedLabel.length === 10) {
-    const [year, month, day] = formattedLabel.split("-");
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const shortYear = year.slice(2);
-    formattedLabel = `${day} ${monthNames[Number.parseInt(month, 10) - 1]} ${shortYear}`;
-  } else if (formattedLabel.length === 7) {
-    formattedLabel = getMonthLabel(formattedLabel);
-  }
-
-  return formattedLabel;
-}
-
-function formatTooltipSeriesLabel(name: string) {
-  if (name === "value" || name === "balance") return "BALANCE";
-  if (name === "heritage") return "HERITAGE";
-  return formatProviderLabel(name);
-}
 
 type PortfolioChartProps = {
   data: PortfolioData;
@@ -115,25 +103,18 @@ export function PortfolioChart({
                 padding={{ left: isMobile ? 16 : 0, right: isMobile ? 16 : 0 }}
                 minTickGap={isMobile ? 20 : 10}
                 ticks={xAxisTicks}
-                tickFormatter={(value) => {
-                  if (!value) return "";
-                  if (value.length === 7) {
-                    return getMonthLabel(value);
-                  }
-                  const [year, month] = value.split("-");
-                  return getMonthLabel(`${year}-${month}`);
-                }}
+                tickFormatter={(value) => formatPortfolioXAxisTick(String(value ?? ""))}
               />
               <YAxis tick={{ fill: "#a8a8a8", fontSize: isMobile ? 9 : 10 }} axisLine={false} tickLine={false} mirror={isMobile} tickFormatter={(value) => formatEuroCents(value).replace(/\s/g, "").replace(",00", "")} width={yAxisWidth} />
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,154,154,0.12)" vertical={false} />
               <Tooltip
                 content={(
                   <ChartTooltip
-                    formatLabel={formatTooltipLabel}
-                    formatSeriesLabel={formatTooltipSeriesLabel}
+                    formatLabel={formatPortfolioTooltipLabel}
+                    formatSeriesLabel={formatPortfolioTooltipSeriesLabel}
                     formatValue={formatEuroCents}
                     labelClassName="truncate max-w-[150px]"
-                    priorityNames={["heritage", "value", "balance"]}
+                    priorityNames={PORTFOLIO_TOOLTIP_PRIORITY_NAMES}
                     setActivePoint={onSetActiveChartPoint}
                   />
                 )}
@@ -255,53 +236,16 @@ export function PortfolioChart({
         </div>
       </div>
 
-      {activeTab === "ALL" ? (() => {
-          const allSeriesKeys = ["heritage", ...data.providers.map(provider => provider.sourceInstitution)];
-
-          return (
-            <ChartLegend
-              className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar"
-              hiddenSeries={hiddenSeries}
-              items={allSeriesKeys.map((key, index) => ({
-                key,
-                label: key === "heritage" ? "HERITAGE" : formatProviderLabel(key),
-                color: key === "heritage" ? "#ffffff" : GRAYSCALE_PALETTE[(index - 1) % GRAYSCALE_PALETTE.length]
-              }))}
-              onToggleSeries={onToggleSeries}
-              transactionCount={transactionCount}
-            />
-          );
-        })() : (() => {
-          let metricKeys = ["balance", ...(activeProvider?.products.map(product => product.productName) || [])];
-
-          if (!showSoldAssets) {
-            metricKeys = metricKeys.filter(key => {
-              if (key === "balance") return true;
-              const product = activeProvider?.products.find(item => item.productName === key);
-              if (product && Math.abs(product.quantity) <= 0.000001) return false;
-              return true;
-            });
-          }
-
-          return (
-            <ChartLegend
-              className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar"
-              hiddenSeries={hiddenSeries}
-              items={metricKeys.map((key, index) => {
-                const isBalance = key === "balance";
-                return {
-                  key,
-                  label: isBalance ? "BALANCE" : key,
-                  color: isBalance ? "#ffffff" : GRAYSCALE_PALETTE[(index - 1) % GRAYSCALE_PALETTE.length],
-                  labelClassName: "truncate"
-                };
-              })}
-              labelClassName="max-w-[150px]"
-              onToggleSeries={onToggleSeries}
-              transactionCount={transactionCount}
-            />
-          );
-        })()}
+      <ChartLegend
+        className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar"
+        hiddenSeries={hiddenSeries}
+        items={activeTab === "ALL"
+          ? getPortfolioAllLegendItems(data.providers)
+          : getPortfolioProviderLegendItems(activeProvider, showSoldAssets)}
+        labelClassName={activeTab === "ALL" ? undefined : "max-w-[150px]"}
+        onToggleSeries={onToggleSeries}
+        transactionCount={transactionCount}
+      />
     </>
   );
 }
