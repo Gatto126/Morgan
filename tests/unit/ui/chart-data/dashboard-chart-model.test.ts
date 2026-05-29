@@ -156,6 +156,20 @@ function buildHeritageData() {
   });
 }
 
+function buildChartDataFor(activeTab: "heritage" | "checking" | "investment" | "crypto") {
+  return buildDashboardChartData({
+    activeTab,
+    binanceTotalCents: 2000,
+    checkingProviders: collectCheckingProviders(dashboardData),
+    cryptoInstitutions: collectCryptoInstitutions(dashboardData),
+    cryptoTokens: collectCryptoTokens(dashboardData),
+    data: dashboardData,
+    hasBinancePortfolio: true,
+    investmentProducts: collectInvestmentProducts(dashboardData),
+    timeRange: "ALL"
+  });
+}
+
 describe("dashboard chart data model", () => {
   it("collects provider, product, token and crypto institution series from dashboard data", () => {
     expect(collectCheckingProviders(dashboardData)).toEqual(["bbva"]);
@@ -199,6 +213,73 @@ describe("dashboard chart data model", () => {
       crypto: 7000,
       binance: 2000
     });
+  });
+
+  it("keeps Binance out of checking and investment tab values", () => {
+    const checkingPoints = buildChartDataFor("checking");
+    const investmentPoints = buildChartDataFor("investment");
+    const cryptoPoints = buildChartDataFor("crypto");
+
+    expect(checkingPoints[0].value).toBeNull();
+    expect(checkingPoints[1].value).toBe(10000);
+    expect(investmentPoints[2].value).toBe(25000);
+    expect(cryptoPoints[0].value).toBe(2000);
+    expect(cryptoPoints[2].value).toBe(7000);
+  });
+
+  it("treats missing provider values as zero after the first acquisition", () => {
+    const points = buildDashboardChartData({
+      activeTab: "checking",
+      binanceTotalCents: 0,
+      checkingProviders: ["bbva"],
+      cryptoInstitutions: [],
+      cryptoTokens: [],
+      data: {
+        ...dashboardData,
+        monthlyData: [
+          {
+            month: "2026-01",
+            checking: 10000,
+            investment: 0,
+            crypto: 0,
+            heritage: 10000,
+            providerChecking: { bbva: 10000 },
+            providerProducts: {},
+            providerCryptoTokens: {}
+          }
+        ],
+        dailyData: [
+          {
+            month: "2026-01",
+            date: "2026-01-01",
+            checking: 10000,
+            investment: 0,
+            crypto: 0,
+            heritage: 10000,
+            providerChecking: { bbva: 10000 },
+            providerProducts: {},
+            providerCryptoTokens: {}
+          },
+          {
+            month: "2026-01",
+            date: "2026-01-02",
+            checking: 10000,
+            investment: 0,
+            crypto: 0,
+            heritage: 10000,
+            providerChecking: {},
+            providerProducts: {},
+            providerCryptoTokens: {}
+          }
+        ]
+      },
+      hasBinancePortfolio: false,
+      investmentProducts: [],
+      timeRange: "ALL"
+    });
+
+    expect(points[0].bbva).toBe(10000);
+    expect(points[1].bbva).toBe(0);
   });
 
   it("returns an empty chart when dashboard data is missing", () => {
