@@ -36,6 +36,8 @@ pnpm run test:scripts
 pnpm run smoke:upload-panel
 pnpm run smoke:upload-panel:docker
 pnpm run e2e:docker:full
+pnpm run e2e:realistic
+pnpm run e2e:active-components
 ```
 
 ## GitHub Workflows
@@ -43,9 +45,9 @@ pnpm run e2e:docker:full
 - `CI` runs on push and pull request. It installs dependencies, validates both
   Prisma schemas, lints, typechecks, runs unit/script tests, and builds Next.
 - `Docker E2E` is manual (`workflow_dispatch`). It builds and starts the Docker
-  pre-production stack on port `3001`, runs the upload-panel smoke test and the
-  realistic browser flow, uploads browser artifacts on failure, then stops the
-  Docker stack.
+  pre-production stack on port `3001`, runs the upload-panel smoke test, the
+  realistic browser flow, and the active-components walkthrough, uploads
+  browser artifacts on failure, then stops the Docker stack.
 
 ## Local Runtime Policy
 
@@ -79,9 +81,18 @@ The full Docker E2E script uses `TEST_BASE_URL` when provided, otherwise
 `http://127.0.0.1:3001`. It reads database settings from `.env` unless
 `TEST_DATABASE_URL` and optional `TEST_DIRECT_URL` are set.
 
+The active-components walkthrough uses `TEST_BASE_URL` when provided, otherwise
+`http://127.0.0.1:3000`. It creates a disposable account, imports Trade Republic
+and BBVA files through the UI, exercises Dashboard, Checking, Investments,
+Crypto, Binance, Upload, Settings, API Key, Danger zone, Select profile, and New
+Profile panels, saves screenshots under `artifacts/e2e/active-components-walkthrough/`,
+then deletes the account through the UI.
+
 Binance API checks are opt-in for local testing. Set
 `BINANCE_TEST_API_KEY` and `BINANCE_TEST_API_SECRET` in the process environment
-only; do not commit them to files.
+only; do not commit them to files. When these variables are absent, the
+active-components walkthrough seeds cached Binance balances so the Binance UI is
+still mounted and covered without storing real secrets.
 
 ## Artifacts
 

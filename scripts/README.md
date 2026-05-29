@@ -37,6 +37,14 @@ files move.
   under `artifacts/e2e/realistic-browser-flow`, imports Trade Republic and BBVA
   data across multiple years, optionally syncs Binance when credentials are set
   in the environment, and deletes its temporary users before exit.
+- `pnpm run e2e:active-components` runs the UI regression walkthrough used after
+  frontend refactors. It creates a disposable account, imports Trade Republic and
+  BBVA files through the browser, exercises the dashboard sections, upload
+  overlay, Settings submenus, API Key panel, Danger zone, Select profile, and New
+  Profile panel, then deletes the account. Binance uses
+  `BINANCE_TEST_API_KEY`/`BINANCE_TEST_API_SECRET` when present; otherwise the
+  script seeds cached balances in the test database to keep the Binance UI
+  covered without committing secrets.
 
 Browser artifacts are written under `artifacts/`, which is ignored by Git.
 

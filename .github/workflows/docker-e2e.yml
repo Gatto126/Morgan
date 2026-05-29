@@ -77,6 +77,9 @@ jobs:
       - name: Realistic browser flow
         run: pnpm run e2e:realistic
 
+      - name: Active components walkthrough
+        run: pnpm run e2e:active-components
+
       - name: Upload browser artifacts
         if: failure()
         uses: actions/upload-artifact@v4
