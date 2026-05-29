@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useLayoutEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { AuthShell } from "./auth-shell";
+import { CreateProfileStage } from "./finance-shell/create-profile-stage";
 import {
   FrameOverlayPanels,
   frameOverlayPanelMotionDurationMs,
@@ -22,11 +23,9 @@ import { useFinanceNavigation, type Stage } from "./finance-shell/use-finance-na
 import { useInertElements, useModalFocusTrap } from "./finance-shell/use-modal-accessibility";
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
 import { UserSelectPanel } from "./finance-shell/user-select-panel";
-import PlusIcon from "./ui/plus-icon";
+import { WelcomeStage } from "./finance-shell/welcome-stage";
 
-import { Input } from "@/components/ui/input";
 import { authClient } from "@/client/auth-client";
-import { cn } from "@/shared/utils";
 
 const dashboardStages = new Set<Stage>(["dashboard", "checking", "investment", "binance", "crypto"]);
 const restorableStages = new Set<Stage>(["welcome", "select", "create", "dashboard", "checking", "investment", "settings", "binance", "crypto"]);
@@ -871,69 +870,12 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
 
     if (stage === "welcome") {
       return (
-        <div className="relative h-full w-full">
-          <div className="relative h-full w-full">
-            <div
-              ref={welcomeBackgroundRef}
-              aria-hidden={isWelcomePanelModalOpen ? "true" : undefined}
-              data-panel-background="welcome"
-              data-visible={isWelcomeBackgroundVisible ? "true" : "false"}
-              className={cn(
-                "panel-content-reveal absolute inset-0 flex items-center justify-center",
-                isWelcomePanelModalOpen && "pointer-events-none"
-              )}
-            >
-              <div className="mx-auto flex h-full w-full max-w-[850px] items-stretch justify-start text-left md:h-[380px]">
-                <div className="flex h-full w-full shrink-0 flex-col justify-between py-1 md:w-[380px] md:py-2">
-                  <div className="space-y-4 md:space-y-6">
-                    <div className="space-y-1 select-none">
-                      <h1 className="text-4xl font-bold tracking-[-0.06em] text-white sm:text-[3rem]">
-                        Morgan
-                      </h1>
-                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]/50">
-                        Personal finance workspace
-                      </div>
-                    </div>
-                    <p className="max-w-[320px] text-sm font-medium leading-relaxed text-[color:var(--text-dim)]">
-                      Track accounts, investments and crypto in one private local dashboard.
-                    </p>
-                  </div>
-
-                  <div className="space-y-5 pt-6">
-                    <button
-                      className="group block cursor-pointer select-none space-y-1 text-left"
-                      onClick={() => void handleSignOut()}
-                      type="button"
-                    >
-                      <div className="text-2xl font-bold tracking-[-0.06em] text-[color:var(--text-dim)] transition-colors group-hover:text-white md:text-3xl sm:text-[2.2rem]">
-                        Log out
-                      </div>
-                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]/50 transition-colors group-hover:text-[color:var(--text-dim)]">
-                        End local session
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mx-8 hidden w-[2px] shrink-0 self-stretch bg-[color:var(--line-strong)] opacity-30 md:block" />
-
-                <div className="hidden h-full w-[398px] shrink-0 flex-col justify-end py-2 md:flex">
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <h2 className="text-3xl font-bold uppercase tracking-[-0.06em] text-white">LOCAL FIRST</h2>
-                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
-                        Built around your profiles
-                      </div>
-                    </div>
-                    <p className="text-sm font-medium leading-relaxed text-[color:var(--text-dim)]">
-                      Your account opens Morgan. Profiles inside Morgan separate the financial workspaces.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <WelcomeStage
+          backgroundRef={welcomeBackgroundRef}
+          isBackgroundVisible={isWelcomeBackgroundVisible}
+          isPanelModalOpen={isWelcomePanelModalOpen}
+          onSignOut={() => void handleSignOut()}
+        />
       );
     }
 
@@ -943,67 +885,13 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
 
     if (stage === "create") {
       return (
-        <div className="mx-auto flex h-full w-full max-w-[1164px] items-center justify-center text-left md:relative md:h-[526px] md:max-h-[526px]">
-          <div className="hidden md:absolute md:left-1/4 md:top-1/2 md:block md:w-[320px] md:-translate-x-1/2 md:-translate-y-1/2">
-            <div className="space-y-7">
-              <h1 className="text-3xl font-bold tracking-[-0.06em] text-white sm:text-[2.35rem]">
-                {title}
-              </h1>
-
-              <div className="max-w-[250px] space-y-2">
-                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
-                  Profile workspace
-                </div>
-                <p className="text-sm font-medium leading-relaxed text-[color:var(--text-dim)]">
-                  Use profiles to keep financial workspaces separate. You can add more later to track family finances too.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="hidden h-full w-[2px] shrink-0 self-stretch bg-[color:var(--line-strong)] opacity-30 md:absolute md:left-1/2 md:top-0 md:block" />
-
-          <div className="flex h-full w-full shrink-0 flex-col items-center justify-center space-y-4 py-1 text-center md:absolute md:left-3/4 md:top-1/2 md:h-[108px] md:w-[398px] md:-translate-x-1/2 md:-translate-y-1/2 md:space-y-0 md:py-0">
-            <h1 className="text-3xl font-bold tracking-[-0.06em] text-white sm:text-[2.35rem] md:hidden">
-              {title}
-            </h1>
-            <p className="max-w-[300px] text-sm font-medium leading-relaxed text-[color:var(--text-dim)] md:hidden">
-              Use profiles to keep financial workspaces separate. Add more later for family finances too.
-            </p>
-
-            <div className="w-full max-w-[398px] space-y-3 md:relative md:h-[108px] md:space-y-0">
-              <Input
-                autoFocus
-                className="w-full border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-xl text-white focus:border-white focus:ring-0 sm:h-12"
-                maxLength={24}
-                onChange={(event) => setName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    void handleCreateUser();
-                  }
-                }}
-                placeholder="Profile"
-                value={name}
-              />
-              <div className="flex min-h-12 w-full justify-center md:absolute md:left-0 md:top-[60px]">
-                <button
-                  type="button"
-                  aria-label="Create profile"
-                  className={cn(
-                    "flex h-12 w-12 cursor-pointer items-center justify-center rounded-[16px] border border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--text-dim)] transition-[background-color,border-color,color,transform,opacity] duration-200 hover:border-[color:var(--text-dim)] hover:bg-[color:var(--surface-elevated)] active:scale-[0.985] disabled:pointer-events-none disabled:opacity-40 has-lucide"
-                  )}
-                  disabled={saving || !name.trim()}
-                  onClick={() => void handleCreateUser()}
-                >
-                  <PlusIcon className="h-5 w-5" strokeWidth={2.3} />
-                </button>
-              </div>
-              <div className="min-h-4 text-center text-xs font-semibold text-[color:var(--text-dim)] md:absolute md:left-0 md:top-[calc(100%+0.75rem)] md:w-full">
-                {saving ? <span>Saving...</span> : null}
-              </div>
-            </div>
-          </div>
-        </div>
+        <CreateProfileStage
+          profileName={name}
+          saving={saving}
+          title={title}
+          onCreateProfile={() => void handleCreateUser()}
+          onProfileNameChange={setName}
+        />
       );
     }
 
