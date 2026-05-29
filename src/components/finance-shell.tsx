@@ -1,15 +1,9 @@
 "use client";
 
-import { useRef, useState, useEffect, useLayoutEffect, useMemo } from "react";
+import { useRef, useState, useEffect } from "react";
 import { AuthShell } from "./auth-shell";
 import { CreateProfileStage } from "./finance-shell/create-profile-stage";
-import {
-  FrameOverlayPanels,
-  frameOverlayPanelMotionDurationMs,
-  resolveFrameOverlayPanel,
-  type ExitingFrameOverlayPanelConfig,
-  type FrameOverlayPanelConfig
-} from "./finance-shell/frame-overlay-panels";
+import { FrameOverlayPanels } from "./finance-shell/frame-overlay-panels";
 import { FinanceShellMainFrame } from "./finance-shell/main-frame";
 import { ReviewPanel } from "./finance-shell/review-panel";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
@@ -22,8 +16,8 @@ import {
   resolveInitialFinanceState,
   useFinanceProfiles
 } from "./finance-shell/use-finance-profiles";
+import { useFrameOverlayLifecycle } from "./finance-shell/use-frame-overlay-lifecycle";
 import { useFinanceNavigation, type Stage } from "./finance-shell/use-finance-navigation";
-import { useInertElements, useModalFocusTrap } from "./finance-shell/use-modal-accessibility";
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
 import { UserSelectPanel } from "./finance-shell/user-select-panel";
 import { WelcomeStage } from "./finance-shell/welcome-stage";
@@ -214,40 +208,19 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     };
   }, [applyImportedTransactionCounts]);
   const isDashboardStage = dashboardStages.has(stage);
-  const isDashboardPanelModalOpen =
-    isDashboardStage && !!activeUser && (showUploadView || showSettingsView || showUserSelectView);
-  const isWelcomePanelModalOpen =
-    stage === "welcome" && (showUploadView || showSettingsView || showUserSelectView);
-  const isPanelModalOpen = isDashboardPanelModalOpen || isWelcomePanelModalOpen;
-  const isOverlayPanelClosing =
-    (showUploadView && isClosingUpload) ||
-    (showSettingsView && isClosingSettings) ||
-    (showUserSelectView && isClosingUserSelect);
-  const isDashboardBackgroundVisible = !isDashboardPanelModalOpen || isOverlayPanelClosing;
-  const isWelcomeBackgroundVisible = !isWelcomePanelModalOpen || isOverlayPanelClosing;
-  const activePanelFocusKey = isDashboardPanelModalOpen
-    ? `dashboard:${showUploadView ? "upload" : showSettingsView ? "settings" : "profile"}`
-    : isWelcomePanelModalOpen
-      ? `welcome:${showUploadView ? "upload" : showSettingsView ? "settings" : "profile"}`
-      : "closed";
-  const shellPanelBackgroundRefs = useMemo(
-    () => [dashboardTabsPortalRef, dashboardCardsPortalRef],
-    []
-  );
-  const dashboardPanelBackgroundRefs = useMemo(
-    () => [dashboardBackgroundRef],
-    []
-  );
-  const welcomePanelBackgroundRefs = useMemo(
-    () => [welcomeBackgroundRef],
-    []
-  );
-  const deleteDialogBackgroundRefs = useMemo(
-    () => [appContentRef],
-    []
-  );
-  const activeFramePanel = resolveFrameOverlayPanel({
+  const {
+    activeFramePanel,
+    exitingFramePanel,
+    isDashboardBackgroundVisible,
+    isWelcomeBackgroundVisible,
+    isWelcomePanelModalOpen
+  } = useFrameOverlayLifecycle({
+    activeOverlayPanelRef,
     activeUserPresent: !!activeUser,
+    appContentRef,
+    dashboardBackgroundRef,
+    dashboardCardsPortalRef,
+    dashboardTabsPortalRef,
     isClosingSettings,
     isClosingUpload,
     isClosingUserSelect,
@@ -255,61 +228,17 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     renderSettingsContent: renderSettingsState,
     renderUploadContent: () => previewTransactions.length > 0 ? renderReviewState() : renderUploadState(),
     renderUserSelectContent: renderUserSelectState,
+    showDeleteAccountConfirm,
     showSettingsView,
     showUploadView,
     showUserSelectView,
     stage,
+    welcomeBackgroundRef,
+    onCloseActiveOverlayPanel: closeActiveOverlayPanel,
     onCloseSettings: handleSettingsPanelClose,
     onCloseUpload: handleCloseUpload,
     onCloseUserSelect: handleCloseUserSelect
   });
-  const previousFramePanelRef = useRef<FrameOverlayPanelConfig | null>(null);
-  const exitingFramePanelTimerRef = useRef<number | null>(null);
-  const exitingFramePanelIdRef = useRef(0);
-  const [exitingFramePanel, setExitingFramePanel] = useState<ExitingFrameOverlayPanelConfig | null>(null);
-
-  useModalFocusTrap({
-    active: isPanelModalOpen && !showDeleteAccountConfirm,
-    containerRef: activeOverlayPanelRef,
-    focusKey: activePanelFocusKey,
-    onEscape: closeActiveOverlayPanel
-  });
-  useInertElements(isPanelModalOpen, shellPanelBackgroundRefs);
-  useInertElements(isDashboardPanelModalOpen, dashboardPanelBackgroundRefs);
-  useInertElements(isWelcomePanelModalOpen, welcomePanelBackgroundRefs);
-  useInertElements(showDeleteAccountConfirm, deleteDialogBackgroundRefs);
-
-  useLayoutEffect(() => {
-    const previousFramePanel = previousFramePanelRef.current;
-    const previousKey = previousFramePanel?.key ?? null;
-    const currentKey = activeFramePanel?.key ?? null;
-
-    if (previousFramePanel && previousKey !== currentKey && currentKey === null && !previousFramePanel.isClosingPanel) {
-      if (exitingFramePanelTimerRef.current) {
-        window.clearTimeout(exitingFramePanelTimerRef.current);
-      }
-
-      const exitId = `${previousFramePanel.key}:exit:${exitingFramePanelIdRef.current}`;
-      exitingFramePanelIdRef.current += 1;
-      setExitingFramePanel({ ...previousFramePanel, exitId });
-      exitingFramePanelTimerRef.current = window.setTimeout(() => {
-        exitingFramePanelTimerRef.current = null;
-        setExitingFramePanel(null);
-      }, frameOverlayPanelMotionDurationMs);
-    } else if (!activeFramePanel && previousFramePanel?.isClosingPanel && exitingFramePanel) {
-      setExitingFramePanel(null);
-    }
-
-    previousFramePanelRef.current = activeFramePanel;
-  }, [activeFramePanel, exitingFramePanel]);
-
-  useEffect(() => {
-    return () => {
-      if (exitingFramePanelTimerRef.current) {
-        window.clearTimeout(exitingFramePanelTimerRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (showCreateUserSubmenu && createUserInputRef.current) {
