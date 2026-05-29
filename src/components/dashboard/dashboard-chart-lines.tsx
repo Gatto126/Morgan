@@ -1,13 +1,14 @@
 import { Line, ReferenceLine } from "recharts";
 
 import { ChartReferenceLabel } from "@/components/chart-primitives/chart-reference-label";
+import { SelectableChartDot, type ChartDotSelectedPoint } from "@/components/chart-primitives/selectable-chart-dot";
 import type { DashboardChartConfig, DashboardChartPoint } from "./dashboard-chart-types";
 import type { AccountTab } from "./types";
 
 type ActiveDotProps = {
   cx?: number;
   cy?: number;
-  payload?: DashboardChartPoint;
+  payload?: DashboardChartPoint & { rawMonth?: string };
 };
 
 type DashboardChartLinesProps = {
@@ -26,40 +27,6 @@ function getHiddenSeriesSignature(hiddenSeries: Record<string, boolean>) {
     .join("");
 }
 
-function SeriesDot({
-  color,
-  dataKey,
-  payload,
-  cx,
-  cy,
-  setSelectedMonth,
-  setSelectedSeriesKey
-}: ActiveDotProps & {
-  color: string;
-  dataKey: string;
-  setSelectedMonth: (month: string | null) => void;
-  setSelectedSeriesKey: (seriesKey: string | null) => void;
-}) {
-  if (cx === undefined || cy === undefined || !payload || payload[dataKey] == null) return null;
-
-  return (
-    <circle
-      cx={cx}
-      cy={cy}
-      r={dataKey === "value" ? 6 : 5}
-      fill="#1a1a1a"
-      stroke={color}
-      strokeWidth={2}
-      style={{ cursor: "pointer", outline: "none" }}
-      onClick={(event) => {
-        event.stopPropagation();
-        setSelectedMonth(payload.rawMonth as string);
-        setSelectedSeriesKey(dataKey);
-      }}
-    />
-  );
-}
-
 export function DashboardChartLines({
   activeTab,
   chartConfig,
@@ -69,6 +36,10 @@ export function DashboardChartLines({
   setSelectedSeriesKey
 }: DashboardChartLinesProps) {
   const hiddenSeriesSignature = getHiddenSeriesSignature(hiddenSeries);
+  const handleSelectPoint = (point: ChartDotSelectedPoint) => {
+    setSelectedMonth(point.month);
+    setSelectedSeriesKey(point.seriesKey);
+  };
 
   return (
     <>
@@ -85,12 +56,12 @@ export function DashboardChartLines({
             isAnimationActive={false}
             connectNulls={false}
             activeDot={(props: ActiveDotProps) => (
-              <SeriesDot
+              <SelectableChartDot
                 {...props}
                 color={subLine.stroke}
-                dataKey={subLine.key}
-                setSelectedMonth={setSelectedMonth}
-                setSelectedSeriesKey={setSelectedSeriesKey}
+                onSelectPoint={handleSelectPoint}
+                radius={5}
+                seriesKey={subLine.key}
               />
             )}
             dot={false}
@@ -109,12 +80,11 @@ export function DashboardChartLines({
           isAnimationActive={false}
           connectNulls={false}
           activeDot={(props: ActiveDotProps) => (
-            <SeriesDot
+            <SelectableChartDot
               {...props}
               color="#ffffff"
-              dataKey="value"
-              setSelectedMonth={setSelectedMonth}
-              setSelectedSeriesKey={setSelectedSeriesKey}
+              onSelectPoint={handleSelectPoint}
+              seriesKey="value"
             />
           )}
           dot={false}

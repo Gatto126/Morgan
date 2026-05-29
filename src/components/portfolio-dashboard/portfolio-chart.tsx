@@ -6,6 +6,7 @@ import { ChartLegend } from "@/components/chart-primitives/chart-legend";
 import { ChartReferenceLabel } from "@/components/chart-primitives/chart-reference-label";
 import { ChartTimeRangeControls } from "@/components/chart-primitives/chart-time-range-controls";
 import { ChartTooltip } from "@/components/chart-primitives/chart-tooltip";
+import { SelectableChartDot } from "@/components/chart-primitives/selectable-chart-dot";
 import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
 import type { ActiveDotProps, ChartPoint } from "@/types/chart";
 
@@ -137,11 +138,14 @@ export function PortfolioChart({
                         strokeWidth={1.5}
                         isAnimationActive={false}
                         connectNulls={false}
-                        activeDot={(props: ActiveDotProps) => {
-                          const { cx, cy, payload } = props;
-                          if (payload[providerKey] == null) return null;
-                          return <circle cx={cx} cy={cy} r={6} fill="#1a1a1a" stroke={strokeColor} strokeWidth={2} style={{ cursor: "pointer", outline: "none" }} onClick={(event) => { event.stopPropagation(); onSelectPoint({ month: payload.rawMonth, seriesKey: providerKey, value: Number(payload[providerKey]) }); }} />;
-                        }}
+                        activeDot={(props: ActiveDotProps) => (
+                          <SelectableChartDot
+                            {...props}
+                            color={strokeColor}
+                            onSelectPoint={onSelectPoint}
+                            seriesKey={providerKey}
+                          />
+                        )}
                         dot={false}
                       />
                     );
@@ -156,18 +160,14 @@ export function PortfolioChart({
                     isAnimationActive={false}
                     connectNulls={false}
                     hide={!!hiddenSeries.heritage}
-                    activeDot={(props: ActiveDotProps) => {
-                      const { cx, cy, payload } = props;
-                      if (payload.heritage == null) return null;
-                      return (
-                        <circle
-                          cx={cx} cy={cy} r={6}
-                          fill="#1a1a1a" stroke="#ffffff" strokeWidth={2}
-                          style={{ cursor: "pointer", outline: "none" }}
-                          onClick={(event) => { event.stopPropagation(); onSelectPoint({ month: payload.rawMonth, seriesKey: "heritage", value: Number(payload.heritage) }); }}
-                        />
-                      );
-                    }}
+                    activeDot={(props: ActiveDotProps) => (
+                      <SelectableChartDot
+                        {...props}
+                        color="#ffffff"
+                        onSelectPoint={onSelectPoint}
+                        seriesKey="heritage"
+                      />
+                    )}
                     dot={false}
                   />
                 </>
@@ -189,18 +189,15 @@ export function PortfolioChart({
                         strokeWidth={1.5}
                         isAnimationActive={false}
                         connectNulls={false}
-                        activeDot={(props: ActiveDotProps) => {
-                          const { cx, cy, payload } = props;
-                          if (payload[productKey] == null) return null;
-                          return (
-                            <circle
-                              cx={cx} cy={cy} r={5}
-                              fill="#1a1a1a" stroke={strokeColor} strokeWidth={2}
-                              style={{ cursor: "pointer", outline: "none" }}
-                              onClick={(event) => { event.stopPropagation(); onSelectPoint({ month: payload.rawMonth, seriesKey: productKey, value: Number(payload[productKey]) }); }}
-                            />
-                          );
-                        }}
+                        activeDot={(props: ActiveDotProps) => (
+                          <SelectableChartDot
+                            {...props}
+                            color={strokeColor}
+                            onSelectPoint={onSelectPoint}
+                            radius={5}
+                            seriesKey={productKey}
+                          />
+                        )}
                         dot={false}
                       />
                     );
@@ -215,17 +212,14 @@ export function PortfolioChart({
                     isAnimationActive={false}
                     connectNulls={false}
                     hide={!!hiddenSeries.balance}
-                    activeDot={(props: ActiveDotProps) => {
-                      const { cx, cy, payload } = props;
-                      return (
-                        <circle
-                          cx={cx} cy={cy} r={6}
-                          fill="#1a1a1a" stroke="#ffffff" strokeWidth={2}
-                          style={{ cursor: "pointer", outline: "none" }}
-                          onClick={(event) => { event.stopPropagation(); onSelectPoint({ month: payload.rawMonth, seriesKey: "balance", value: Number(payload.balance) }); }}
-                        />
-                      );
-                    }}
+                    activeDot={(props: ActiveDotProps) => (
+                      <SelectableChartDot
+                        {...props}
+                        color="#ffffff"
+                        onSelectPoint={onSelectPoint}
+                        seriesKey="balance"
+                      />
+                    )}
                     dot={false}
                   />
                 </>

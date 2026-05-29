@@ -7,6 +7,7 @@ import { Line, LineChart, CartesianGrid, ReferenceLine, Tooltip, XAxis, YAxis } 
 import { ChartLegend } from "./chart-primitives/chart-legend";
 import { ChartReferenceLabel } from "./chart-primitives/chart-reference-label";
 import { ChartTimeRangeControls } from "./chart-primitives/chart-time-range-controls";
+import { SelectableChartDot } from "./chart-primitives/selectable-chart-dot";
 import { BinanceChartTooltip } from "./binance-dashboard/binance-chart-tooltip";
 import {
   BINANCE_CHART_LEGEND_ITEMS,
@@ -249,17 +250,14 @@ export function BinanceDashboard({
                       stroke="#ffffff"
                       strokeWidth={2.5}
                       isAnimationActive={false}
-                      activeDot={(props: ActiveDotProps) => {
-                        const { cx, cy, payload } = props;
-                        return (
-                          <circle
-                            cx={cx} cy={cy} r={6}
-                            fill="#1a1a1a" stroke="#ffffff" strokeWidth={2}
-                            style={{ cursor: "pointer", outline: "none" }}
-                            onClick={(e) => { e.stopPropagation(); setSelectedPoint({ month: payload.rawMonth, seriesKey: "balance", value: Number(payload.balance) }); }}
-                          />
-                        );
-                      }}
+                      activeDot={(props: ActiveDotProps) => (
+                        <SelectableChartDot
+                          {...props}
+                          color="#ffffff"
+                          onSelectPoint={setSelectedPoint}
+                          seriesKey="balance"
+                        />
+                      )}
                       dot={false}
                     />
                     {selectedPoint && <ReferenceLine y={selectedPoint.value} stroke="rgba(254,254,254,0.5)" strokeWidth={1.5} strokeDasharray="6 4" label={<ChartReferenceLabel selectedValue={selectedPoint.value} />} />}

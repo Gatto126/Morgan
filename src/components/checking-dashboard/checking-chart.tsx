@@ -5,6 +5,7 @@ import { ChartLegend } from "@/components/chart-primitives/chart-legend";
 import { ChartReferenceLabel } from "@/components/chart-primitives/chart-reference-label";
 import { ChartTimeRangeControls } from "@/components/chart-primitives/chart-time-range-controls";
 import { ChartTooltip } from "@/components/chart-primitives/chart-tooltip";
+import { SelectableChartDot } from "@/components/chart-primitives/selectable-chart-dot";
 import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
 import type { ActiveDotProps, ChartPoint } from "@/types/chart";
 
@@ -124,21 +125,15 @@ export function CheckingChart({
                     isAnimationActive={false}
                     connectNulls={false}
                     hide={!!hiddenSeries.income}
-                    activeDot={(props: ActiveDotProps) => {
-                      const { cx, cy, payload } = props;
-                      if (payload.income == null) return null;
-                      return (
-                        <circle
-                          cx={cx} cy={cy} r={5}
-                          fill="#1a1a1a" stroke="#8f8f8f" strokeWidth={2}
-                          style={{ cursor: "pointer", outline: "none" }}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onSelectPoint({ month: payload.rawMonth, seriesKey: "income", value: Number(payload.income) });
-                          }}
-                        />
-                      );
-                    }}
+                    activeDot={(props: ActiveDotProps) => (
+                      <SelectableChartDot
+                        {...props}
+                        color="#8f8f8f"
+                        onSelectPoint={onSelectPoint}
+                        radius={5}
+                        seriesKey="income"
+                      />
+                    )}
                     dot={false}
                   />
                   <Line
@@ -150,21 +145,15 @@ export function CheckingChart({
                     isAnimationActive={false}
                     connectNulls={false}
                     hide={!!hiddenSeries.expenses}
-                    activeDot={(props: ActiveDotProps) => {
-                      const { cx, cy, payload } = props;
-                      if (payload.expenses == null) return null;
-                      return (
-                        <circle
-                          cx={cx} cy={cy} r={5}
-                          fill="#1a1a1a" stroke="#404040" strokeWidth={2}
-                          style={{ cursor: "pointer", outline: "none" }}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onSelectPoint({ month: payload.rawMonth, seriesKey: "expenses", value: Number(payload.expenses) });
-                          }}
-                        />
-                      );
-                    }}
+                    activeDot={(props: ActiveDotProps) => (
+                      <SelectableChartDot
+                        {...props}
+                        color="#404040"
+                        onSelectPoint={onSelectPoint}
+                        radius={5}
+                        seriesKey="expenses"
+                      />
+                    )}
                     dot={false}
                   />
                   <Line
@@ -177,21 +166,14 @@ export function CheckingChart({
                     isAnimationActive={false}
                     connectNulls={false}
                     hide={!!hiddenSeries.balance}
-                    activeDot={(props: ActiveDotProps) => {
-                      const { cx, cy, payload } = props;
-                      if (payload.balance == null) return null;
-                      return (
-                        <circle
-                          cx={cx} cy={cy} r={6}
-                          fill="#1a1a1a" stroke="#ffffff" strokeWidth={2}
-                          style={{ cursor: "pointer", outline: "none" }}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onSelectPoint({ month: payload.rawMonth, seriesKey: "balance", value: Number(payload.balance) });
-                          }}
-                        />
-                      );
-                    }}
+                    activeDot={(props: ActiveDotProps) => (
+                      <SelectableChartDot
+                        {...props}
+                        color="#ffffff"
+                        onSelectPoint={onSelectPoint}
+                        seriesKey="balance"
+                      />
+                    )}
                     dot={false}
                   />
                 </>
@@ -212,21 +194,14 @@ export function CheckingChart({
                         strokeWidth={2}
                         isAnimationActive={false}
                         connectNulls={false}
-                        activeDot={(props: ActiveDotProps) => {
-                          const { cx, cy, payload } = props;
-                          if (payload[providerKey] == null) return null;
-                          return (
-                            <circle
-                              cx={cx} cy={cy} r={6}
-                              fill="#1a1a1a" stroke={strokeColor} strokeWidth={2}
-                              style={{ cursor: "pointer", outline: "none" }}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onSelectPoint({ month: payload.rawMonth, seriesKey: providerKey, value: Number(payload[providerKey]) });
-                              }}
-                            />
-                          );
-                        }}
+                        activeDot={(props: ActiveDotProps) => (
+                          <SelectableChartDot
+                            {...props}
+                            color={strokeColor}
+                            onSelectPoint={onSelectPoint}
+                            seriesKey={providerKey}
+                          />
+                        )}
                         dot={false}
                       />
                     );
@@ -240,21 +215,14 @@ export function CheckingChart({
                     strokeWidth={2.5}
                     isAnimationActive={false}
                     hide={!!hiddenSeries.heritage}
-                    activeDot={(props: ActiveDotProps) => {
-                      const { cx, cy, payload } = props;
-                      if (payload.heritage == null) return null;
-                      return (
-                        <circle
-                          cx={cx} cy={cy} r={6}
-                          fill="#1a1a1a" stroke="#ffffff" strokeWidth={2}
-                          style={{ cursor: "pointer", outline: "none" }}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onSelectPoint({ month: payload.rawMonth, seriesKey: "heritage", value: Number(payload.heritage) });
-                          }}
-                        />
-                      );
-                    }}
+                    activeDot={(props: ActiveDotProps) => (
+                      <SelectableChartDot
+                        {...props}
+                        color="#ffffff"
+                        onSelectPoint={onSelectPoint}
+                        seriesKey="heritage"
+                      />
+                    )}
                     dot={false}
                   />
                 </>
