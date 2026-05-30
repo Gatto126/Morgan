@@ -585,7 +585,7 @@ async function deleteAccountViaUi(page) {
   await dialog.getByPlaceholder("Enter your password", { exact: true }).fill(password);
   await dialog.getByRole("button", { name: "Delete account", exact: true }).click();
   await page.locator('main[data-auth-shell-ready="true"]').waitFor({ state: "attached", timeout: 30_000 });
-  await page.getByRole("button", { name: "Register New local account", exact: true }).waitFor({ state: "visible", timeout: 30_000 });
+  await page.getByRole("button", { name: "Register New account", exact: true }).waitFor({ state: "visible", timeout: 30_000 });
   await saveScreenshot(page, "after-account-delete.png");
   steps.push("deleted_account_via_ui");
 }
@@ -643,7 +643,7 @@ try {
   await page.locator('main[data-auth-shell-ready="true"]').waitFor({ state: "attached", timeout: 20_000 });
   await expectNoOverlay(page, "initial load");
 
-  await page.getByRole("button", { name: "Register New local account", exact: true }).click();
+  await page.getByRole("button", { name: "Register New account", exact: true }).click();
   await page.getByPlaceholder("Invite code", { exact: true }).fill(signupInviteCode);
   await page.getByPlaceholder("Email", { exact: true }).fill(email);
   await page.getByPlaceholder("Password", { exact: true }).fill(password);

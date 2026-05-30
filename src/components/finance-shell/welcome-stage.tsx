@@ -40,7 +40,7 @@ export function WelcomeStage({
                   </div>
                 </div>
                 <p className="max-w-[320px] text-sm font-medium leading-relaxed text-[color:var(--text-dim)]">
-                  Track accounts, investments and crypto in one private local dashboard.
+                  Track accounts, investments and crypto in one private dashboard.
                 </p>
               </div>
 
@@ -54,7 +54,7 @@ export function WelcomeStage({
                     Log out
                   </div>
                   <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]/50 transition-colors group-hover:text-[color:var(--text-dim)]">
-                    End local session
+                    End session
                   </div>
                 </button>
               </div>
@@ -65,7 +65,7 @@ export function WelcomeStage({
             <div className="hidden h-full w-[398px] shrink-0 flex-col justify-end py-2 md:flex">
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <h2 className="text-3xl font-bold uppercase tracking-[-0.06em] text-white">LOCAL FIRST</h2>
+                  <h2 className="text-3xl font-bold uppercase tracking-[-0.06em] text-white">PRIVATE BY DESIGN</h2>
                   <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
                     Built around your profiles
                   </div>

@@ -188,7 +188,7 @@ try {
   await expectNoHydrationOverlay(page, "initial load");
   steps.push("loaded_home_with_security_headers");
 
-  await page.getByRole("button", { name: "Register New local account", exact: true }).click();
+  await page.getByRole("button", { name: "Register New account", exact: true }).click();
   await page.getByPlaceholder("Invite code", { exact: true }).fill(signupInviteCode);
   await page.getByPlaceholder("Email", { exact: true }).fill(email);
   await page.getByPlaceholder("Password", { exact: true }).fill(password);
@@ -295,7 +295,7 @@ try {
   await dialog.getByPlaceholder("Enter your password", { exact: true }).fill(password);
   await dialog.getByRole("button", { name: "Delete account", exact: true }).click();
   await page.locator('main[data-auth-shell-ready="true"]').waitFor({ state: "attached", timeout: 20_000 });
-  await page.getByRole("button", { name: "Register New local account", exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+  await page.getByRole("button", { name: "Register New account", exact: true }).waitFor({ state: "visible", timeout: 20_000 });
   await expectNoHydrationOverlay(page, "after account deletion");
   await saveScreenshot(page, "03-after-account-delete.png");
   steps.push("deleted_account_via_ui");

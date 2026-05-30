@@ -440,7 +440,7 @@ async function runSmoke() {
     await waitForAuthShellHydration(page);
     const inviteCodeInput = page.getByPlaceholder("Invite code", { exact: true });
     await clickUntilVisible(
-      page.getByRole("button", { name: "Register New local account", exact: true }),
+      page.getByRole("button", { name: "Register New account", exact: true }),
       inviteCodeInput,
       "register view"
     );

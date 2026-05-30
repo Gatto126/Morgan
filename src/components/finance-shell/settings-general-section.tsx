@@ -22,7 +22,7 @@ export function SettingsGeneralSection({
           <div className="min-w-0 text-left">
             <div className="truncate text-sm font-bold text-white">{accountName}</div>
             <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-dim)]/70">
-              Local account
+              Account
             </div>
           </div>
           <button
