@@ -119,7 +119,7 @@ pnpm run lint             # Run ESLint
 pnpm run typecheck        # Typecheck application code without tests
 pnpm run typecheck:test   # Typecheck tests and fixtures
 pnpm run test:run         # Run unit tests
-pnpm run release:check    # Run lint, typecheck, tests, and production build
+pnpm run release:check    # Validate Prisma, lint, typecheck, test, and build
 pnpm run test:unit        # Run tests already migrated under tests/unit
 pnpm run test:scripts     # Run script helper tests
 pnpm run test:rate-limit:clear # Clear Better Auth test rate limits on safe local/explicit test DBs
@@ -129,6 +129,7 @@ pnpm run e2e:docker:full  # Run the full Docker browser flow; Binance runs only 
 pnpm run e2e:realistic    # Run the large realistic browser flow against TEST_BASE_URL or port 3000
 pnpm run prisma:generate  # Generate the default Postgres Prisma client
 pnpm run prisma:generate:sqlite # Generate the SQLite Prisma client for desktop storage checks
+pnpm run prisma:validate  # Validate Postgres and SQLite Prisma schemas
 pnpm run db:migrate       # Apply committed Postgres Prisma migrations
 pnpm run db:migrate:dev   # Create/apply a new local Postgres migration
 pnpm run db:migrate:dev:sqlite # Create/apply a local SQLite migration for the desktop scaffold

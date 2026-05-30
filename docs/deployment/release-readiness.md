@@ -19,6 +19,9 @@ Run this gate on the release branch before any preview or production deploy:
 pnpm run release:check
 ```
 
+This validates both Prisma schemas, lints, typechecks app and test code, runs
+the Vitest suite, and creates a production build.
+
 For Docker pre-production:
 
 ```powershell
