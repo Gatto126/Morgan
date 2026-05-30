@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import { cn } from "@/shared/utils";
 
 type DashboardStatusProps = {
@@ -8,9 +10,21 @@ type DashboardLoadingOverlayProps = {
   showLoadingOverlay: boolean;
 };
 
+const inactiveDashboardStageStyle: CSSProperties = {
+  contain: "layout paint style",
+  contentVisibility: "hidden"
+};
+
+export function getDashboardStageVisibilityStyle(isActive: boolean) {
+  return isActive ? undefined : inactiveDashboardStageStyle;
+}
+
 export function DashboardErrorState({ error, isActive }: DashboardStatusProps & { error: string }) {
   return (
-    <div className={cn("absolute inset-0 flex h-full items-center justify-center", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
+    <div
+      className={cn("absolute inset-0 flex h-full items-center justify-center", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
+      style={getDashboardStageVisibilityStyle(isActive)}
+    >
       <p className="text-sm text-[color:var(--danger)]">{error}</p>
     </div>
   );

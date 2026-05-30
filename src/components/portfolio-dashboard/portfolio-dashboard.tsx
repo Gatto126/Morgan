@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/shared/utils";
 import type { ChartPoint } from "@/types/chart";
 import { DashboardPanelHost } from "@/components/dashboard-panel-host";
-import { DashboardLoadingOverlay } from "@/components/dashboard/dashboard-status";
+import { DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "@/components/dashboard/dashboard-status";
 import { buildPortfolioChartData, getPortfolioXAxisTicks } from "./chart-data";
 import { formatProviderLabel } from "./formatters";
 import { PortfolioChart } from "./portfolio-chart";
@@ -151,10 +151,20 @@ export function PortfolioDashboard({
     });
   }, [importRefreshSettled, importRefreshVersion]);
 
-  if (error) return <div className={cn("absolute inset-0 flex h-full items-center justify-center text-sm text-[color:var(--danger)]", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>{error}</div>;
+  if (error) return (
+    <div
+      className={cn("absolute inset-0 flex h-full items-center justify-center text-sm text-[color:var(--danger)]", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
+      style={getDashboardStageVisibilityStyle(isActive)}
+    >
+      {error}
+    </div>
+  );
   if (!data) {
     return (
-      <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
+      <div
+        className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
+        style={getDashboardStageVisibilityStyle(isActive)}
+      >
         <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
       </div>
     );
@@ -182,7 +192,10 @@ export function PortfolioDashboard({
   const tabs: PortfolioDashboardTab[] = [{ key: "ALL", label: config.rootLabel, total: allTotal }, ...data.providers.map(p => ({ key: p.sourceInstitution, label: formatProviderLabel(p.sourceInstitution), total: getProviderLiveTotal(p) }))];
 
   return (
-    <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
+    <div
+      className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
+      style={getDashboardStageVisibilityStyle(isActive)}
+    >
       <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
       <PortfolioDashboardTabs
         portalNode={tabsPortalNode}

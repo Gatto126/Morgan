@@ -7,7 +7,7 @@ import { cn } from "@/shared/utils";
 
 import { DashboardCards } from "./dashboard/dashboard-cards";
 import { DashboardChart } from "./dashboard/dashboard-chart";
-import { DashboardErrorState, DashboardLoadingOverlay } from "./dashboard/dashboard-status";
+import { DashboardErrorState, DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "./dashboard/dashboard-status";
 import { DashboardTabs } from "./dashboard/dashboard-tabs";
 import { useBinanceBalances } from "./dashboard/use-binance-balances";
 import { useDashboardChartModel } from "./dashboard/use-dashboard-chart-model";
@@ -168,7 +168,10 @@ export function Dashboard({
   }
 
   return (
-    <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
+    <div
+      className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
+      style={getDashboardStageVisibilityStyle(isActive)}
+    >
       <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
       {data ? (
         <>

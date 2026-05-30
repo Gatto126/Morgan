@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DashboardPanelHost } from "@/components/dashboard-panel-host";
-import { DashboardLoadingOverlay } from "@/components/dashboard/dashboard-status";
+import { DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "@/components/dashboard/dashboard-status";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { usePortalNode } from "@/hooks/use-portal-node";
 import { cn } from "@/shared/utils";
@@ -143,7 +143,10 @@ export function CheckingDashboard({
 
   if (error) {
     return (
-      <div className={cn("absolute inset-0 flex h-full items-center justify-center", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
+      <div
+        className={cn("absolute inset-0 flex h-full items-center justify-center", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
+        style={getDashboardStageVisibilityStyle(isActive)}
+      >
         <p className="text-sm text-[color:var(--danger)]">{error}</p>
       </div>
     );
@@ -151,7 +154,10 @@ export function CheckingDashboard({
 
   if (!data) {
     return (
-      <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
+      <div
+        className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
+        style={getDashboardStageVisibilityStyle(isActive)}
+      >
         <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
       </div>
     );
@@ -168,7 +174,10 @@ export function CheckingDashboard({
   ];
 
   return (
-    <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
+    <div
+      className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
+      style={getDashboardStageVisibilityStyle(isActive)}
+    >
       <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
       <CheckingDashboardTabs
         portalNode={tabsPortalNode}
