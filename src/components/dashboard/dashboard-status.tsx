@@ -6,7 +6,6 @@ type DashboardStatusProps = {
 
 type DashboardLoadingOverlayProps = {
   showLoadingOverlay: boolean;
-  loadingOverlayFadingOut: boolean;
 };
 
 export function DashboardErrorState({ error, isActive }: DashboardStatusProps & { error: string }) {
@@ -18,8 +17,7 @@ export function DashboardErrorState({ error, isActive }: DashboardStatusProps & 
 }
 
 export function DashboardLoadingOverlay({
-  showLoadingOverlay,
-  loadingOverlayFadingOut
+  showLoadingOverlay
 }: DashboardLoadingOverlayProps) {
   if (!showLoadingOverlay) {
     return null;
@@ -29,9 +27,7 @@ export function DashboardLoadingOverlay({
     <div
       className="absolute -inset-3 z-[60] flex items-center justify-center overflow-hidden rounded-[18px] bg-[color:var(--surface-canvas)] sm:-inset-5"
       style={{
-        opacity: loadingOverlayFadingOut ? 0 : 1,
-        transition: loadingOverlayFadingOut ? "opacity 550ms cubic-bezier(0.4,0,0.2,1)" : "none",
-        pointerEvents: loadingOverlayFadingOut ? "none" : "all"
+        pointerEvents: "all"
       }}
     >
       <div
@@ -44,18 +40,6 @@ export function DashboardLoadingOverlay({
           animation: "dashboardSpinner 0.85s linear infinite"
         }}
       />
-    </div>
-  );
-}
-
-export function DashboardLoadingState({
-  isActive,
-  showLoadingOverlay,
-  loadingOverlayFadingOut
-}: DashboardStatusProps & DashboardLoadingOverlayProps) {
-  return (
-    <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
-      <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} loadingOverlayFadingOut={loadingOverlayFadingOut} />
     </div>
   );
 }

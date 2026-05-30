@@ -26,7 +26,6 @@ export function useDashboardVisualState({
   transactionCount
 }: UseDashboardVisualStateParams) {
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
-  const [loadingOverlayFadingOut, setLoadingOverlayFadingOut] = useState(false);
   const [contentVisible, setContentVisible] = useState(false);
   const [chartReady, setChartReady] = useState(false);
   const firstLoadCompletedRef = useRef(false);
@@ -49,13 +48,8 @@ export function useDashboardVisualState({
     }
 
     firstLoadCompletedRef.current = true;
-    setLoadingOverlayFadingOut(true);
     setContentVisible(true);
-    const timer = window.setTimeout(() => {
-      setShowLoadingOverlay(false);
-      setLoadingOverlayFadingOut(false);
-    }, 550);
-    return () => window.clearTimeout(timer);
+    setShowLoadingOverlay(false);
   }, [initialDashboardVisualReady]);
 
   useEffect(() => {
@@ -79,7 +73,6 @@ export function useDashboardVisualState({
   return {
     chartReady,
     contentVisible,
-    loadingOverlayFadingOut,
     setChartReady,
     showLoadingOverlay
   };

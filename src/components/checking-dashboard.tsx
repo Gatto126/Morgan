@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DashboardPanelHost } from "@/components/dashboard-panel-host";
-import { DashboardLoadingOverlay, DashboardLoadingState } from "@/components/dashboard/dashboard-status";
+import { DashboardLoadingOverlay } from "@/components/dashboard/dashboard-status";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { usePortalNode } from "@/hooks/use-portal-node";
 import { cn } from "@/shared/utils";
@@ -57,7 +57,6 @@ export function CheckingDashboard({
   const [activeChartPoint, setActiveChartPoint] = useState<ChartPoint | null>(null);
   const [chartReady, setChartReady] = useState(false);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
-  const [loadingOverlayFadingOut, setLoadingOverlayFadingOut] = useState(false);
   const [contentVisible, setContentVisible] = useState(false);
   const firstLoadCompletedRef = useRef(false);
   const completedImportRefreshVersionRef = useRef(0);
@@ -120,13 +119,8 @@ export function CheckingDashboard({
     }
 
     firstLoadCompletedRef.current = true;
-    setLoadingOverlayFadingOut(true);
     setContentVisible(true);
-    const timer = window.setTimeout(() => {
-      setShowLoadingOverlay(false);
-      setLoadingOverlayFadingOut(false);
-    }, 550);
-    return () => window.clearTimeout(timer);
+    setShowLoadingOverlay(false);
   }, [initialVisualReady]);
 
   useEffect(() => {
@@ -147,10 +141,6 @@ export function CheckingDashboard({
     });
   }, [importRefreshSettled, importRefreshVersion]);
 
-  if (loading) {
-    return <DashboardLoadingState isActive={isActive} showLoadingOverlay={showLoadingOverlay} loadingOverlayFadingOut={loadingOverlayFadingOut} />;
-  }
-
   if (error) {
     return (
       <div className={cn("absolute inset-0 flex h-full items-center justify-center", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
@@ -160,7 +150,11 @@ export function CheckingDashboard({
   }
 
   if (!data) {
-    return null;
+    return (
+      <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
+        <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
+      </div>
+    );
   }
 
   const allTotal = data.providers.reduce((sum, provider) => sum + provider.total, 0);
@@ -175,7 +169,7 @@ export function CheckingDashboard({
 
   return (
     <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
-      <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} loadingOverlayFadingOut={loadingOverlayFadingOut} />
+      <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
       <CheckingDashboardTabs
         portalNode={tabsPortalNode}
         tabs={tabs}

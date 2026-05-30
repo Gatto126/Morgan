@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/shared/utils";
 import type { ChartPoint } from "@/types/chart";
 import { DashboardPanelHost } from "@/components/dashboard-panel-host";
-import { DashboardLoadingOverlay, DashboardLoadingState } from "@/components/dashboard/dashboard-status";
+import { DashboardLoadingOverlay } from "@/components/dashboard/dashboard-status";
 import { buildPortfolioChartData, getPortfolioXAxisTicks } from "./chart-data";
 import { formatProviderLabel } from "./formatters";
 import { PortfolioChart } from "./portfolio-chart";
@@ -61,7 +61,6 @@ export function PortfolioDashboard({
   const [showSoldAssets, setShowSoldAssets] = useState(false);
   const [chartReady, setChartReady] = useState(false);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
-  const [loadingOverlayFadingOut, setLoadingOverlayFadingOut] = useState(false);
   const [contentVisible, setContentVisible] = useState(false);
   const firstLoadCompletedRef = useRef(false);
   const completedImportRefreshVersionRef = useRef(0);
@@ -130,13 +129,8 @@ export function PortfolioDashboard({
     }
 
     firstLoadCompletedRef.current = true;
-    setLoadingOverlayFadingOut(true);
     setContentVisible(true);
-    const timer = window.setTimeout(() => {
-      setShowLoadingOverlay(false);
-      setLoadingOverlayFadingOut(false);
-    }, 550);
-    return () => window.clearTimeout(timer);
+    setShowLoadingOverlay(false);
   }, [initialVisualReady]);
 
   useEffect(() => {
@@ -157,9 +151,14 @@ export function PortfolioDashboard({
     });
   }, [importRefreshSettled, importRefreshVersion]);
 
-  if (loading) return <DashboardLoadingState isActive={isActive} showLoadingOverlay={showLoadingOverlay} loadingOverlayFadingOut={loadingOverlayFadingOut} />;
   if (error) return <div className={cn("absolute inset-0 flex h-full items-center justify-center text-sm text-[color:var(--danger)]", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>{error}</div>;
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
+        <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
+      </div>
+    );
+  }
 
   const getProviderLiveTotal = (provider: PortfolioProviderSummary) => {
     let liveTotal = 0;
@@ -184,7 +183,7 @@ export function PortfolioDashboard({
 
   return (
     <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
-      <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} loadingOverlayFadingOut={loadingOverlayFadingOut} />
+      <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
       <PortfolioDashboardTabs
         portalNode={tabsPortalNode}
         tabs={tabs}

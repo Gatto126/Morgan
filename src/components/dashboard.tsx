@@ -7,7 +7,7 @@ import { cn } from "@/shared/utils";
 
 import { DashboardCards } from "./dashboard/dashboard-cards";
 import { DashboardChart } from "./dashboard/dashboard-chart";
-import { DashboardErrorState, DashboardLoadingOverlay, DashboardLoadingState } from "./dashboard/dashboard-status";
+import { DashboardErrorState, DashboardLoadingOverlay } from "./dashboard/dashboard-status";
 import { DashboardTabs } from "./dashboard/dashboard-tabs";
 import { useBinanceBalances } from "./dashboard/use-binance-balances";
 import { useDashboardChartModel } from "./dashboard/use-dashboard-chart-model";
@@ -150,7 +150,6 @@ export function Dashboard({
   });
   const {
     contentVisible,
-    loadingOverlayFadingOut,
     setChartReady,
     showLoadingOverlay
   } = useDashboardVisualState({
@@ -168,84 +167,78 @@ export function Dashboard({
     return <DashboardErrorState error={error} isActive={isActive} />;
   }
 
-  if (!data) {
-    return (
-      <DashboardLoadingState
-        isActive={isActive}
-        showLoadingOverlay={showLoadingOverlay}
-        loadingOverlayFadingOut={loadingOverlayFadingOut}
-      />
-    );
-  }
-
   return (
     <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
-      <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} loadingOverlayFadingOut={loadingOverlayFadingOut} />
-      <DashboardTabs
-        portalNode={portalNode}
-        isActive={isActive}
-        contentVisible={contentVisible}
-        visibleTabs={visibleTabs}
-        activeTab={activeTab}
-        activePoint={activeChartPoint}
-        data={data}
-        onActiveTabChange={setActiveTab}
-        getGlobalInvestmentLiveTotal={getGlobalInvestmentLiveTotal}
-        getGlobalCryptoLiveTotal={getGlobalCryptoLiveTotal}
-      />
+      <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
+      {data ? (
+        <>
+          <DashboardTabs
+            portalNode={portalNode}
+            isActive={isActive}
+            contentVisible={contentVisible}
+            visibleTabs={visibleTabs}
+            activeTab={activeTab}
+            activePoint={activeChartPoint}
+            data={data}
+            onActiveTabChange={setActiveTab}
+            getGlobalInvestmentLiveTotal={getGlobalInvestmentLiveTotal}
+            getGlobalCryptoLiveTotal={getGlobalCryptoLiveTotal}
+          />
 
-      <DashboardChart
-        showSettingsView={showSettingsView}
-        isClosingSettings={isClosingSettings}
-        onCloseSettings={onCloseSettings}
-        settingsElement={settingsElement}
-        showUserSelectView={showUserSelectView}
-        isClosingUserSelect={isClosingUserSelect}
-        onCloseUserSelect={onCloseUserSelect}
-        userSelectElement={userSelectElement}
-        shouldShowUploadPanel={shouldShowUploadPanel}
-        isClosingUpload={isClosingUpload}
-        onCloseUpload={onCloseUpload}
-        uploadElement={uploadElement}
-        emptyStateElement={requiresInitialUpload ? emptyStateElement : undefined}
-        reviewElement={reviewElement}
-        previewTransactionsCount={previewTransactionsCount}
-        activeTab={activeTab}
-        showSoldAssets={showSoldAssets}
-        onShowSoldAssetsChange={setShowSoldAssets}
-        timeRange={timeRange}
-        onTimeRangeChange={setTimeRange}
-        processedChartData={processedChartData}
-        marginLeft={marginLeft}
-        marginRight={marginRight}
-        isMobile={isMobile}
-        xAxisTicks={xAxisTicks}
-        yAxisWidth={yAxisWidth}
-        setActiveChartPoint={setActiveChartPoint}
-        chartConfig={chartConfig}
-        hiddenSeries={hiddenSeries}
-        toggleSeries={toggleSeries}
-        selectedValue={selectedValue}
-        setSelectedMonth={setSelectedMonth}
-        setSelectedSeriesKey={setSelectedSeriesKey}
-        transactionCount={transactionCount}
-        onChartReadyChange={setChartReady}
-      />
-      <DashboardCards
-        cardsPortalNode={cardsPortalNode}
-        isActive={isActive}
-        contentVisible={contentVisible}
-        data={data}
-        timeRange={timeRange}
-        livePrices={livePrices}
-        binanceBalances={binanceBalances}
-        isBinanceSyncing={isBinanceSyncing}
-        filterSmallBinance={filterSmallBinance}
-        setFilterSmallBinance={setFilterSmallBinance}
-        binanceListRef={binanceListRef}
-        getProviderInvestmentLiveTotal={getProviderInvestmentLiveTotal}
-        getProviderCryptoLiveTotal={getProviderCryptoLiveTotal}
-      />
+          <DashboardChart
+            showSettingsView={showSettingsView}
+            isClosingSettings={isClosingSettings}
+            onCloseSettings={onCloseSettings}
+            settingsElement={settingsElement}
+            showUserSelectView={showUserSelectView}
+            isClosingUserSelect={isClosingUserSelect}
+            onCloseUserSelect={onCloseUserSelect}
+            userSelectElement={userSelectElement}
+            shouldShowUploadPanel={shouldShowUploadPanel}
+            isClosingUpload={isClosingUpload}
+            onCloseUpload={onCloseUpload}
+            uploadElement={uploadElement}
+            emptyStateElement={requiresInitialUpload ? emptyStateElement : undefined}
+            reviewElement={reviewElement}
+            previewTransactionsCount={previewTransactionsCount}
+            activeTab={activeTab}
+            showSoldAssets={showSoldAssets}
+            onShowSoldAssetsChange={setShowSoldAssets}
+            timeRange={timeRange}
+            onTimeRangeChange={setTimeRange}
+            processedChartData={processedChartData}
+            marginLeft={marginLeft}
+            marginRight={marginRight}
+            isMobile={isMobile}
+            xAxisTicks={xAxisTicks}
+            yAxisWidth={yAxisWidth}
+            setActiveChartPoint={setActiveChartPoint}
+            chartConfig={chartConfig}
+            hiddenSeries={hiddenSeries}
+            toggleSeries={toggleSeries}
+            selectedValue={selectedValue}
+            setSelectedMonth={setSelectedMonth}
+            setSelectedSeriesKey={setSelectedSeriesKey}
+            transactionCount={transactionCount}
+            onChartReadyChange={setChartReady}
+          />
+          <DashboardCards
+            cardsPortalNode={cardsPortalNode}
+            isActive={isActive}
+            contentVisible={contentVisible}
+            data={data}
+            timeRange={timeRange}
+            livePrices={livePrices}
+            binanceBalances={binanceBalances}
+            isBinanceSyncing={isBinanceSyncing}
+            filterSmallBinance={filterSmallBinance}
+            setFilterSmallBinance={setFilterSmallBinance}
+            binanceListRef={binanceListRef}
+            getProviderInvestmentLiveTotal={getProviderInvestmentLiveTotal}
+            getProviderCryptoLiveTotal={getProviderCryptoLiveTotal}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

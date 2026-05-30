@@ -46,11 +46,7 @@ type VisitedDashboardStages = {
 };
 
 function DashboardStageLoading() {
-  return (
-    <div className="absolute inset-0 flex h-full w-full items-center justify-center">
-      <div className="import-spinner" />
-    </div>
-  );
+  return null;
 }
 
 function resolveActiveDashboardStage(stage: Stage, visibleStageKeys: Set<DashboardStageKey>): DashboardStageKey {
@@ -84,7 +80,7 @@ export function DashboardStageStack({
   }, [activeDashboardStage, activeUserId, visitedState]);
 
   useEffect(() => {
-    if (!activeUserId || !isDashboardStage) {
+    if (!activeUserId) {
       return;
     }
 
@@ -109,9 +105,9 @@ export function DashboardStageStack({
     }));
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [activeDashboardStage, activeUserId, isDashboardStage]);
+  }, [activeDashboardStage, activeUserId]);
 
-  if (!activeUser || !isDashboardStage) {
+  if (!activeUser) {
     return null;
   }
 
@@ -121,7 +117,7 @@ export function DashboardStageStack({
         <Dashboard
           emptyStateElement={activeUser.transactionCount === 0 && !activeUser.hasBinanceCredentials ? renderInlineUploadState() : undefined}
           hasBinanceCredentials={activeUser.hasBinanceCredentials}
-          isActive={activeDashboardStage === "dashboard"}
+          isActive={isDashboardStage && activeDashboardStage === "dashboard"}
           shouldLoad={activeDashboardStage === "dashboard"}
           key={`dashboard-${activeUser.id}`}
           userId={activeUser.id}
@@ -135,7 +131,7 @@ export function DashboardStageStack({
       ) : null}
       {renderedStageKeys.has("checking") && visibleStageKeys.has("checking") ? (
         <CheckingDashboard
-          isActive={activeDashboardStage === "checking"}
+          isActive={isDashboardStage && activeDashboardStage === "checking"}
           shouldLoad={activeDashboardStage === "checking"}
           key={`checking-${activeUser.id}`}
           userId={activeUser.id}
@@ -145,7 +141,7 @@ export function DashboardStageStack({
       ) : null}
       {renderedStageKeys.has("investment") && visibleStageKeys.has("investment") ? (
         <InvestmentDashboard
-          isActive={activeDashboardStage === "investment"}
+          isActive={isDashboardStage && activeDashboardStage === "investment"}
           shouldLoad={activeDashboardStage === "investment"}
           key={`investment-${activeUser.id}`}
           userId={activeUser.id}
@@ -155,7 +151,7 @@ export function DashboardStageStack({
       ) : null}
       {renderedStageKeys.has("crypto") && visibleStageKeys.has("crypto") ? (
         <CryptoDashboard
-          isActive={activeDashboardStage === "crypto"}
+          isActive={isDashboardStage && activeDashboardStage === "crypto"}
           shouldLoad={activeDashboardStage === "crypto"}
           key={`crypto-${activeUser.id}`}
           userId={activeUser.id}
@@ -165,7 +161,7 @@ export function DashboardStageStack({
       ) : null}
       {renderedStageKeys.has("binance") && visibleStageKeys.has("binance") ? (
         <BinanceDashboard
-          isActive={activeDashboardStage === "binance"}
+          isActive={isDashboardStage && activeDashboardStage === "binance"}
           shouldLoad={activeDashboardStage === "binance"}
           key={`binance-${activeUser.id}`}
           userId={activeUser.id}
