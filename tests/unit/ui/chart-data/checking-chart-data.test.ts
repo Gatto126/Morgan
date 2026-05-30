@@ -72,6 +72,29 @@ describe("checking chart data", () => {
     expect(points[1].expenses).toBe(8650);
   });
 
+  it("preserves signed balances instead of turning overdrafts into positive spikes", () => {
+    const points = buildCheckingChartData({
+      data: {
+        ...checkingData,
+        dailyData: [
+          {
+            month: "2026-03",
+            date: "2026-03-04",
+            total: -15000,
+            providers: { bbva: -15000 },
+            providerIncome: {},
+            providerExpenses: { bbva: 15000 }
+          }
+        ]
+      },
+      activeTab: "ALL",
+      timeRange: "ALL"
+    });
+
+    expect(points[0].heritage).toBe(-15000);
+    expect(points[0].bbva).toBe(-15000);
+  });
+
   it("uses daily buckets for ALL ranges even when monthly buckets are available", () => {
     const points = buildCheckingChartData({
       data: {

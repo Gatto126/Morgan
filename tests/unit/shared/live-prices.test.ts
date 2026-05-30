@@ -26,7 +26,7 @@ describe("live price client cache", () => {
 
   it("normalizes request keys", () => {
     expect(getLivePriceRequestKey({
-      cryptos: ["ETH", "BTC", "BTC"],
+      cryptos: ["ETH", "BTC", "BTC", "XF000ETH0019"],
       isins: ["IE00B4L5Y983", "IE00B4L5Y983"]
     })).toBe("isins=IE00B4L5Y983|cryptos=BTC,ETH");
   });

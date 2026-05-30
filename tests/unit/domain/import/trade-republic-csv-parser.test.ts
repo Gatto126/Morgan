@@ -99,4 +99,49 @@ describe("parseTradeRepublicCsv", () => {
       )
     ).rejects.toThrow("transaction_id duplicato");
   });
+
+  it("normalizes Trade Republic crypto identifiers to exchange tickers", async () => {
+    const document = await parseTradeRepublicCsv(
+      buildTradeRepublicCsvFile([
+        {
+          datetime: "2024-01-01T10:00:00.000Z",
+          date: "2024-01-01",
+          account_type: "CASH",
+          category: "CASH",
+          type: "TRANSFER",
+          amount: "100.00",
+          fee: "0",
+          tax: "0",
+          currency: "EUR",
+          description: "Funding",
+          transaction_id: "cash-crypto-1"
+        },
+        {
+          datetime: "2024-01-02T10:00:00.000Z",
+          date: "2024-01-02",
+          account_type: "CRYPTO",
+          category: "TRADING",
+          type: "BUY",
+          asset_class: "CRYPTO",
+          name: "Bitcoin",
+          symbol: "XF000BTC0017",
+          shares: "0.001",
+          price: "50000.00",
+          amount: "-50.00",
+          fee: "0",
+          tax: "0",
+          currency: "EUR",
+          description: "Savings plan execution",
+          transaction_id: "crypto-buy-1"
+        }
+      ])
+    );
+
+    expect(document.transactions[1]).toMatchObject({
+      accountType: "crypto",
+      productName: "Bitcoin",
+      isin: "BTC",
+      quantityUnits: 0.001
+    });
+  });
 });

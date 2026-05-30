@@ -1,3 +1,5 @@
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
+
 export const globalLivePricesCache: Record<string, number | null> = {};
 export const globalLivePricesCacheUpdatedAt: Record<string, number> = {};
 
@@ -21,8 +23,14 @@ type LivePriceRequestOptions = {
   maxAgeMs?: number;
 };
 
-function normalizeKeys(keys: string[] | undefined) {
-  return [...new Set(keys ?? [])].filter(Boolean).sort();
+function normalizeKeys(keys: string[] | undefined, kind: "isin" | "crypto") {
+  return [
+    ...new Set(
+      (keys ?? [])
+        .map((key) => kind === "crypto" ? normalizeCryptoSymbol(key) : key)
+        .filter((key): key is string => Boolean(key))
+    )
+  ].sort();
 }
 
 function pickCachedPrices(keys: string[], maxAgeMs: number) {
@@ -93,8 +101,8 @@ function trackInFlightRequest(
 }
 
 export function getLivePriceRequestKey({ isins, cryptos }: LivePriceRequest) {
-  const normalizedIsins = normalizeKeys(isins);
-  const normalizedCryptos = normalizeKeys(cryptos);
+  const normalizedIsins = normalizeKeys(isins, "isin");
+  const normalizedCryptos = normalizeKeys(cryptos, "crypto");
 
   if (normalizedIsins.length === 0 && normalizedCryptos.length === 0) {
     return "";
@@ -107,8 +115,8 @@ export async function fetchAndCacheLivePrices(
   request: LivePriceRequest,
   { maxAgeMs = DEFAULT_LIVE_PRICE_CACHE_MAX_AGE_MS }: LivePriceRequestOptions = {}
 ) {
-  const normalizedIsins = normalizeKeys(request.isins);
-  const normalizedCryptos = normalizeKeys(request.cryptos);
+  const normalizedIsins = normalizeKeys(request.isins, "isin");
+  const normalizedCryptos = normalizeKeys(request.cryptos, "crypto");
   const cachedIsins = pickCachedPrices(normalizedIsins, maxAgeMs);
   const cachedCryptos = pickCachedPrices(normalizedCryptos, maxAgeMs);
   const cachedPrices = {

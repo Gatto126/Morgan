@@ -51,12 +51,12 @@ export function buildCheckingChartData({
     };
 
     if (activeTab === "ALL") {
-      point.heritage = Math.abs(bucket.total);
+      point.heritage = bucket.total;
 
       data.providers.forEach(provider => {
         const providerKey = provider.sourceInstitution;
         const value = bucket.providers[providerKey];
-        point[providerKey] = value !== undefined ? Math.abs(value) : null;
+        point[providerKey] = value ?? null;
       });
 
       return point;
@@ -67,15 +67,15 @@ export function buildCheckingChartData({
     const expenses = bucket.providerExpenses[activeTab];
     const hasBalance = balance !== undefined;
 
-    point.balance = hasBalance ? Math.abs(balance) : null;
+    point.balance = hasBalance ? balance : null;
     point.income = hasBalance ? Math.abs(income || 0) : null;
     point.expenses = hasBalance ? Math.abs(expenses || 0) : null;
-    point.heritage = Math.abs(bucket.total);
+    point.heritage = bucket.total;
 
     data.providers.forEach(provider => {
       const providerKey = provider.sourceInstitution;
       const value = bucket.providers[providerKey];
-      point[providerKey] = value !== undefined ? Math.abs(value) : null;
+      point[providerKey] = value ?? null;
     });
 
     return point;

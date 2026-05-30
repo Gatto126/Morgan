@@ -54,7 +54,7 @@ describe("dashboard time-series", () => {
           direction: "OUT",
           amountCents: 5000,
           tokenName: "Bitcoin",
-          tokenSymbol: "BTC",
+          tokenSymbol: "XF000BTC0017",
           quantityUnits: 0.1
         }
       ]

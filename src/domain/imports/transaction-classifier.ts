@@ -3,6 +3,8 @@
  * and extracts structured investment/crypto data from the description.
  */
 
+import { findCryptoSymbolInText, normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
+
 export type AccountType = "checking" | "investment" | "crypto";
 
 export type ClassificationResult = {
@@ -100,9 +102,10 @@ function isInvestmentTransaction(typeLabel: string, description: string): { isIn
 export function classifyTransaction(typeLabel: string, description: string): ClassificationResult {
   // Check crypto first (crypto is more specific than investment)
   if (isCryptoTransaction(typeLabel, description)) {
-    const isin = extractISIN(description);
+    const rawIdentifier = extractISIN(description);
+    const isin = findCryptoSymbolInText(description) ?? normalizeCryptoSymbol(rawIdentifier);
     const quantity = extractQuantity(description);
-    const productName = extractProductName(description, isin);
+    const productName = extractProductName(description, rawIdentifier);
 
     return {
       accountType: "crypto",

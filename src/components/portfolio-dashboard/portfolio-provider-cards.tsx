@@ -91,7 +91,7 @@ export function PortfolioProviderCards({
                           if (price == null) {
                             return (
                               <span className="font-semibold text-[color:var(--text-dim)] underline decoration-dotted decoration-[color:var(--text-dim)]">
-                                {formatEuroCents(0)}
+                                {formatEuroCents(product.investedValue)}
                               </span>
                             );
                           }

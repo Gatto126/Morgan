@@ -1,3 +1,5 @@
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
+
 export const PRICE_REQUEST_LIMITS = {
   maxTotalKeys: 50,
   maxIsins: 40,
@@ -34,7 +36,9 @@ function parsePriceRequestList(
 
   const values = new Set<string>();
   for (const rawItem of rawValue.split(",")) {
-    const item = rawItem.trim().toUpperCase();
+    const item = paramName === "cryptos"
+      ? normalizeCryptoSymbol(rawItem)
+      : rawItem.trim().toUpperCase();
     if (!item) continue;
 
     if (!pattern.test(item)) {

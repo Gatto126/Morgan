@@ -226,25 +226,39 @@ function fetchLivePrice(isin: string, timeoutMs = 6_000, logger: PriceLogger = l
   });
 }
 
+async function fetchBinanceTickerPrice(binanceSymbol: string, timeoutMs: number) {
+  const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${binanceSymbol}`, {
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = await response.json();
+  return data?.price != null ? Number(data.price) : null;
+}
+
 async function fetchBinancePrice(symbol: string, timeoutMs = BINANCE_TIMEOUT_MS, logger: PriceLogger = log) {
   try {
     const uppercaseSymbol = symbol.toUpperCase();
-    const binanceSymbol = `${uppercaseSymbol}EUR`;
-    const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${binanceSymbol}`, {
-      signal: AbortSignal.timeout(timeoutMs)
-    });
-
-    if (!response.ok) {
-      logger.info(`[${symbol}] Binance returned status ${response.status}`);
-      return null;
+    const eurPrice = await fetchBinanceTickerPrice(`${uppercaseSymbol}EUR`, timeoutMs);
+    if (eurPrice != null) {
+      logger.info(`[${symbol}] Received EUR live price from Binance.`);
+      return eurPrice;
     }
 
-    const data = await response.json();
-    if (data?.price != null) {
-      logger.info(`[${symbol}] Received live price from Binance.`);
-      return Number(data.price);
+    const [usdtPrice, eurUsdtRate] = await Promise.all([
+      fetchBinanceTickerPrice(`${uppercaseSymbol}USDT`, timeoutMs),
+      fetchBinanceTickerPrice("EURUSDT", timeoutMs)
+    ]);
+
+    if (usdtPrice != null && eurUsdtRate != null && eurUsdtRate > 0) {
+      logger.info(`[${symbol}] Received USDT live price from Binance and converted to EUR.`);
+      return usdtPrice / eurUsdtRate;
     }
 
+    logger.info(`[${symbol}] Binance returned no usable EUR or USDT live price.`);
     return null;
   } catch (error) {
     logger.info(`[${symbol}] Binance fetch error: ${error}`);

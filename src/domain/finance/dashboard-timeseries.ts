@@ -1,4 +1,5 @@
 import { classifyCheckingFlow, type CheckingFlowCategory } from "@/domain/finance/checking-timeseries";
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { resolveDailyEndingBalanceCents } from "@/domain/finance/checking-balance";
 
 export type DashboardCheckingTransaction = {
@@ -371,7 +372,7 @@ export function mapDashboardTransactions({
       balanceCents: 0,
       accountType: "crypto",
       productName: transaction.tokenName,
-      isin: transaction.tokenSymbol,
+      isin: normalizeCryptoSymbol(transaction.tokenSymbol),
       quantityUnits: transaction.quantityUnits,
       tradeType: null
     }))

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { TRADE_REPUBLIC_INSTITUTION } from "@/shared/institutions";
 
 export { TRADE_REPUBLIC_INSTITUTION };
@@ -364,6 +365,9 @@ function toParsedTransaction(record: CsvRecord, netCashCents: number, runningCas
   const accountType = inferAccountType(record);
   const shares = parseDecimal(record.shares, record.rowNumber, "shares");
   const symbol = normalizeText(record.symbol);
+  const instrumentSymbol = accountType === "crypto"
+    ? normalizeCryptoSymbol(symbol || record.name || record.description)
+    : symbol || null;
 
   assertTradeDirection(record, netCashCents);
   assertTradingFields(record, accountType);
@@ -382,7 +386,7 @@ function toParsedTransaction(record: CsvRecord, netCashCents: number, runningCas
     currency: "EUR" as const,
     accountType,
     productName: normalizeText(record.name) || null,
-    isin: symbol || null,
+    isin: instrumentSymbol,
     quantityUnits: accountType === "investment" || accountType === "crypto" ? Math.abs(shares ?? 0) || null : null,
     tradeType: inferTradeType(record)
   } satisfies ParsedTradeRepublicCsvTransaction;

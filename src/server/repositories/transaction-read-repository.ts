@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import type { PortfolioTransaction } from "@/domain/finance/portfolio-timeseries";
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { prisma } from "@/server/db/prisma";
 
 const checkingSelect = {
@@ -181,7 +182,7 @@ export function toCryptoPortfolioTransaction(transaction: CryptoTransactionRecor
       ? (transaction.description.toLowerCase().includes("savings plan") ? "savings_plan" : "buy_trade")
       : null,
     productName: transaction.tokenName,
-    isin: transaction.tokenSymbol,
+    isin: normalizeCryptoSymbol(transaction.tokenSymbol),
     quantityUnits: transaction.quantityUnits
   };
 }

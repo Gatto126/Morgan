@@ -52,7 +52,9 @@ export function DashboardCryptoCards({
           <div className="space-y-4">
             {provider.cryptoTokens.map((token) => {
               const price = token.tokenSymbol ? livePrices[token.tokenSymbol] : null;
-              const currentValueCents = price == null ? null : Math.round(token.quantity * price * 100);
+              const currentValueCents = price == null
+                ? token.investedValue
+                : Math.round(token.quantity * price * 100);
 
               return (
                 <div key={token.tokenName}>
@@ -70,8 +72,8 @@ export function DashboardCryptoCards({
                     <DashboardMetricRow label="Invested Value" value={formatEuroCents(token.investedValue)} />
                     <DashboardMetricRow
                       label="Current Value"
-                      value={formatEuroCents(currentValueCents ?? 0)}
-                      valueClassName={currentValueCents == null
+                      value={formatEuroCents(currentValueCents)}
+                      valueClassName={price == null
                         ? "text-[color:var(--text-dim)] underline decoration-dotted decoration-[color:var(--text-dim)]"
                         : "text-[color:var(--text-main)]"}
                     />

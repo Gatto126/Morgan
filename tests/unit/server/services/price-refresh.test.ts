@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createPriceRefreshService,
@@ -11,6 +11,10 @@ const silentLogger = {
 };
 
 describe("price refresh service", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("applies a deterministic in-memory rate limit", () => {
     let now = 0;
     const limiter = new InMemoryPriceRateLimiter({
@@ -51,6 +55,66 @@ describe("price refresh service", () => {
       ETH: 250000
     });
     expect(repository.listLatestHistoricalPrices).toHaveBeenCalledWith(["IE00B4L5Y983", "BTC", "ETH"]);
+  });
+
+  it("uses crypto live fetchers for normalized Trade Republic crypto identifiers", async () => {
+    const cryptoFetcher = vi.fn(async (symbol: string) => symbol === "BTC" ? 6200000 : null);
+    const service = createPriceRefreshService({
+      repository: { listLatestHistoricalPrices: vi.fn(async () => new Map()) },
+      rateLimiter: { getRetryAfterMs: () => null },
+      isinFetcher: vi.fn(async () => null),
+      cryptoFetcher,
+      logger: silentLogger
+    });
+
+    await expect(service.fetchPrices({
+      isins: [],
+      cryptos: ["BTC"]
+    })).resolves.toEqual({
+      BTC: 6200000
+    });
+    expect(cryptoFetcher).toHaveBeenCalledWith("BTC");
+  });
+
+  it("falls back to USDT crypto pairs and converts them to EUR", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("BTCEUR")) {
+        return { ok: false };
+      }
+      if (url.includes("BTCUSDT")) {
+        return { ok: true, json: async () => ({ price: "66000" }) };
+      }
+      if (url.includes("EURUSDT")) {
+        return { ok: true, json: async () => ({ price: "1.10" }) };
+      }
+      return { ok: false };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const service = createPriceRefreshService({
+      repository: { listLatestHistoricalPrices: vi.fn(async () => new Map()) },
+      rateLimiter: { getRetryAfterMs: () => null },
+      isinFetcher: vi.fn(async () => null),
+      logger: silentLogger
+    });
+
+    const prices = await service.fetchPrices({
+      isins: [],
+      cryptos: ["BTC"]
+    });
+    expect(prices.BTC).toBeCloseTo(60000);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.binance.com/api/v3/ticker/price?symbol=BTCEUR",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT",
+      expect.any(Object)
+    );
   });
 
   it("uses historical fallback quickly when a live price is slow", async () => {
