@@ -53,8 +53,7 @@ export function WelcomeStage({
                 <a
                   className="group block cursor-pointer select-none space-y-1 text-left"
                   href="/api/logout"
-                  onClick={(event) => {
-                    event.preventDefault();
+                  onClick={() => {
                     onSignOut();
                   }}
                 >

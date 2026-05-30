@@ -32,10 +32,14 @@ export function useFinanceAccountSessionActions({
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const handleSignOut = useCallback(() => {
-    clearPersistedFinanceProfileSelection();
-    setUsers([]);
-    setActiveUser(null);
-    setIsSignedOut(true);
+    try {
+      clearPersistedFinanceProfileSelection();
+      setUsers([]);
+      setActiveUser(null);
+      setIsSignedOut(true);
+    } catch (err) {
+      console.warn("Could not clear local session state before sign out", err);
+    }
 
     try {
       window.location.assign("/api/logout");
