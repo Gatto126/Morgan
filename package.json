@@ -24,6 +24,7 @@
     "test:unit": "vitest run tests/unit",
     "test:scripts": "vitest run scripts",
     "test:run": "vitest run",
+    "release:check": "pnpm run lint && pnpm run typecheck && pnpm run typecheck:test && pnpm run test:run && pnpm run build",
     "test:rate-limit:clear": "node scripts/testing/clear-rate-limits.mjs",
     "seed:performance": "node scripts/testing/seed-dashboard-performance-data.mjs",
     "smoke:upload-panel": "node scripts/e2e/smoke-upload-panel.mjs",

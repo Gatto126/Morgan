@@ -42,3 +42,7 @@ Current security-sensitive targets:
 Before public deployment, run the repository checks and complete the deployment
 hardening items documented in `docs/deployment/`.
 
+Public release is blocked until `docs/deployment/release-readiness.md` is
+green for the deployed environment, including backup/restore validation, secret
+rotation, legal/privacy copy, monitoring, rollback, browser QA, and dense-data
+performance QA.

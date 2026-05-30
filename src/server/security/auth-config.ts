@@ -1,5 +1,13 @@
 type AuthEnv = Partial<Record<
-  "BETTER_AUTH_IP_HEADERS" | "BETTER_AUTH_TRUSTED_ORIGINS" | "BETTER_AUTH_URL" | "NODE_ENV" | "TRUSTED_IP_HEADERS",
+  | "BETTER_AUTH_IP_HEADERS"
+  | "BETTER_AUTH_SECRET"
+  | "BETTER_AUTH_TRUSTED_ORIGINS"
+  | "BETTER_AUTH_URL"
+  | "DATABASE_URL"
+  | "DIRECT_URL"
+  | "MORGAN_ENCRYPTION_KEY"
+  | "NODE_ENV"
+  | "TRUSTED_IP_HEADERS",
   string
 >>;
 
@@ -22,6 +30,27 @@ function isLocalhostUrl(value: string) {
 function isHttpsUrl(value: string) {
   try {
     return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function hasMinimumSecretLength(value: string | undefined) {
+  return (value ?? "").trim().length >= 32;
+}
+
+function isValidEncryptionKey(value: string | undefined) {
+  const key = (value ?? "").trim();
+  if (/^[a-f0-9]{64}$/i.test(key)) {
+    return true;
+  }
+
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(key)) {
+    return false;
+  }
+
+  try {
+    return Buffer.from(key, "base64").length === 32;
   } catch {
     return false;
   }
@@ -62,6 +91,26 @@ export function getAuthDeploymentWarnings(env: AuthEnv = process.env) {
   const baseUrl = env.BETTER_AUTH_URL;
   const trustedOrigins = splitCsv(env.BETTER_AUTH_TRUSTED_ORIGINS);
   const ipHeaders = splitCsv(env.BETTER_AUTH_IP_HEADERS ?? env.TRUSTED_IP_HEADERS);
+
+  if (!env.DATABASE_URL) {
+    warnings.push("DATABASE_URL is required in production.");
+  }
+
+  if (!env.DIRECT_URL) {
+    warnings.push("DIRECT_URL is required in production.");
+  }
+
+  if (!env.BETTER_AUTH_SECRET) {
+    warnings.push("BETTER_AUTH_SECRET is required in production.");
+  } else if (!hasMinimumSecretLength(env.BETTER_AUTH_SECRET)) {
+    warnings.push("BETTER_AUTH_SECRET should be at least 32 characters in production.");
+  }
+
+  if (!env.MORGAN_ENCRYPTION_KEY) {
+    warnings.push("MORGAN_ENCRYPTION_KEY is required in production.");
+  } else if (!isValidEncryptionKey(env.MORGAN_ENCRYPTION_KEY)) {
+    warnings.push("MORGAN_ENCRYPTION_KEY must be a 32-byte base64 or 64-character hex value.");
+  }
 
   if (!baseUrl) {
     warnings.push("BETTER_AUTH_URL is required in production.");
