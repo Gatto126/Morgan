@@ -21,7 +21,6 @@ import { useIsMobile } from "@/hooks/use-is-mobile";
 import { usePortalNode } from "@/hooks/use-portal-node";
 import { usePortfolioDashboardData } from "./use-portfolio-dashboard-data";
 import { usePortfolioLivePrices } from "./use-portfolio-live-prices";
-import { usePortfolioSeriesData } from "./use-portfolio-series-data";
 
 export type { PortfolioDashboardConfig, PortfolioDashboardProps, PortfolioTransaction } from "./types";
 
@@ -73,13 +72,6 @@ export function PortfolioDashboard({
     isActive,
     shouldLoad: shouldLoad && !!data
   });
-  const chartDataSource = usePortfolioSeriesData({
-    activeProviderKey: activeTab,
-    data,
-    endpoint: config.endpoint,
-    shouldLoad: shouldLoad && !!data,
-    userId
-  });
   const [activeChartPoint, setActiveChartPoint] = useState<ChartPoint | null>(null);
   const activePoint = activeChartPoint;
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
@@ -96,27 +88,25 @@ export function PortfolioDashboard({
   const cardsPortalNode = usePortalNode("dashboard-cards-portal");
 
   const activeProvider = useMemo(() => {
-    return (chartDataSource ?? data)?.providers.find(p => p.sourceInstitution === activeTab) || null;
-  }, [activeTab, chartDataSource, data]);
+    return data?.providers.find(p => p.sourceInstitution === activeTab) || null;
+  }, [data, activeTab]);
 
   const chartData = useMemo(() => {
-    const source = chartDataSource ?? data;
-    if (!source) return [];
-    return buildPortfolioChartData({ data: source, activeTab, timeRange, activeProvider });
-  }, [activeProvider, activeTab, chartDataSource, data, timeRange]);
+    if (!data) return [];
+    return buildPortfolioChartData({ data, activeTab, timeRange, activeProvider });
+  }, [data, activeTab, timeRange, activeProvider]);
 
   const xAxisTicks = useMemo(() => {
     return getPortfolioXAxisTicks(chartData);
   }, [chartData]);
 
   const hasRenderableChartData = useMemo(() => {
-    const source = chartDataSource ?? data;
-    if (!source) {
+    if (!data) {
       return false;
     }
 
     const seriesKeys = activeTab === "ALL"
-      ? ["heritage", ...source.providers.map((provider) => provider.sourceInstitution)]
+      ? ["heritage", ...data.providers.map((provider) => provider.sourceInstitution)]
       : ["balance", ...(activeProvider?.products.map((product) => product.productName) ?? [])];
 
     return chartData.some((point) =>
@@ -125,7 +115,7 @@ export function PortfolioDashboard({
         return typeof value === "number" && Number.isFinite(value);
       })
     );
-  }, [activeProvider, activeTab, chartData, chartDataSource, data]);
+  }, [activeProvider, activeTab, chartData, data]);
 
   const effectiveChartReady = !isPanelOpen && chartReady;
   const initialVisualReady =
@@ -179,8 +169,6 @@ export function PortfolioDashboard({
       </div>
     );
   }
-
-  const chartRenderData = chartDataSource ?? data;
 
   const getProviderLiveTotal = (provider: PortfolioProviderSummary) => {
     let liveTotal = 0;
@@ -244,7 +232,7 @@ export function PortfolioDashboard({
           userSelectElement={userSelectElement}
         >
           <PortfolioChart
-            data={chartRenderData}
+            data={data}
             activeProvider={activeProvider}
             activeTab={activeTab}
             chartData={chartData}

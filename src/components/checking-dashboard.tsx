@@ -21,7 +21,6 @@ import type {
   TimeRange
 } from "./checking-dashboard/types";
 import { useCheckingDashboardData } from "./checking-dashboard/use-checking-dashboard-data";
-import { useCheckingSeriesData } from "./checking-dashboard/use-checking-series-data";
 
 export function CheckingDashboard({
   userId,
@@ -64,12 +63,6 @@ export function CheckingDashboard({
   const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
   const isMobile = useIsMobile();
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
-  const chartDataSource = useCheckingSeriesData({
-    activeProviderKey: activeTab,
-    data,
-    shouldLoad: shouldLoad && !!data,
-    userId
-  });
 
   useEffect(() => {
     onImportRefreshCompleteRef.current = onImportRefreshComplete;
@@ -86,26 +79,24 @@ export function CheckingDashboard({
   const cardsPortalNode = usePortalNode("dashboard-cards-portal");
 
   const chartData = useMemo(() => {
-    const source = chartDataSource ?? data;
-    if (!source) {
+    if (!data) {
       return [];
     }
 
-    return buildCheckingChartData({ data: source, activeTab, timeRange });
-  }, [activeTab, chartDataSource, data, timeRange]);
+    return buildCheckingChartData({ data, activeTab, timeRange });
+  }, [data, activeTab, timeRange]);
 
   const xAxisTicks = useMemo(() => {
     return getCheckingXAxisTicks(chartData);
   }, [chartData]);
 
   const hasRenderableChartData = useMemo(() => {
-    const source = chartDataSource ?? data;
-    if (!source) {
+    if (!data) {
       return false;
     }
 
     const seriesKeys = activeTab === "ALL"
-      ? ["heritage", ...source.providers.map((provider) => provider.sourceInstitution)]
+      ? ["heritage", ...data.providers.map((provider) => provider.sourceInstitution)]
       : ["balance", "income", "expenses"];
 
     return chartData.some((point) =>
@@ -114,7 +105,7 @@ export function CheckingDashboard({
         return typeof value === "number" && Number.isFinite(value);
       })
     );
-  }, [activeTab, chartData, chartDataSource, data]);
+  }, [activeTab, chartData, data]);
 
   const effectiveChartReady = !isPanelOpen && chartReady;
   const initialVisualReady =
@@ -172,8 +163,6 @@ export function CheckingDashboard({
     );
   }
 
-  const chartRenderData = chartDataSource ?? data;
-
   const allTotal = data.providers.reduce((sum, provider) => sum + provider.total, 0);
   const tabs: CheckingDashboardTab[] = [
     { key: "ALL", label: "CHECKING", total: allTotal },
@@ -224,7 +213,7 @@ export function CheckingDashboard({
           userSelectElement={userSelectElement}
         >
           <CheckingChart
-            data={chartRenderData}
+            data={data}
             activeTab={activeTab}
             chartData={chartData}
             xAxisTicks={xAxisTicks}

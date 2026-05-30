@@ -19,7 +19,6 @@ import {
 } from "./dashboard-chart-display-model";
 import type { DashboardChartPoint } from "./dashboard-chart-types";
 import type { AccountTab, BinanceBalanceRow, DashboardData, TimeRange } from "./types";
-import { useDashboardSeriesData } from "./use-dashboard-series-data";
 
 type UseDashboardChartModelParams = {
   binanceBalances: BinanceBalanceRow[];
@@ -30,7 +29,6 @@ type UseDashboardChartModelParams = {
   hasBinancePortfolio: boolean;
   investmentCount: number;
   transactionCount: number;
-  userId: string;
 };
 
 export function useDashboardChartModel({
@@ -41,8 +39,7 @@ export function useDashboardChartModel({
   data,
   hasBinancePortfolio,
   investmentCount,
-  transactionCount,
-  userId
+  transactionCount
 }: UseDashboardChartModelParams) {
   const [activeTab, setActiveTab] = useState<AccountTab>("heritage");
   const [timeRange, setTimeRange] = useState<TimeRange>("ALL");
@@ -84,17 +81,10 @@ export function useDashboardChartModel({
     }));
   }, []);
 
-  const chartDataSource = useDashboardSeriesData({
-    activeTab,
-    data,
-    shouldLoad: !!data,
-    userId
-  });
-
-  const checkingProviders = useMemo(() => collectCheckingProviders(chartDataSource), [chartDataSource]);
-  const investmentProducts = useMemo(() => collectInvestmentProducts(chartDataSource), [chartDataSource]);
-  const cryptoTokens = useMemo(() => collectCryptoTokens(chartDataSource), [chartDataSource]);
-  const cryptoInstitutions = useMemo(() => collectCryptoInstitutions(chartDataSource), [chartDataSource]);
+  const checkingProviders = useMemo(() => collectCheckingProviders(data), [data]);
+  const investmentProducts = useMemo(() => collectInvestmentProducts(data), [data]);
+  const cryptoTokens = useMemo(() => collectCryptoTokens(data), [data]);
+  const cryptoInstitutions = useMemo(() => collectCryptoInstitutions(data), [data]);
 
   const chartData = useMemo(() => buildDashboardChartData({
     activeTab,
@@ -102,7 +92,7 @@ export function useDashboardChartModel({
     checkingProviders,
     cryptoInstitutions,
     cryptoTokens,
-    data: chartDataSource,
+    data,
     hasBinancePortfolio,
     investmentProducts,
     timeRange
@@ -112,7 +102,7 @@ export function useDashboardChartModel({
     checkingProviders,
     cryptoInstitutions,
     cryptoTokens,
-    chartDataSource,
+    data,
     hasBinancePortfolio,
     investmentProducts,
     timeRange
@@ -139,7 +129,7 @@ export function useDashboardChartModel({
     cryptoInstitutions,
     investmentCount,
     investmentProducts,
-    providerSummaries: chartDataSource?.providerSummaries ?? [],
+    providerSummaries: data?.providerSummaries ?? [],
     showSoldAssets
   }), [
     activeTab,
@@ -151,7 +141,7 @@ export function useDashboardChartModel({
     investmentCount,
     investmentProducts,
     showSoldAssets,
-    chartDataSource?.providerSummaries
+    data?.providerSummaries
   ]);
 
   const hasRenderableChartData = useMemo(

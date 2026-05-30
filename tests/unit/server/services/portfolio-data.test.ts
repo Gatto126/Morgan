@@ -2,11 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   getInvestmentPortfolioData,
-  getInvestmentPortfolioSeriesData,
   getInvestmentPortfolioSummaryData,
   getInvestmentPortfolioTransactionRows,
   getTradeRepublicCryptoPortfolioData,
-  getTradeRepublicCryptoPortfolioSeriesData,
   getTradeRepublicCryptoPortfolioSummaryData,
   getTradeRepublicCryptoPortfolioTransactionRows
 } from "@/server/services/portfolio-data";
@@ -122,37 +120,6 @@ describe("portfolio data service", () => {
       transactionCount: 1
     });
     expect(result.providers[0]).not.toHaveProperty("transactions");
-    expect(result.dailyData.at(-1)).not.toHaveProperty("providerProducts");
-    expect(result.monthlyData.at(-1)).not.toHaveProperty("providerProducts");
-  });
-
-  it("builds investment provider product series on demand", async () => {
-    const transactionRepository = {
-      listInvestmentTransactions: vi.fn(async () => [
-        investmentRow
-      ]),
-      listTradeRepublicCryptoTransactions: vi.fn()
-    };
-    const marketRepository = {
-      listPortfolioHistory: vi.fn(async () => [
-        { isin: "IE00B4L5Y983", date: "2026-01-01", value: 120 }
-      ])
-    };
-
-    const result = await getInvestmentPortfolioSeriesData("profile-1", "trade_republic", {
-      transactionRepository,
-      marketRepository,
-      now: new Date("2026-01-01T12:00:00.000Z")
-    });
-
-    expect(result.provider).toBe("trade_republic");
-    expect(result.dailyData.at(-1)).toMatchObject({
-      providerProducts: {
-        trade_republic: {
-          "Core MSCI World": 12000
-        }
-      }
-    });
   });
 
   it("builds crypto summaries without provider transaction rows", async () => {
@@ -191,48 +158,6 @@ describe("portfolio data service", () => {
       transactionCount: 1
     });
     expect(result.providers[0]).not.toHaveProperty("transactions");
-    expect(result.dailyData.at(-1)).not.toHaveProperty("providerProducts");
-    expect(result.monthlyData.at(-1)).not.toHaveProperty("providerProducts");
-  });
-
-  it("builds crypto provider product series on demand", async () => {
-    const transactionRepository = {
-      listInvestmentTransactions: vi.fn(),
-      listTradeRepublicCryptoTransactions: vi.fn(async () => [
-        {
-          id: "crypto-1",
-          sourceInstitution: "trade_republic",
-          bookingDate: new Date("2026-01-01T00:00:00.000Z"),
-          typeLabel: "BUY",
-          description: "BTC savings plan",
-          direction: "OUT",
-          amountCents: 5000,
-          tokenName: "Bitcoin",
-          tokenSymbol: "BTC",
-          quantityUnits: 0.1
-        }
-      ])
-    };
-    const marketRepository = {
-      listPortfolioHistory: vi.fn(async () => [
-        { isin: "BTC", date: "2026-01-01", value: 60000 }
-      ])
-    };
-
-    const result = await getTradeRepublicCryptoPortfolioSeriesData("profile-1", "trade_republic", {
-      transactionRepository,
-      marketRepository,
-      now: new Date("2026-01-01T12:00:00.000Z")
-    });
-
-    expect(result.provider).toBe("trade_republic");
-    expect(result.dailyData.at(-1)).toMatchObject({
-      providerProducts: {
-        trade_republic: {
-          Bitcoin: 600000
-        }
-      }
-    });
   });
 
   it("loads investment transaction rows through the repository", async () => {

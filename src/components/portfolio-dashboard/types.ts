@@ -6,7 +6,7 @@ export type MonthBucket = {
   month: string;
   total: number;
   providers: Record<string, number>;
-  providerProducts?: Record<string, Record<string, number>>;
+  providerProducts: Record<string, Record<string, number>>;
 };
 
 export type PortfolioBucket = MonthBucket & {

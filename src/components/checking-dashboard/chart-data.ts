@@ -63,8 +63,8 @@ export function buildCheckingChartData({
     }
 
     const balance = bucket.providers[activeTab];
-    const income = bucket.providerIncome?.[activeTab];
-    const expenses = bucket.providerExpenses?.[activeTab];
+    const income = bucket.providerIncome[activeTab];
+    const expenses = bucket.providerExpenses[activeTab];
     const hasBalance = balance !== undefined;
 
     point.balance = hasBalance ? Math.abs(balance) : null;

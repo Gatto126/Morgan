@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  getCheckingProviderSeriesData,
   getCheckingSummaryData,
   getCheckingTransactionRows
 } from "@/server/services/checking-data";
@@ -46,45 +45,6 @@ describe("checking data service", () => {
       transactionCount: 2
     });
     expect(result.providers[0]).not.toHaveProperty("transactions");
-    expect(result.dailyData.at(-1)).not.toHaveProperty("providerIncome");
-    expect(result.dailyData.at(-1)).not.toHaveProperty("providerExpenses");
-    expect(result.monthlyData.at(-1)).not.toHaveProperty("providerIncome");
-    expect(result.monthlyData.at(-1)).not.toHaveProperty("providerExpenses");
-  });
-
-  it("builds checking provider flow series on demand", async () => {
-    const repository = {
-      listCheckingTransactions: vi.fn(async () => [
-        checkingRow,
-        {
-          id: "checking-2",
-          sourceInstitution: "bbva",
-          bookingDate: new Date("2026-01-02T00:00:00.000Z"),
-          typeLabel: "Card",
-          description: "Card payment",
-          direction: "OUT",
-          amountCents: 20_000,
-          balanceCents: 80_000
-        }
-      ])
-    };
-
-    const result = await getCheckingProviderSeriesData(
-      "profile-1",
-      "bbva",
-      repository,
-      new Date("2026-01-02T12:00:00.000Z")
-    );
-
-    expect(result.provider).toBe("bbva");
-    expect(result.dailyData.at(-1)).toMatchObject({
-      providerIncome: { bbva: 0 },
-      providerExpenses: { bbva: 20_000 }
-    });
-    expect(result.monthlyData.at(-1)).toMatchObject({
-      providerIncome: { bbva: 100_000 },
-      providerExpenses: { bbva: 20_000 }
-    });
   });
 
   it("loads checking transaction rows through the repository", async () => {
