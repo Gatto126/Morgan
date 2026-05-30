@@ -2,7 +2,11 @@ import type { RefObject } from "react";
 
 import { cn } from "@/shared/utils";
 
+import type { UserRecord } from "./types";
+import { WelcomeHeritagePreview } from "./welcome-heritage-preview";
+
 type WelcomeStageProps = {
+  activeUser: UserRecord | null;
   backgroundRef: RefObject<HTMLDivElement | null>;
   isBackgroundVisible: boolean;
   isPanelModalOpen: boolean;
@@ -10,6 +14,7 @@ type WelcomeStageProps = {
 };
 
 export function WelcomeStage({
+  activeUser,
   backgroundRef,
   isBackgroundVisible,
   isPanelModalOpen,
@@ -28,8 +33,8 @@ export function WelcomeStage({
             isPanelModalOpen && "pointer-events-none"
           )}
         >
-          <div className="mx-auto flex h-full w-full max-w-[850px] items-stretch justify-start text-left md:h-[380px]">
-            <div className="flex h-full w-full shrink-0 flex-col justify-between py-1 md:w-[380px] md:py-2">
+          <div className="mx-auto grid h-full w-full min-w-0 gap-5 text-left md:grid-cols-[minmax(0,1fr)_2px_minmax(0,1fr)]">
+            <div className="mx-auto flex min-h-0 min-w-0 w-full max-w-[380px] flex-col justify-center gap-10 py-1 sm:gap-12 md:gap-16 lg:gap-24 lg:py-2">
               <div className="space-y-4 md:space-y-6">
                 <div className="space-y-1 select-none">
                   <h1 className="text-4xl font-bold tracking-[-0.06em] text-white sm:text-[3rem]">
@@ -44,11 +49,14 @@ export function WelcomeStage({
                 </p>
               </div>
 
-              <div className="space-y-5 pt-6">
-                <button
+              <div className="pt-6">
+                <a
                   className="group block cursor-pointer select-none space-y-1 text-left"
-                  onClick={onSignOut}
-                  type="button"
+                  href="/api/logout"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onSignOut();
+                  }}
                 >
                   <div className="text-2xl font-bold tracking-[-0.06em] text-[color:var(--text-dim)] transition-colors group-hover:text-white md:text-3xl sm:text-[2.2rem]">
                     Log out
@@ -56,25 +64,16 @@ export function WelcomeStage({
                   <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]/50 transition-colors group-hover:text-[color:var(--text-dim)]">
                     End session
                   </div>
-                </button>
+                </a>
               </div>
             </div>
 
-            <div className="mx-8 hidden w-[2px] shrink-0 self-stretch bg-[color:var(--line-strong)] opacity-30 md:block" />
+            <div className="hidden w-[2px] shrink-0 self-stretch bg-[color:var(--line-strong)] opacity-30 md:block" />
 
-            <div className="hidden h-full w-[398px] shrink-0 flex-col justify-end py-2 md:flex">
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <h2 className="text-3xl font-bold uppercase tracking-[-0.06em] text-white">PRIVATE BY DESIGN</h2>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
-                    Built around your profiles
-                  </div>
-                </div>
-                <p className="text-sm font-medium leading-relaxed text-[color:var(--text-dim)]">
-                  Your account opens Morgan. Profiles inside Morgan separate the financial workspaces.
-                </p>
-              </div>
-            </div>
+            <WelcomeHeritagePreview
+              activeUser={activeUser}
+              isActive={isBackgroundVisible && !isPanelModalOpen}
+            />
           </div>
         </div>
       </div>

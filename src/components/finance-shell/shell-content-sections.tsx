@@ -71,6 +71,7 @@ type UploadContentProps = {
 type InlineUploadContentProps = UploadContentProps;
 
 type WelcomeContentProps = {
+  activeUser: UserRecord | null;
   backgroundRef: RefObject<HTMLDivElement | null>;
   isBackgroundVisible: boolean;
   isPanelModalOpen: boolean;
@@ -97,6 +98,7 @@ type NonDashboardStageContentProps = {
 };
 
 export function FinanceShellWelcomeContent({
+  activeUser,
   backgroundRef,
   isBackgroundVisible,
   isPanelModalOpen,
@@ -104,6 +106,7 @@ export function FinanceShellWelcomeContent({
 }: WelcomeContentProps) {
   return (
     <WelcomeStage
+      activeUser={activeUser}
       backgroundRef={backgroundRef}
       isBackgroundVisible={isBackgroundVisible}
       isPanelModalOpen={isPanelModalOpen}

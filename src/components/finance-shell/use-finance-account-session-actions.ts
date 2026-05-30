@@ -31,15 +31,21 @@ export function useFinanceAccountSessionActions({
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
-  const handleSignOut = useCallback(async () => {
+  const handleSignOut = useCallback(() => {
+    clearPersistedFinanceProfileSelection();
+    setUsers([]);
+    setActiveUser(null);
+    setIsSignedOut(true);
+
     try {
-      await authClient.signOut();
-    } finally {
-      clearPersistedFinanceProfileSelection();
-      setIsSignedOut(true);
-      router.refresh();
+      window.location.assign("/api/logout");
+    } catch {
+      void authClient.signOut().finally(() => {
+        router.refresh();
+        window.location.replace("/");
+      });
     }
-  }, [router]);
+  }, [router, setActiveUser, setUsers]);
 
   const openDeleteAccountConfirm = useCallback(() => {
     const resetState = getDeleteAccountDialogResetState();
