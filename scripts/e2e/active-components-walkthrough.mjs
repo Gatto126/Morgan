@@ -6,6 +6,7 @@ import { chromium } from "playwright";
 
 import {
   assert,
+  authUserPrefixWhere,
   buildXlsxBufferFromRows,
   cleanupUsersByPrefix,
   expectNoNextOverlay,
@@ -39,6 +40,7 @@ const outDir = path.resolve("artifacts/e2e/active-components-walkthrough");
 const prisma = new PrismaClient();
 const runId = Date.now().toString(36);
 const username = `activeflow${runId}`;
+const email = `${username}@example.test`;
 const password = "Temporary active components password 2026!";
 const signupInviteCode = process.env.MORGAN_SIGNUP_INVITE_CODE ?? "local-test-invite-code";
 const profileName = `Active Flow ${runId.slice(-6)}`;
@@ -561,7 +563,7 @@ async function exerciseActiveComponents(page) {
   await page.getByRole("button", { name: "Esci dall'importazione", exact: true }).click();
 
   const generalPanel = await openSettingsSection(page, "Settings General Settings", "General Settings");
-  await generalPanel.getByText(username, { exact: true }).waitFor({ state: "visible", timeout: 10_000 });
+  await generalPanel.getByText(email, { exact: true }).waitFor({ state: "visible", timeout: 10_000 });
   await saveScreenshot(page, "settings-general-menu.png");
   await generalPanel.getByRole("button", { name: "API Key Manage API", exact: true }).click();
   await generalPanel.getByRole("heading", { name: "BINANCE", exact: true }).waitFor({ state: "visible", timeout: 10_000 });
@@ -642,8 +644,8 @@ try {
   await expectNoOverlay(page, "initial load");
 
   await page.getByRole("button", { name: "Register New local account", exact: true }).click();
-  await page.getByPlaceholder("Username", { exact: true }).fill(username);
   await page.getByPlaceholder("Invite code", { exact: true }).fill(signupInviteCode);
+  await page.getByPlaceholder("Email", { exact: true }).fill(email);
   await page.getByPlaceholder("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create account", exact: true }).click();
   await page.getByRole("button", { name: "Create profile", exact: true }).waitFor({ state: "visible", timeout: 20_000 });
@@ -690,7 +692,7 @@ try {
     await saveScreenshot(page, "kept-account-ready.png");
     steps.push("kept_account_for_manual_review");
     remainingUsers = await prisma.authUser.count({
-      where: { username: { startsWith: "activeflow" } }
+      where: authUserPrefixWhere(["activeflow"])
     });
     assert(remainingUsers > 0, "Expected activeflow test user to remain for manual review.");
   } else {
@@ -700,7 +702,7 @@ try {
     assert(httpErrors.length === 0, `Unexpected HTTP errors found: ${JSON.stringify(httpErrors)}`);
 
     remainingUsers = await prisma.authUser.count({
-      where: { username: { startsWith: "activeflow" } }
+      where: authUserPrefixWhere(["activeflow"])
     });
     assert(remainingUsers === 0, `Expected activeflow test users to be deleted, found ${remainingUsers}`);
   }

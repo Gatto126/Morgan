@@ -421,6 +421,7 @@ async function runSmoke() {
   const port = shouldStartServer ? await findAvailablePort() : null;
   const baseUrl = configuredBaseUrl ?? `http://${host}:${port}`;
   const username = `smokeupload${Date.now().toString(36)}`;
+  const email = `${username}@example.test`;
   const initialRateLimits = await snapshotAndClearRateLimits();
   const { child, getLogs } = shouldStartServer
     ? startNextDev(port)
@@ -437,14 +438,14 @@ async function runSmoke() {
     const initialResponse = await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
     expectSecurityHeaders(initialResponse);
     await waitForAuthShellHydration(page);
-    const usernameInput = page.getByPlaceholder("Username", { exact: true });
+    const inviteCodeInput = page.getByPlaceholder("Invite code", { exact: true });
     await clickUntilVisible(
       page.getByRole("button", { name: "Register New local account", exact: true }),
-      usernameInput,
+      inviteCodeInput,
       "register view"
     );
-    await usernameInput.fill(username);
-    await page.getByPlaceholder("Invite code", { exact: true }).fill(signupInviteCode);
+    await inviteCodeInput.fill(signupInviteCode);
+    await page.getByPlaceholder("Email", { exact: true }).fill(email);
     await page.getByPlaceholder("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Create account", exact: true }).click();
 

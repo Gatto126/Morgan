@@ -3,18 +3,17 @@ import { describe, expect, it } from "vitest";
 import {
   getLocalPasswordPolicyHint,
   hasLocalPasswordInput,
+  isValidLocalEmail,
   isValidLocalPassword,
-  isValidLocalUsername,
-  localUsernameToEmail,
-  normalizeLocalUsername
+  normalizeLocalEmail,
 } from "@/domain/auth/local-auth";
 
 describe("local auth helpers", () => {
-  it("normalizes and validates local usernames", () => {
-    expect(normalizeLocalUsername(" Luca ")).toBe("luca");
-    expect(isValidLocalUsername("luca01")).toBe(true);
-    expect(isValidLocalUsername("luca-01")).toBe(false);
-    expect(localUsernameToEmail("Luca")).toBe("luca@morgan.local");
+  it("normalizes and validates email addresses", () => {
+    expect(normalizeLocalEmail(" Luca.Example+Morgan@Example.COM ")).toBe("luca.example+morgan@example.com");
+    expect(isValidLocalEmail("luca@example.com")).toBe(true);
+    expect(isValidLocalEmail("luca@example")).toBe(false);
+    expect(isValidLocalEmail("luca example@example.com")).toBe(false);
   });
 
   it("accepts long passphrases with spaces and symbols", () => {

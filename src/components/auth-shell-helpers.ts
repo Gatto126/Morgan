@@ -12,6 +12,7 @@ export function getAuthSubmitButtonClass(canSubmit: boolean) {
 export function getAuthLandingResetState() {
   return {
     view: "landing" as const,
+    email: "",
     password: "",
     inviteCode: "",
     error: null,

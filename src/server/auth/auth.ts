@@ -4,7 +4,6 @@ import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
-import { username } from "better-auth/plugins";
 
 import { prisma } from "@/server/db/prisma";
 import {
@@ -22,10 +21,9 @@ import {
   LOCAL_PASSWORD_MAX_LENGTH,
   LOCAL_PASSWORD_MIN_LENGTH,
   hasLocalPasswordInput,
+  isValidLocalEmail,
   isValidLocalPassword,
-  isValidLocalUsername,
-  localUsernameToEmail,
-  normalizeLocalUsername
+  normalizeLocalEmail
 } from "@/domain/auth/local-auth";
 
 const authConfigWarningState = globalThis as typeof globalThis & {
@@ -55,7 +53,7 @@ function assertPassword(password: unknown, path: string) {
     });
   }
 
-  if (path === "/sign-in/username" && !hasLocalPasswordInput(password)) {
+  if (path === "/sign-in/email" && !hasLocalPasswordInput(password)) {
     throw new APIError("BAD_REQUEST", {
       message: `Password must be between 1 and ${LOCAL_PASSWORD_MAX_LENGTH} characters.`
     });
@@ -84,8 +82,6 @@ function normalizeAuthBody(body: unknown, path: string) {
   if (!body || typeof body !== "object") return;
 
   const payload = body as {
-    username?: unknown;
-    displayUsername?: unknown;
     email?: unknown;
     inviteCode?: unknown;
     name?: unknown;
@@ -94,37 +90,24 @@ function normalizeAuthBody(body: unknown, path: string) {
 
   assertPassword(payload.password, path);
 
+  if (path === "/sign-in/email" || path === "/sign-up/email") {
+    if (typeof payload.email !== "string" || !isValidLocalEmail(payload.email)) {
+      throw new APIError("BAD_REQUEST", {
+        message: "Valid email is required."
+      });
+    }
+
+    payload.email = normalizeLocalEmail(payload.email);
+  }
+
   if (path === "/sign-up/email") {
     assertSignupInviteCode(payload.inviteCode);
     delete payload.inviteCode;
 
-    if (typeof payload.username !== "string") {
-      throw new APIError("BAD_REQUEST", {
-        message: "Username is required."
-      });
-    }
-  }
-
-  if (typeof payload.username === "string") {
-    const normalizedUsername = normalizeLocalUsername(payload.username);
-    if (!isValidLocalUsername(normalizedUsername)) {
-      throw new APIError("BAD_REQUEST", {
-        message: "Invalid username."
-      });
-    }
-    payload.username = normalizedUsername;
-
-    const displayName = typeof payload.name === "string" && payload.name.trim()
-      ? payload.name.trim()
-      : normalizedUsername;
-    payload.name = displayName;
-
-    if (typeof payload.displayUsername !== "string") {
-      payload.displayUsername = displayName;
-    }
-
-    if ("email" in payload) {
-      payload.email = localUsernameToEmail(normalizedUsername);
+    if (typeof payload.name !== "string" || payload.name.trim().length === 0) {
+      payload.name = payload.email;
+    } else {
+      payload.name = payload.name.trim();
     }
   }
 }
@@ -167,7 +150,7 @@ export const auth = betterAuth({
     window: 60,
     max: 120,
     customRules: {
-      "/sign-in/username": {
+      "/sign-in/email": {
         window: 5 * 60,
         max: 5
       },
@@ -187,18 +170,12 @@ export const auth = betterAuth({
   },
   hooks: {
     before: createAuthMiddleware(async (context) => {
-      if (context.path === "/sign-up/email" || context.path === "/sign-in/username") {
+      if (context.path === "/sign-up/email" || context.path === "/sign-in/email") {
         normalizeAuthBody(context.body, context.path);
       }
     })
   },
   plugins: [
-    username({
-      minUsernameLength: 2,
-      maxUsernameLength: 24,
-      usernameValidator: isValidLocalUsername,
-      usernameNormalization: normalizeLocalUsername
-    }),
     nextCookies()
   ]
 });

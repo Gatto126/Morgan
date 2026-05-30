@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, House, KeyRound, Send, UserRound } from "lucide-react";
+import { ArrowLeft, House, KeyRound, Mail, Send } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { getAuthLandingResetState, getAuthSubmitButtonClass } from "@/components/auth-shell-helpers";
@@ -10,10 +10,9 @@ import { authClient } from "@/client/auth-client";
 import {
   getLocalPasswordPolicyHint,
   hasLocalPasswordInput,
+  isValidLocalEmail,
   isValidLocalPassword,
-  isValidLocalUsername,
-  localUsernameToEmail,
-  normalizeLocalUsername
+  normalizeLocalEmail,
 } from "@/domain/auth/local-auth";
 import { cn } from "@/shared/utils";
 
@@ -70,12 +69,16 @@ function authErrorMessage(message: string) {
     return "Invalid invite code.";
   }
 
+  if (normalized.includes("email")) {
+    return "Enter a valid email address.";
+  }
+
   if (normalized.includes("invalid") || normalized.includes("unauthorized")) {
-    return "Invalid username or password.";
+    return "Invalid email or password.";
   }
 
   if (normalized.includes("already") || normalized.includes("taken") || normalized.includes("exists") || normalized.includes("esiste")) {
-    return "This username already exists.";
+    return "This email already exists.";
   }
 
   return message || "Access failed.";
@@ -84,7 +87,7 @@ function authErrorMessage(message: string) {
 export function AuthShell() {
   const router = useRouter();
   const [view, setView] = useState<AuthView>("landing");
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -94,13 +97,14 @@ export function AuthShell() {
   const [loginWelcomeKey, setLoginWelcomeKey] = useState(0);
   const authShellRef = useRef<HTMLElement | null>(null);
 
-  const normalizedUsername = useMemo(() => normalizeLocalUsername(username), [username]);
+  const normalizedEmail = useMemo(() => normalizeLocalEmail(email), [email]);
   const isAuthForm = view === "signIn" || view === "signUp";
   const hasValidPassword = view === "signUp"
     ? isValidLocalPassword(password)
     : hasLocalPasswordInput(password);
+  const hasValidEmail = isAuthForm && isValidLocalEmail(normalizedEmail);
   const hasInviteCode = view !== "signUp" || inviteCode.trim().length > 0;
-  const hasValidAuthInput = isAuthForm && isValidLocalUsername(normalizedUsername) && hasValidPassword && hasInviteCode;
+  const hasValidAuthInput = isAuthForm && hasValidEmail && hasValidPassword && hasInviteCode;
   const canSubmit = hasValidAuthInput && !isSubmitting;
 
   useEffect(() => {
@@ -111,7 +115,7 @@ export function AuthShell() {
     if (nextView === view) return;
 
     setView(nextView);
-    setUsername("");
+    setEmail("");
     setPassword("");
     setInviteCode("");
     setError(null);
@@ -127,6 +131,7 @@ export function AuthShell() {
     const resetState = getAuthLandingResetState();
 
     setView(resetState.view);
+    setEmail(resetState.email);
     setPassword(resetState.password);
     setInviteCode(resetState.inviteCode);
     setError(resetState.error);
@@ -143,17 +148,15 @@ export function AuthShell() {
     try {
       const result =
         view === "signIn"
-          ? await authClient.signIn.username({
-              username: normalizedUsername,
+          ? await authClient.signIn.email({
+              email: normalizedEmail,
               password,
               rememberMe: true
             })
           : await authClient.signUp.email({
-              email: localUsernameToEmail(normalizedUsername),
+              email: normalizedEmail,
               password,
-              name: username.trim() || normalizedUsername,
-              username: normalizedUsername,
-              displayUsername: username.trim() || normalizedUsername,
+              name: normalizedEmail,
               inviteCode: inviteCode.trim()
             } as Parameters<typeof authClient.signUp.email>[0] & { inviteCode: string });
 
@@ -178,7 +181,7 @@ export function AuthShell() {
       }
       setIsSubmitting(false);
     }
-  }, [canSubmit, inviteCode, normalizedUsername, password, router, username, view]);
+  }, [canSubmit, inviteCode, normalizedEmail, password, router, view]);
 
   function renderLanding() {
     return (
@@ -301,7 +304,7 @@ export function AuthShell() {
         <form
           className={cn(
             "flex h-full w-full shrink-0 flex-col items-center justify-center py-1 md:absolute md:left-3/4 md:top-1/2 md:w-[398px] md:-translate-x-1/2 md:-translate-y-1/2 md:py-0",
-            isSignUp ? "md:h-[168px]" : "md:h-[108px]"
+            isSignUp ? "md:h-[228px]" : "md:h-[108px]"
           )}
           onSubmit={(event) => {
             event.preventDefault();
@@ -319,35 +322,14 @@ export function AuthShell() {
 
           <div className={cn(
             "w-full max-w-[398px] space-y-4 md:relative md:space-y-0",
-            isSignUp ? "md:h-[168px]" : "md:h-[108px]"
+            isSignUp ? "md:h-[228px]" : "md:h-[108px]"
           )}>
             <div className="space-y-3">
-              <div className="relative">
-                <Input
-                  autoComplete="username"
-                  autoFocus
-                  className="h-11 pr-12 text-lg sm:h-12 sm:text-xl"
-                  disabled={isSubmitting}
-                  maxLength={24}
-                  name="username"
-                  onChange={(event) => {
-                    setUsername(event.target.value);
-                    setError(null);
-                    setSuccessMessage(null);
-                    if (view === "signIn" && error) {
-                      setPassword("");
-                    }
-                  }}
-                  placeholder="Username"
-                  value={username}
-                />
-                <UserRound className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2" />
-              </div>
-
               {isSignUp ? (
                 <div className="relative">
                   <Input
                     autoComplete="off"
+                    autoFocus
                     className="h-11 pr-12 text-lg sm:h-12 sm:text-xl"
                     disabled={isSubmitting}
                     maxLength={64}
@@ -364,6 +346,29 @@ export function AuthShell() {
                   <KeyRound className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2" />
                 </div>
               ) : null}
+
+              <div className="relative">
+                <Input
+                  autoComplete="email"
+                  autoFocus={!isSignUp}
+                  className="h-11 pr-12 text-lg sm:h-12 sm:text-xl"
+                  disabled={isSubmitting}
+                  maxLength={254}
+                  name="email"
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setError(null);
+                    setSuccessMessage(null);
+                    if (view === "signIn" && error) {
+                      setPassword("");
+                    }
+                  }}
+                  placeholder="Email"
+                  type="email"
+                  value={email}
+                />
+                <Mail className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2" />
+              </div>
 
               <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2 sm:grid-cols-[minmax(0,1fr)_48px]">
                 <Input

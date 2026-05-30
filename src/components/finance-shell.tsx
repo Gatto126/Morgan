@@ -19,9 +19,15 @@ import { useFinanceNavigation } from "./finance-shell/use-finance-navigation";
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
 import { dashboardStages, getStageTitle } from "./finance-shell/stage-title";
 
+function getSuggestedFirstProfileName(accountName: string) {
+  const trimmedName = accountName.trim();
+  const emailLocalPart = trimmedName.includes("@") ? trimmedName.split("@")[0] : trimmedName;
+  return emailLocalPart.trim().slice(0, 24);
+}
+
 export function FinanceShell({ accountName, initialUsers }: { accountName: string; initialUsers: UserRecord[] }) {
   const [initialFinanceState] = useState(() => resolveInitialFinanceState(initialUsers));
-  const suggestedFirstProfileName = initialUsers.length === 0 ? accountName : "";
+  const suggestedFirstProfileName = initialUsers.length === 0 ? getSuggestedFirstProfileName(accountName) : "";
   const [hasRestoredClientState, setHasRestoredClientState] = useState(false);
   const [users, setUsers] = useState<UserRecord[]>(initialUsers);
   const [activeUser, setActiveUser] = useState<UserRecord | null>(initialFinanceState.activeUser);

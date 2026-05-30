@@ -1,15 +1,20 @@
-export const LOCAL_AUTH_DOMAIN = "morgan.local";
 export const LOCAL_PASSWORD_MIN_LENGTH = 15;
 export const LOCAL_PASSWORD_MAX_LENGTH = 128;
+export const LOCAL_EMAIL_MAX_LENGTH = 254;
 
-const usernamePattern = /^[a-z0-9]{2,24}$/;
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function normalizeLocalUsername(username: string) {
-  return username.trim().toLowerCase();
+export function normalizeLocalEmail(email: string) {
+  return email.trim().toLowerCase();
 }
 
-export function isValidLocalUsername(username: string) {
-  return usernamePattern.test(normalizeLocalUsername(username));
+export function isValidLocalEmail(email: string) {
+  const normalizedEmail = normalizeLocalEmail(email);
+  return (
+    normalizedEmail.length > 0 &&
+    normalizedEmail.length <= LOCAL_EMAIL_MAX_LENGTH &&
+    emailPattern.test(normalizedEmail)
+  );
 }
 
 export function hasLocalPasswordInput(password: string) {
@@ -26,8 +31,4 @@ export function isValidLocalPassword(password: string) {
 
 export function getLocalPasswordPolicyHint() {
   return `${LOCAL_PASSWORD_MIN_LENGTH}-${LOCAL_PASSWORD_MAX_LENGTH} characters; spaces and symbols allowed`;
-}
-
-export function localUsernameToEmail(username: string) {
-  return `${normalizeLocalUsername(username)}@${LOCAL_AUTH_DOMAIN}`;
 }

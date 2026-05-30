@@ -19,6 +19,7 @@ describe("auth shell helpers", () => {
   it("clears sensitive auth state when returning to landing", () => {
     expect(getAuthLandingResetState()).toEqual({
       view: "landing",
+      email: "",
       password: "",
       inviteCode: "",
       error: null,
