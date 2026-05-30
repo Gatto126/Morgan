@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, House, Send, UserRound } from "lucide-react";
+import { ArrowLeft, House, KeyRound, Send, UserRound } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { getAuthLandingResetState, getAuthSubmitButtonClass } from "@/components/auth-shell-helpers";
@@ -66,6 +66,10 @@ function getRandomLoginWelcome() {
 function authErrorMessage(message: string) {
   const normalized = message.toLowerCase();
 
+  if (normalized.includes("invite")) {
+    return "Invalid invite code.";
+  }
+
   if (normalized.includes("invalid") || normalized.includes("unauthorized")) {
     return "Invalid username or password.";
   }
@@ -82,6 +86,7 @@ export function AuthShell() {
   const [view, setView] = useState<AuthView>("landing");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -94,7 +99,8 @@ export function AuthShell() {
   const hasValidPassword = view === "signUp"
     ? isValidLocalPassword(password)
     : hasLocalPasswordInput(password);
-  const hasValidAuthInput = isAuthForm && isValidLocalUsername(normalizedUsername) && hasValidPassword;
+  const hasInviteCode = view !== "signUp" || inviteCode.trim().length > 0;
+  const hasValidAuthInput = isAuthForm && isValidLocalUsername(normalizedUsername) && hasValidPassword && hasInviteCode;
   const canSubmit = hasValidAuthInput && !isSubmitting;
 
   useEffect(() => {
@@ -107,6 +113,7 @@ export function AuthShell() {
     setView(nextView);
     setUsername("");
     setPassword("");
+    setInviteCode("");
     setError(null);
     setSuccessMessage(null);
 
@@ -121,6 +128,7 @@ export function AuthShell() {
 
     setView(resetState.view);
     setPassword(resetState.password);
+    setInviteCode(resetState.inviteCode);
     setError(resetState.error);
     setSuccessMessage(resetState.successMessage);
   }
@@ -145,8 +153,9 @@ export function AuthShell() {
               password,
               name: username.trim() || normalizedUsername,
               username: normalizedUsername,
-              displayUsername: username.trim() || normalizedUsername
-            });
+              displayUsername: username.trim() || normalizedUsername,
+              inviteCode: inviteCode.trim()
+            } as Parameters<typeof authClient.signUp.email>[0] & { inviteCode: string });
 
       if (result.error) {
         throw new Error(authErrorMessage(result.error.message || ""));
@@ -169,7 +178,7 @@ export function AuthShell() {
       }
       setIsSubmitting(false);
     }
-  }, [canSubmit, normalizedUsername, password, router, username, view]);
+  }, [canSubmit, inviteCode, normalizedUsername, password, router, username, view]);
 
   function renderLanding() {
     return (
@@ -290,7 +299,10 @@ export function AuthShell() {
         <div className="hidden h-full w-[2px] shrink-0 self-stretch bg-[color:var(--line-strong)] opacity-30 md:absolute md:left-1/2 md:top-0 md:block" />
 
         <form
-          className="flex h-full w-full shrink-0 flex-col items-center justify-center py-1 md:absolute md:left-3/4 md:top-1/2 md:h-[108px] md:w-[398px] md:-translate-x-1/2 md:-translate-y-1/2 md:py-0"
+          className={cn(
+            "flex h-full w-full shrink-0 flex-col items-center justify-center py-1 md:absolute md:left-3/4 md:top-1/2 md:w-[398px] md:-translate-x-1/2 md:-translate-y-1/2 md:py-0",
+            isSignUp ? "md:h-[168px]" : "md:h-[108px]"
+          )}
           onSubmit={(event) => {
             event.preventDefault();
             void submitCredentials();
@@ -305,7 +317,10 @@ export function AuthShell() {
             <ArrowLeft className="h-4 w-4" />
           </button>
 
-          <div className="w-full max-w-[398px] space-y-4 md:relative md:h-[108px] md:space-y-0">
+          <div className={cn(
+            "w-full max-w-[398px] space-y-4 md:relative md:space-y-0",
+            isSignUp ? "md:h-[168px]" : "md:h-[108px]"
+          )}>
             <div className="space-y-3">
               <div className="relative">
                 <Input
@@ -328,6 +343,27 @@ export function AuthShell() {
                 />
                 <UserRound className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2" />
               </div>
+
+              {isSignUp ? (
+                <div className="relative">
+                  <Input
+                    autoComplete="off"
+                    className="h-11 pr-12 text-lg sm:h-12 sm:text-xl"
+                    disabled={isSubmitting}
+                    maxLength={64}
+                    name="inviteCode"
+                    onChange={(event) => {
+                      setInviteCode(event.target.value);
+                      setError(null);
+                      setSuccessMessage(null);
+                    }}
+                    placeholder="Invite code"
+                    type="password"
+                    value={inviteCode}
+                  />
+                  <KeyRound className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2" />
+                </div>
+              ) : null}
 
               <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2 sm:grid-cols-[minmax(0,1fr)_48px]">
                 <Input

@@ -60,6 +60,7 @@ DIRECT_URL=postgresql://morgan:morgan@localhost:5432/morgan?schema=public
 MORGAN_DATABASE_PROVIDER=postgresql
 MORGAN_ENCRYPTION_KEY=
 BETTER_AUTH_SECRET=
+MORGAN_SIGNUP_INVITE_CODE=
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.*.*:3000
 BETTER_AUTH_IP_HEADERS=x-forwarded-for
@@ -72,6 +73,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 Use separate values for `MORGAN_ENCRYPTION_KEY` and `BETTER_AUTH_SECRET`.
+Set `MORGAN_SIGNUP_INVITE_CODE` to a private registration code before any
+publicly reachable deployment.
 
 For a public Vercel deployment, set `BETTER_AUTH_URL` to the final HTTPS origin,
 keep `BETTER_AUTH_TRUSTED_ORIGINS` to exact origins you control, and use
@@ -191,6 +194,7 @@ src/
 ## Data and Security Notes
 
 - `.env` files, local databases, build outputs, and generated caches are intentionally ignored by Git.
+- New account registration is gated by `MORGAN_SIGNUP_INVITE_CODE` in production.
 - Binance API secrets are encrypted before being stored.
 - Imported transactions are fingerprinted to prevent duplicate persistence.
 - Production logging defaults to `MORGAN_LOG_DETAIL=minimal`, omitting response bodies and suppressing noisy integration details.

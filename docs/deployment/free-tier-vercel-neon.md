@@ -92,6 +92,7 @@ DIRECT_URL=<Neon direct/unpooled connection string>
 MORGAN_DATABASE_PROVIDER=postgresql
 MORGAN_ENCRYPTION_KEY=<32-byte base64 or 64-character hex key>
 BETTER_AUTH_SECRET=<different random secret, at least 32 characters>
+MORGAN_SIGNUP_INVITE_CODE=<private registration code>
 BETTER_AUTH_URL=https://<vercel-project-domain>.vercel.app
 BETTER_AUTH_TRUSTED_ORIGINS=https://<vercel-project-domain>.vercel.app
 BETTER_AUTH_IP_HEADERS=x-forwarded-for
@@ -109,6 +110,10 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 Use one value for `MORGAN_ENCRYPTION_KEY` and the other for
 `BETTER_AUTH_SECRET`.
 
+Choose `MORGAN_SIGNUP_INVITE_CODE` yourself and keep it outside Git. In
+production, registration is blocked unless the user enters this exact
+case-sensitive code.
+
 If the first Vercel domain differs from the value you guessed, update
 `BETTER_AUTH_URL` and `BETTER_AUTH_TRUSTED_ORIGINS`, then redeploy from Vercel.
 
@@ -117,7 +122,7 @@ If the first Vercel domain differs from the value you guessed, update
 After Vercel deploys:
 
 1. Open the production URL.
-2. Register a test account.
+2. Register a test account with the private invite code.
 3. Create one profile.
 4. Navigate Dashboard, Checking, Investments, Crypto, Settings.
 5. Import one small BBVA or Trade Republic sample locally only if you are

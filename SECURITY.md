@@ -23,6 +23,7 @@ Never commit real values for:
 - `DATABASE_URL` or `DIRECT_URL`;
 - `BETTER_AUTH_SECRET`;
 - `MORGAN_ENCRYPTION_KEY`;
+- `MORGAN_SIGNUP_INVITE_CODE`;
 - Binance API keys or secrets;
 - browser traces, screenshots, logs, or exported databases containing personal
   finance data.

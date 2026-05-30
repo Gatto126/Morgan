@@ -20,6 +20,7 @@ describe("auth shell helpers", () => {
     expect(getAuthLandingResetState()).toEqual({
       view: "landing",
       password: "",
+      inviteCode: "",
       error: null,
       successMessage: null
     });

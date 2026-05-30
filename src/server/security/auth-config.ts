@@ -6,6 +6,7 @@ type AuthEnv = Partial<Record<
   | "DATABASE_URL"
   | "DIRECT_URL"
   | "MORGAN_ENCRYPTION_KEY"
+  | "MORGAN_SIGNUP_INVITE_CODE"
   | "NODE_ENV"
   | "TRUSTED_IP_HEADERS",
   string
@@ -110,6 +111,12 @@ export function getAuthDeploymentWarnings(env: AuthEnv = process.env) {
     warnings.push("MORGAN_ENCRYPTION_KEY is required in production.");
   } else if (!isValidEncryptionKey(env.MORGAN_ENCRYPTION_KEY)) {
     warnings.push("MORGAN_ENCRYPTION_KEY must be a 32-byte base64 or 64-character hex value.");
+  }
+
+  if (!env.MORGAN_SIGNUP_INVITE_CODE) {
+    warnings.push("MORGAN_SIGNUP_INVITE_CODE is required in production.");
+  } else if (env.MORGAN_SIGNUP_INVITE_CODE.trim().length < 8) {
+    warnings.push("MORGAN_SIGNUP_INVITE_CODE should be at least 8 characters in production.");
   }
 
   if (!baseUrl) {

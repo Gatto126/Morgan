@@ -43,6 +43,8 @@ Production must provide:
 - `MORGAN_DATABASE_PROVIDER=postgresql`.
 - `MORGAN_ENCRYPTION_KEY` as a 32-byte base64 value or 64-character hex value.
 - `BETTER_AUTH_SECRET` with at least 32 characters.
+- `MORGAN_SIGNUP_INVITE_CODE` as a private, case-sensitive registration code
+  with at least 8 characters.
 - `BETTER_AUTH_URL` set to the exact HTTPS application origin.
 - `BETTER_AUTH_TRUSTED_ORIGINS` set to exact HTTPS origins only.
 - `BETTER_AUTH_IP_HEADERS` set for the hosting/proxy path, for example
@@ -59,7 +61,7 @@ These items block public release:
 - Backup and restore procedure documented and tested on a production-like
   Postgres database.
 - Secret rotation runbook for `BETTER_AUTH_SECRET`, `MORGAN_ENCRYPTION_KEY`,
-  database credentials, and Binance credentials.
+  `MORGAN_SIGNUP_INVITE_CODE`, database credentials, and Binance credentials.
 - Privacy policy, terms, and financial-data disclaimer written and linked from
   the product.
 - Monitoring and alerting for app errors, slow API routes, failed enrichment

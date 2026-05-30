@@ -13,6 +13,10 @@ import {
   getTrustedOrigins,
   shouldUseSecureCookies
 } from "@/server/security/auth-config";
+import {
+  isSignupInviteCodeAccepted,
+  shouldRequireSignupInviteCode
+} from "@/server/security/signup-invite";
 import { getDatabaseProvider } from "@/server/db/database-provider";
 import {
   LOCAL_PASSWORD_MAX_LENGTH,
@@ -64,6 +68,18 @@ function assertPassword(password: unknown, path: string) {
   }
 }
 
+function assertSignupInviteCode(inviteCode: unknown) {
+  if (!shouldRequireSignupInviteCode()) {
+    return;
+  }
+
+  if (!isSignupInviteCodeAccepted(inviteCode, process.env.MORGAN_SIGNUP_INVITE_CODE)) {
+    throw new APIError("FORBIDDEN", {
+      message: "Invalid invite code."
+    });
+  }
+}
+
 function normalizeAuthBody(body: unknown, path: string) {
   if (!body || typeof body !== "object") return;
 
@@ -71,16 +87,22 @@ function normalizeAuthBody(body: unknown, path: string) {
     username?: unknown;
     displayUsername?: unknown;
     email?: unknown;
+    inviteCode?: unknown;
     name?: unknown;
     password?: unknown;
   };
 
   assertPassword(payload.password, path);
 
-  if (path === "/sign-up/email" && typeof payload.username !== "string") {
-    throw new APIError("BAD_REQUEST", {
-      message: "Username is required."
-    });
+  if (path === "/sign-up/email") {
+    assertSignupInviteCode(payload.inviteCode);
+    delete payload.inviteCode;
+
+    if (typeof payload.username !== "string") {
+      throw new APIError("BAD_REQUEST", {
+        message: "Username is required."
+      });
+    }
   }
 
   if (typeof payload.username === "string") {

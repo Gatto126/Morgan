@@ -22,6 +22,7 @@ const execFile = promisify(execFileCallback);
 const rootDir = process.cwd();
 const host = "127.0.0.1";
 const password = "Temporary smoke password 2026!";
+const signupInviteCode = process.env.MORGAN_SIGNUP_INVITE_CODE ?? "local-test-invite-code";
 
 function readArgValue(name) {
   const equalsPrefix = `${name}=`;
@@ -443,6 +444,7 @@ async function runSmoke() {
       "register view"
     );
     await usernameInput.fill(username);
+    await page.getByPlaceholder("Invite code", { exact: true }).fill(signupInviteCode);
     await page.getByPlaceholder("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Create account", exact: true }).click();
 

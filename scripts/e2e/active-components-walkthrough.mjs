@@ -40,6 +40,7 @@ const prisma = new PrismaClient();
 const runId = Date.now().toString(36);
 const username = `activeflow${runId}`;
 const password = "Temporary active components password 2026!";
+const signupInviteCode = process.env.MORGAN_SIGNUP_INVITE_CODE ?? "local-test-invite-code";
 const profileName = `Active Flow ${runId.slice(-6)}`;
 const secondProfileName = `Active Flow Extra ${runId.slice(-6)}`;
 const trPath = path.join(outDir, "trade-republic-active-components.csv");
@@ -642,6 +643,7 @@ try {
 
   await page.getByRole("button", { name: "Register New local account", exact: true }).click();
   await page.getByPlaceholder("Username", { exact: true }).fill(username);
+  await page.getByPlaceholder("Invite code", { exact: true }).fill(signupInviteCode);
   await page.getByPlaceholder("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create account", exact: true }).click();
   await page.getByRole("button", { name: "Create profile", exact: true }).waitFor({ state: "visible", timeout: 20_000 });

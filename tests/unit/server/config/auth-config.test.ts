@@ -48,6 +48,7 @@ describe("auth config helpers", () => {
       DIRECT_URL: "postgresql://user:pass@example.test:5432/morgan",
       BETTER_AUTH_SECRET: "0123456789abcdef0123456789abcdef",
       MORGAN_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      MORGAN_SIGNUP_INVITE_CODE: "private-beta-code",
       BETTER_AUTH_URL: "http://morgan.example",
       BETTER_AUTH_TRUSTED_ORIGINS: "https://*.example.com"
     })).toEqual([
@@ -66,7 +67,8 @@ describe("auth config helpers", () => {
       "DATABASE_URL is required in production.",
       "DIRECT_URL is required in production.",
       "BETTER_AUTH_SECRET is required in production.",
-      "MORGAN_ENCRYPTION_KEY is required in production."
+      "MORGAN_ENCRYPTION_KEY is required in production.",
+      "MORGAN_SIGNUP_INVITE_CODE is required in production."
     ]);
   });
 
@@ -77,11 +79,13 @@ describe("auth config helpers", () => {
       DIRECT_URL: "postgresql://user:pass@example.test:5432/morgan",
       BETTER_AUTH_SECRET: "too-short",
       MORGAN_ENCRYPTION_KEY: "not-a-key",
+      MORGAN_SIGNUP_INVITE_CODE: "short",
       BETTER_AUTH_URL: "https://morgan.example",
       BETTER_AUTH_IP_HEADERS: "x-forwarded-for"
     })).toEqual([
       "BETTER_AUTH_SECRET should be at least 32 characters in production.",
-      "MORGAN_ENCRYPTION_KEY must be a 32-byte base64 or 64-character hex value."
+      "MORGAN_ENCRYPTION_KEY must be a 32-byte base64 or 64-character hex value.",
+      "MORGAN_SIGNUP_INVITE_CODE should be at least 8 characters in production."
     ]);
   });
 
@@ -92,6 +96,7 @@ describe("auth config helpers", () => {
       DIRECT_URL: "postgresql://user:pass@example.test:5432/morgan",
       BETTER_AUTH_SECRET: "0123456789abcdef0123456789abcdef",
       MORGAN_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      MORGAN_SIGNUP_INVITE_CODE: "private-beta-code",
       BETTER_AUTH_URL: "https://morgan.example",
       BETTER_AUTH_TRUSTED_ORIGINS: "https://morgan.example",
       BETTER_AUTH_IP_HEADERS: "x-forwarded-for"

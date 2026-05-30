@@ -13,6 +13,7 @@ export function getAuthLandingResetState() {
   return {
     view: "landing" as const,
     password: "",
+    inviteCode: "",
     error: null,
     successMessage: null,
   };

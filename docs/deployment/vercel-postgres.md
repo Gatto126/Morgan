@@ -45,6 +45,7 @@ DIRECT_URL=postgresql://morgan:morgan@localhost:5432/morgan?schema=public
 MORGAN_DATABASE_PROVIDER=postgresql
 MORGAN_ENCRYPTION_KEY=<32-byte base64 or 64-character hex key>
 BETTER_AUTH_SECRET=<random secret>
+MORGAN_SIGNUP_INVITE_CODE=<private registration code>
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.*.*:3000
 BETTER_AUTH_IP_HEADERS=x-forwarded-for
@@ -69,6 +70,7 @@ DIRECT_URL=postgresql://...
 MORGAN_DATABASE_PROVIDER=postgresql
 MORGAN_ENCRYPTION_KEY=...
 BETTER_AUTH_SECRET=...
+MORGAN_SIGNUP_INVITE_CODE=...
 BETTER_AUTH_URL=https://<app>.vercel.app
 BETTER_AUTH_TRUSTED_ORIGINS=https://<app>.vercel.app
 BETTER_AUTH_IP_HEADERS=x-forwarded-for
@@ -78,6 +80,9 @@ MORGAN_LOG_DETAIL=minimal
 
 When a custom domain is attached, replace `BETTER_AUTH_URL` and
 `BETTER_AUTH_TRUSTED_ORIGINS` with that exact HTTPS origin.
+
+Keep `MORGAN_SIGNUP_INVITE_CODE` out of Git and rotate it if it is shared with
+anyone who should no longer be able to create accounts.
 
 ## Build And Deploy
 
