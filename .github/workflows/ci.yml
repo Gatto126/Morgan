@@ -46,26 +46,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate Prisma schemas
-        run: |
-          pnpm exec prisma validate --schema=prisma/schema.prisma
-          pnpm exec prisma validate --schema=prisma/sqlite/schema.prisma
-
-      - name: Lint
-        run: pnpm run lint
-
-      - name: Typecheck app
-        run: pnpm run typecheck
-
-      - name: Typecheck tests
-        run: pnpm run typecheck:test
-
-      - name: Unit tests
-        run: pnpm run test:run
-
-      - name: Script tests
-        run: pnpm run test:scripts
-
-      - name: Build
-        run: pnpm run build
-
+      - name: Release check
+        run: pnpm run release:check

@@ -15,6 +15,11 @@ Use package scripts from `package.json` for normal workflows. Direct script
 execution is fine for debugging, but package scripts keep paths stable when
 files move.
 
+Use `pnpm run release:check` as the canonical repository gate. It validates the
+Prisma schemas, lints, typechecks app and test code, runs the Vitest suite, and
+creates a production build. CI runs the same gate so local and remote checks
+stay aligned.
+
 Shared browser-flow helpers live in `scripts/e2e/e2e-helpers.mjs`. Keep common
 fixture generation, app readiness polling, disposable-user cleanup, profile
 waits, overlay checks, and import UI interactions there instead of duplicating
