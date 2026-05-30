@@ -71,11 +71,10 @@ type UploadContentProps = {
 type InlineUploadContentProps = UploadContentProps;
 
 type WelcomeContentProps = {
-  activeUser: UserRecord | null;
   backgroundRef: RefObject<HTMLDivElement | null>;
   isBackgroundVisible: boolean;
   isPanelModalOpen: boolean;
-  onSignOut: () => void;
+  users: UserRecord[];
 };
 
 type CreateProfileContentProps = {
@@ -98,19 +97,17 @@ type NonDashboardStageContentProps = {
 };
 
 export function FinanceShellWelcomeContent({
-  activeUser,
   backgroundRef,
   isBackgroundVisible,
   isPanelModalOpen,
-  onSignOut
+  users
 }: WelcomeContentProps) {
   return (
     <WelcomeStage
-      activeUser={activeUser}
       backgroundRef={backgroundRef}
       isBackgroundVisible={isBackgroundVisible}
       isPanelModalOpen={isPanelModalOpen}
-      onSignOut={onSignOut}
+      users={users}
     />
   );
 }

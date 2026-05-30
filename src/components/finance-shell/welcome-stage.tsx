@@ -6,19 +6,17 @@ import type { UserRecord } from "./types";
 import { WelcomeHeritagePreview } from "./welcome-heritage-preview";
 
 type WelcomeStageProps = {
-  activeUser: UserRecord | null;
   backgroundRef: RefObject<HTMLDivElement | null>;
   isBackgroundVisible: boolean;
   isPanelModalOpen: boolean;
-  onSignOut: () => void;
+  users: UserRecord[];
 };
 
 export function WelcomeStage({
-  activeUser,
   backgroundRef,
   isBackgroundVisible,
   isPanelModalOpen,
-  onSignOut
+  users
 }: WelcomeStageProps) {
   return (
     <div className="relative h-full w-full">
@@ -49,13 +47,14 @@ export function WelcomeStage({
                 </p>
               </div>
 
-              <div className="pt-6">
-                <a
-                  className="group block cursor-pointer select-none space-y-1 text-left"
-                  href="/api/logout"
-                  onClick={() => {
-                    onSignOut();
-                  }}
+              <form
+                action="/api/logout"
+                className="pt-6"
+                method="post"
+              >
+                <button
+                  className="group block cursor-pointer select-none space-y-1 bg-transparent p-0 text-left"
+                  type="submit"
                 >
                   <div className="text-2xl font-bold tracking-[-0.06em] text-[color:var(--text-dim)] transition-colors group-hover:text-white md:text-3xl sm:text-[2.2rem]">
                     Log out
@@ -63,15 +62,15 @@ export function WelcomeStage({
                   <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]/50 transition-colors group-hover:text-[color:var(--text-dim)]">
                     End session
                   </div>
-                </a>
-              </div>
+                </button>
+              </form>
             </div>
 
             <div className="hidden w-[2px] shrink-0 self-stretch bg-[color:var(--line-strong)] opacity-30 md:block" />
 
             <WelcomeHeritagePreview
-              activeUser={activeUser}
               isActive={isBackgroundVisible && !isPanelModalOpen}
+              users={users}
             />
           </div>
         </div>

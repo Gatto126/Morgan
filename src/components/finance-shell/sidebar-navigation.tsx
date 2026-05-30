@@ -126,6 +126,7 @@ function isKeyActive(
 ) {
   if (key === "settings") return showSettingsView;
   if (key === "profile") return showUserSelectView || stage === "select";
+  if (key === "home") return stage === "welcome";
   return stage === key;
 }
 

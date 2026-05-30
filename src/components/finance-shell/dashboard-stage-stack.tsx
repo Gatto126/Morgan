@@ -6,6 +6,8 @@ import { getVisibleDashboardStageKeys, type DashboardStageKey } from "./dashboar
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
 
+import { cn } from "@/shared/utils";
+
 const Dashboard = dynamic(
   () => import("../dashboard").then((mod) => mod.Dashboard),
   { loading: DashboardStageLoading, ssr: false }
@@ -112,7 +114,10 @@ export function DashboardStageStack({
   }
 
   return (
-    <div className="absolute inset-0 z-10">
+    <div
+      aria-hidden={!isDashboardStage ? "true" : undefined}
+      className={cn("absolute inset-0 z-10", !isDashboardStage && "pointer-events-none")}
+    >
       {renderedStageKeys.has("dashboard") && visibleStageKeys.has("dashboard") ? (
         <Dashboard
           emptyStateElement={activeUser.transactionCount === 0 && !activeUser.hasBinanceCredentials ? renderInlineUploadState() : undefined}

@@ -201,11 +201,10 @@ export function useFinanceShellContent({
         userSelectContent={userSelectContent}
         welcomeContent={(
           <FinanceShellWelcomeContent
-            activeUser={activeUser}
             backgroundRef={welcomeBackgroundRef}
             isBackgroundVisible={isWelcomeBackgroundVisible}
             isPanelModalOpen={isWelcomePanelModalOpen}
-            onSignOut={onSignOut}
+            users={users}
           />
         )}
       />
