@@ -181,6 +181,7 @@ src/
 - [Runtime targets and storage decision](docs/architecture/targets.md)
 - [Repository structure and duplication rules](docs/architecture/repo-structure.md)
 - [Docker pre-production](docs/deployment/docker-preprod.md)
+- [Free-tier Vercel and Neon setup](docs/deployment/free-tier-vercel-neon.md)
 - [Release readiness](docs/deployment/release-readiness.md)
 - [SQLite local runtime scaffold](docs/deployment/sqlite-local.md)
 - [Vercel and Postgres deployment](docs/deployment/vercel-postgres.md)

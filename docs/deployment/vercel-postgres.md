@@ -17,6 +17,10 @@ Recommended services:
 - Neon Postgres for production and preview databases;
 - local Docker Compose Postgres for pre-production checks.
 
+For the first free-tier cloud setup, follow
+`docs/deployment/free-tier-vercel-neon.md` before enabling preview database
+branching or external authentication providers.
+
 ## Local Pre-Production
 
 Start the full Docker pre-production stack when you want to test the app as a
