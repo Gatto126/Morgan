@@ -29,7 +29,7 @@ export type CheckingProviderSummary = {
   interest: number;
   cashback: number;
   tax: number;
-  transactions: CheckingTransaction[];
+  transactionCount: number;
 };
 
 export type CheckingData = {

@@ -53,10 +53,33 @@ export type CryptoTransactionRecord = Prisma.CryptoTransactionGetPayload<{
   select: typeof cryptoTransactionSelect;
 }>;
 
+type TransactionRowsPageOptions = {
+  sourceInstitution: string;
+  limit: number;
+  offset: number;
+};
+
+type TransactionRowsPage<TTransaction> = {
+  transactions: TTransaction[];
+  total: number;
+};
+
 export type TransactionReadRepository = {
   listCheckingTransactions(userId: string): Promise<CheckingTransactionRecord[]>;
   listInvestmentTransactions(userId: string): Promise<InvestmentPortfolioTransactionRecord[]>;
   listTradeRepublicCryptoTransactions(userId: string): Promise<CryptoTransactionRecord[]>;
+  listCheckingTransactionRows(
+    userId: string,
+    options: TransactionRowsPageOptions
+  ): Promise<TransactionRowsPage<CheckingTransactionRecord>>;
+  listInvestmentTransactionRows(
+    userId: string,
+    options: TransactionRowsPageOptions
+  ): Promise<TransactionRowsPage<InvestmentPortfolioTransactionRecord>>;
+  listTradeRepublicCryptoTransactionRows(
+    userId: string,
+    options: TransactionRowsPageOptions
+  ): Promise<TransactionRowsPage<CryptoTransactionRecord>>;
 };
 
 export const transactionReadRepository: TransactionReadRepository = {
@@ -85,6 +108,63 @@ export const transactionReadRepository: TransactionReadRepository = {
       orderBy: { bookingDate: "desc" },
       select: cryptoTransactionSelect
     });
+  },
+
+  async listCheckingTransactionRows(userId, { limit, offset, sourceInstitution }) {
+    const where = { userId, sourceInstitution };
+    const [transactions, total] = await Promise.all([
+      prisma.checkingTransaction.findMany({
+        where,
+        orderBy: [
+          { bookingDate: "desc" },
+          { id: "desc" }
+        ],
+        skip: offset,
+        take: limit,
+        select: checkingSelect
+      }),
+      prisma.checkingTransaction.count({ where })
+    ]);
+
+    return { total, transactions };
+  },
+
+  async listInvestmentTransactionRows(userId, { limit, offset, sourceInstitution }) {
+    const where = { userId, sourceInstitution };
+    const [transactions, total] = await Promise.all([
+      prisma.investmentTransaction.findMany({
+        where,
+        orderBy: [
+          { bookingDate: "desc" },
+          { id: "desc" }
+        ],
+        skip: offset,
+        take: limit,
+        select: portfolioTransactionSelect
+      }),
+      prisma.investmentTransaction.count({ where })
+    ]);
+
+    return { total, transactions };
+  },
+
+  async listTradeRepublicCryptoTransactionRows(userId, { limit, offset, sourceInstitution }) {
+    const where = { userId, sourceInstitution };
+    const [transactions, total] = await Promise.all([
+      prisma.cryptoTransaction.findMany({
+        where,
+        orderBy: [
+          { bookingDate: "desc" },
+          { id: "desc" }
+        ],
+        skip: offset,
+        take: limit,
+        select: cryptoTransactionSelect
+      }),
+      prisma.cryptoTransaction.count({ where })
+    ]);
+
+    return { total, transactions };
   }
 };
 

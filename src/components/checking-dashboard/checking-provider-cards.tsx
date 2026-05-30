@@ -1,6 +1,8 @@
 import { createPortal } from "react-dom";
-import { useState } from "react";
+import { useCallback } from "react";
+import type { UIEvent } from "react";
 
+import { useTransactionRows } from "@/hooks/use-transaction-rows";
 import { cn } from "@/shared/utils";
 
 import { formatEuroCents, formatProviderLabel, formatSignedEuroCents } from "./formatters";
@@ -9,14 +11,18 @@ import type { CheckingProviderSummary, CheckingTransaction } from "./types";
 type CheckingProviderCardsProps = {
   portalNode: HTMLElement | null;
   providers: CheckingProviderSummary[];
+  userId: string;
   isActive: boolean;
 };
 
-const INITIAL_TRANSACTION_ROWS = 100;
+const INITIAL_TRANSACTION_ROWS = 20;
+const NEXT_TRANSACTION_ROWS = 10;
+const LOAD_MORE_SCROLL_THRESHOLD_PX = 160;
 
 export function CheckingProviderCards({
   portalNode,
   providers,
+  userId,
   isActive
 }: CheckingProviderCardsProps) {
   if (!portalNode) return null;
@@ -74,7 +80,11 @@ export function CheckingProviderCards({
             </div>
 
             <div className="flex flex-col min-h-[280px] lg:h-[400px] flex-1 overflow-hidden rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[#1f1f1f]">
-              <CheckingTransactionTable transactions={provider.transactions} />
+              <CheckingTransactionTable
+                isActive={isActive}
+                provider={provider}
+                userId={userId}
+              />
             </div>
           </div>
       ))}
@@ -83,16 +93,48 @@ export function CheckingProviderCards({
   );
 }
 
-function CheckingTransactionTable({ transactions }: { transactions: CheckingTransaction[] }) {
-  const [showAllRows, setShowAllRows] = useState(false);
-  const visibleTransactions = showAllRows
-    ? transactions
-    : transactions.slice(0, INITIAL_TRANSACTION_ROWS);
-  const hiddenRows = transactions.length - visibleTransactions.length;
+function CheckingTransactionTable({
+  isActive,
+  provider,
+  userId
+}: {
+  isActive: boolean;
+  provider: CheckingProviderSummary;
+  userId: string;
+}) {
+  const {
+    error,
+    hasMore,
+    loading,
+    loadNext,
+    transactions
+  } = useTransactionRows<CheckingTransaction>({
+    endpoint: "/api/transactions/checking/rows",
+    initialPageSize: INITIAL_TRANSACTION_ROWS,
+    isActive,
+    pageSize: NEXT_TRANSACTION_ROWS,
+    sourceInstitution: provider.sourceInstitution,
+    totalCount: provider.transactionCount,
+    userId
+  });
+  const handleScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    if (!hasMore || loading) {
+      return;
+    }
+
+    const target = event.currentTarget;
+    const distanceFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    if (distanceFromBottom <= LOAD_MORE_SCROLL_THRESHOLD_PX) {
+      loadNext();
+    }
+  }, [hasMore, loadNext, loading]);
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-auto rounded-t-[20px] hide-scrollbar">
+      <div
+        className="min-h-0 flex-1 overflow-auto rounded-t-[20px] hide-scrollbar"
+        onScroll={handleScroll}
+      >
         <table className="min-w-full border-separate border-spacing-0 text-[11px] sm:text-sm">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-[0.12em] text-[#D9D9D9] sm:text-[11px] sm:tracking-[0.18em]">
@@ -103,7 +145,7 @@ function CheckingTransactionTable({ transactions }: { transactions: CheckingTran
             </tr>
           </thead>
           <tbody>
-            {visibleTransactions.map((transaction) => (
+            {transactions.map((transaction) => (
               <tr key={transaction.id} className="border-b border-[color:rgba(255,255,255,0.08)] align-middle last:border-b-0 hover:bg-[color:rgba(255,255,255,0.03)] transition-colors duration-150">
                 <td className="px-1.5 py-2 text-[color:var(--text-main)] sm:px-4">
                   <div className="font-semibold whitespace-nowrap">{new Date(transaction.bookingDate).toISOString().split("T")[0]}</div>
@@ -117,15 +159,19 @@ function CheckingTransactionTable({ transactions }: { transactions: CheckingTran
             ))}
           </tbody>
         </table>
+        {loading ? (
+          <div className="border-t border-[color:var(--line-strong)] px-4 py-3 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
+            Loading
+          </div>
+        ) : null}
       </div>
-      {transactions.length > INITIAL_TRANSACTION_ROWS ? (
+      {error ? (
         <button
-          className="border-t border-[color:var(--line-strong)] px-4 py-3 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)] transition-colors hover:text-white"
-          onClick={() => setShowAllRows((value) => !value)}
+          className="border-t border-[color:var(--line-strong)] px-4 py-3 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--danger)] transition-colors hover:text-white"
+          onClick={loadNext}
           type="button"
         >
-          {showAllRows ? "Show latest" : `Show all ${transactions.length}`}
-          {hiddenRows > 0 ? <span className="ml-2 text-[color:var(--text-dim)]/60">+{hiddenRows}</span> : null}
+          Retry
         </button>
       ) : null}
     </>

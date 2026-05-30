@@ -1,6 +1,8 @@
 import { createPortal } from "react-dom";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import type { UIEvent } from "react";
 
+import { useTransactionRows } from "@/hooks/use-transaction-rows";
 import { cn } from "@/shared/utils";
 
 import { formatEuroCents, formatProviderLabel } from "./formatters";
@@ -12,10 +14,14 @@ type PortfolioProviderCardsProps = {
   config: Pick<PortfolioDashboardConfig, "identifierLabel" | "showCashback" | "transactionFilter">;
   livePrices: Record<string, number | null>;
   isActive: boolean;
+  transactionRowsEndpoint: string;
+  userId: string;
   getProviderLiveTotal: (provider: PortfolioProviderSummary) => number;
 };
 
-const INITIAL_TRANSACTION_ROWS = 100;
+const INITIAL_TRANSACTION_ROWS = 20;
+const NEXT_TRANSACTION_ROWS = 10;
+const LOAD_MORE_SCROLL_THRESHOLD_PX = 160;
 
 export function PortfolioProviderCards({
   portalNode,
@@ -23,6 +29,8 @@ export function PortfolioProviderCards({
   config,
   livePrices,
   isActive,
+  transactionRowsEndpoint,
+  userId,
   getProviderLiveTotal
 }: PortfolioProviderCardsProps) {
   if (!portalNode) return null;
@@ -111,8 +119,11 @@ export function PortfolioProviderCards({
 
             <div className="flex flex-col min-h-[280px] lg:h-[400px] flex-1 overflow-hidden rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[#1f1f1f]">
               <PortfolioTransactionTable
+                endpoint={transactionRowsEndpoint}
+                isActive={isActive}
+                provider={provider}
                 transactionFilter={config.transactionFilter}
-                transactions={provider.transactions}
+                userId={userId}
               />
             </div>
           </div>
@@ -123,25 +134,55 @@ export function PortfolioProviderCards({
 }
 
 function PortfolioTransactionTable({
-  transactions,
+  endpoint,
+  isActive,
+  provider,
+  userId,
   transactionFilter
 }: {
-  transactions: PortfolioTransaction[];
+  endpoint: string;
+  isActive: boolean;
+  provider: PortfolioProviderSummary;
+  userId: string;
   transactionFilter: (transaction: PortfolioTransaction) => boolean;
 }) {
-  const [showAllRows, setShowAllRows] = useState(false);
+  const {
+    error,
+    hasMore,
+    loading,
+    loadNext,
+    transactions
+  } = useTransactionRows<PortfolioTransaction>({
+    endpoint,
+    initialPageSize: INITIAL_TRANSACTION_ROWS,
+    isActive,
+    pageSize: NEXT_TRANSACTION_ROWS,
+    sourceInstitution: provider.sourceInstitution,
+    totalCount: provider.transactionCount,
+    userId
+  });
   const filteredTransactions = useMemo(
     () => transactions.filter(transactionFilter),
     [transactionFilter, transactions]
   );
-  const visibleTransactions = showAllRows
-    ? filteredTransactions
-    : filteredTransactions.slice(0, INITIAL_TRANSACTION_ROWS);
-  const hiddenRows = filteredTransactions.length - visibleTransactions.length;
+  const handleScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    if (!hasMore || loading) {
+      return;
+    }
+
+    const target = event.currentTarget;
+    const distanceFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    if (distanceFromBottom <= LOAD_MORE_SCROLL_THRESHOLD_PX) {
+      loadNext();
+    }
+  }, [hasMore, loadNext, loading]);
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-auto rounded-t-[20px] hide-scrollbar">
+      <div
+        className="min-h-0 flex-1 overflow-auto rounded-t-[20px] hide-scrollbar"
+        onScroll={handleScroll}
+      >
         <table className="min-w-full border-separate border-spacing-0 text-[11px] sm:text-sm">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-[0.12em] text-[#D9D9D9] sm:text-[11px] sm:tracking-[0.18em]">
@@ -152,7 +193,7 @@ function PortfolioTransactionTable({
             </tr>
           </thead>
           <tbody>
-            {visibleTransactions.map((transaction) => (
+            {filteredTransactions.map((transaction) => (
               <tr key={transaction.id} className="border-b border-[color:rgba(255,255,255,0.08)] align-middle last:border-b-0 hover:bg-[color:rgba(255,255,255,0.03)] transition-colors duration-150">
                 <td className="px-1.5 py-2 text-[color:var(--text-main)] sm:px-4">
                   <div className="font-semibold whitespace-nowrap">{new Date(transaction.bookingDate).toISOString().split("T")[0]}</div>
@@ -171,15 +212,19 @@ function PortfolioTransactionTable({
             ))}
           </tbody>
         </table>
+        {loading ? (
+          <div className="border-t border-[color:var(--line-strong)] px-4 py-3 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)]">
+            Loading
+          </div>
+        ) : null}
       </div>
-      {filteredTransactions.length > INITIAL_TRANSACTION_ROWS ? (
+      {error ? (
         <button
-          className="border-t border-[color:var(--line-strong)] px-4 py-3 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-dim)] transition-colors hover:text-white"
-          onClick={() => setShowAllRows((value) => !value)}
+          className="border-t border-[color:var(--line-strong)] px-4 py-3 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--danger)] transition-colors hover:text-white"
+          onClick={loadNext}
           type="button"
         >
-          {showAllRows ? "Show latest" : `Show all ${filteredTransactions.length}`}
-          {hiddenRows > 0 ? <span className="ml-2 text-[color:var(--text-dim)]/60">+{hiddenRows}</span> : null}
+          Retry
         </button>
       ) : null}
     </>

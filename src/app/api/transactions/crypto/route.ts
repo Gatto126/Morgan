@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
 import { internalServerErrorResponse } from "@/server/api/error-response";
 import { apiLogger } from "@/server/logging/logger";
-import { getTradeRepublicCryptoPortfolioData } from "@/server/services/portfolio-data";
+import { getTradeRepublicCryptoPortfolioSummaryData } from "@/server/services/portfolio-data";
 
 const log = apiLogger("CryptoTransactions");
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     await requireOwnedProfile(request, userId);
 
-    const { result, transactionCount } = await getTradeRepublicCryptoPortfolioData(userId);
+    const { result, transactionCount } = await getTradeRepublicCryptoPortfolioSummaryData(userId);
 
     log.response("GET", "/api/transactions/crypto", 200, {
       providers: result.providers.length,

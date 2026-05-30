@@ -247,6 +247,8 @@ export function PortfolioDashboard({
         config={config}
         livePrices={livePrices}
         isActive={isActive}
+        transactionRowsEndpoint={`${config.endpoint}/rows`}
+        userId={userId}
         getProviderLiveTotal={getProviderLiveTotal}
       />
     </div>

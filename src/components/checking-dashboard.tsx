@@ -231,6 +231,7 @@ export function CheckingDashboard({
       <CheckingProviderCards
         portalNode={cardsPortalNode}
         providers={data.providers}
+        userId={userId}
         isActive={isActive}
       />
     </div>

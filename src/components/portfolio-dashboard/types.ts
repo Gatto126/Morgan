@@ -41,7 +41,7 @@ export type PortfolioProviderSummary = {
   interest: number;
   cashback: number;
   tax: number;
-  transactions: PortfolioTransaction[];
+  transactionCount: number;
   products: PortfolioProductSummary[];
 };
 

@@ -11,7 +11,7 @@ const provider: PortfolioProviderSummary = {
   interest: 0,
   cashback: 0,
   tax: 0,
-  transactions: [],
+  transactionCount: 0,
   products: [{
     productName: "iShares Core MSCI World UCITS ETF USD (Acc)",
     quantity: 3.5,

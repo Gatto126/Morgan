@@ -17,7 +17,7 @@ const provider: PortfolioProviderSummary = {
   interest: 0,
   cashback: 0,
   tax: 0,
-  transactions: [],
+  transactionCount: 0,
   products: [
     {
       productName: "Core ETF",

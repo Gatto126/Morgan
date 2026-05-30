@@ -39,7 +39,7 @@ const checkingData: CheckingData = {
     interest: 0,
     cashback: 125,
     tax: 0,
-    transactions: []
+    transactionCount: 0
   }]
 };
 

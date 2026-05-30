@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
 import { internalServerErrorResponse } from "@/server/api/error-response";
 import { apiLogger } from "@/server/logging/logger";
-import { getInvestmentPortfolioData } from "@/server/services/portfolio-data";
+import { getInvestmentPortfolioSummaryData } from "@/server/services/portfolio-data";
 
 const log = apiLogger("Investment");
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     await requireOwnedProfile(request, userId);
 
-    const { result, transactionCount } = await getInvestmentPortfolioData(userId);
+    const { result, transactionCount } = await getInvestmentPortfolioSummaryData(userId);
 
     log.response("GET", "/api/transactions/investment", 200, {
       providers: result.providers.length,

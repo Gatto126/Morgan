@@ -18,7 +18,7 @@ const provider: CheckingProviderSummary = {
   interest: 0,
   cashback: 125,
   tax: 0,
-  transactions: []
+  transactionCount: 0
 };
 
 function digitsOnly(value: string) {
