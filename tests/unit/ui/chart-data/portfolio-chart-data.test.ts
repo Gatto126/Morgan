@@ -86,7 +86,7 @@ describe("portfolio chart data", () => {
     expect(points[2]["iShares Core MSCI World UCITS ETF USD (Acc)"]).toBe(0);
   });
 
-  it("uses monthly buckets for long ALL ranges", () => {
+  it("uses daily buckets for ALL ranges even when monthly buckets are available", () => {
     const points = buildPortfolioChartData({
       data: {
         ...portfolioData,
@@ -118,7 +118,7 @@ describe("portfolio chart data", () => {
       activeProvider: null
     });
 
-    expect(points.map((point) => point.rawMonth)).toEqual(["2026-03", "2026-04"]);
+    expect(points.map((point) => point.rawMonth)).toEqual(["2026-03-14", "2026-03-15", "2026-04-01"]);
   });
 
   it("uses the first visible point for each month as x-axis tick", () => {

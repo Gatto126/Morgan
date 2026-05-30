@@ -72,7 +72,7 @@ describe("checking chart data", () => {
     expect(points[1].expenses).toBe(8650);
   });
 
-  it("uses monthly buckets for long ALL ranges", () => {
+  it("uses daily buckets for ALL ranges even when monthly buckets are available", () => {
     const points = buildCheckingChartData({
       data: {
         ...checkingData,
@@ -97,7 +97,7 @@ describe("checking chart data", () => {
       timeRange: "ALL"
     });
 
-    expect(points.map((point) => point.rawMonth)).toEqual(["2026-03", "2026-04"]);
+    expect(points.map((point) => point.rawMonth)).toEqual(["2026-03-04", "2026-03-08", "2026-04-01"]);
   });
 
   it("uses the first visible point for each month as x-axis tick", () => {

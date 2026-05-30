@@ -58,7 +58,9 @@ export function buildDashboardChartData({
     cryptoInstitutions,
     data
   });
-  const filtered = filterData({ monthly: data.monthlyData, daily: data.dailyData }, timeRange) as DashboardChartBucket[];
+  const filtered = timeRange === "ALL"
+    ? (data.dailyData.length > 0 ? data.dailyData : data.monthlyData) as DashboardChartBucket[]
+    : filterData({ monthly: data.monthlyData, daily: data.dailyData }, timeRange) as DashboardChartBucket[];
 
   return filtered.map((bucket) => {
     const rawMonth = bucket.date || bucket.month;

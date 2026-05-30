@@ -190,7 +190,7 @@ describe("dashboard chart data model", () => {
     expect(points[3].Bitcoin).toBe(0);
   });
 
-  it("uses monthly buckets for long ALL ranges", () => {
+  it("uses daily buckets for ALL ranges even when monthly buckets are available", () => {
     const points = buildDashboardChartData({
       activeTab: "heritage",
       binanceTotalCents: 0,
@@ -227,7 +227,7 @@ describe("dashboard chart data model", () => {
       timeRange: "ALL"
     });
 
-    expect(points.map((point) => point.rawMonth)).toEqual(["2026-01", "2026-02"]);
+    expect(points.map((point) => point.rawMonth)).toEqual(["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]);
   });
 
   it("adds Binance to heritage, crypto and the dedicated Binance series", () => {

@@ -4,7 +4,7 @@ import type { MonthBucket, PortfolioBucket, PortfolioData, PortfolioProviderSumm
 
 export function filterData(data: { monthly: MonthBucket[], daily: PortfolioBucket[] }, range: TimeRange): PortfolioBucket[] {
   if (range === "ALL") {
-    return data.monthly.length > 1 ? data.monthly : data.daily;
+    return data.daily.length > 0 ? data.daily : data.monthly;
   }
 
   const cutoff = new Date();
