@@ -4,8 +4,8 @@ export type MonthBucket = {
   month: string;
   total: number;
   providers: Record<string, number>;
-  providerIncome: Record<string, number>;
-  providerExpenses: Record<string, number>;
+  providerIncome?: Record<string, number>;
+  providerExpenses?: Record<string, number>;
 };
 
 export type CheckingBucket = MonthBucket & {

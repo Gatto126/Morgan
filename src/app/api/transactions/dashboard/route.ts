@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
 import { internalServerErrorResponse } from "@/server/api/error-response";
 import { apiLogger } from "@/server/logging/logger";
-import { getDashboardData } from "@/server/services/dashboard-data";
+import { getDashboardInitialData } from "@/server/services/dashboard-data";
 
 const log = apiLogger("Dashboard");
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     await requireOwnedProfile(request, userId);
 
-    const dashboardData = await getDashboardData(userId);
+    const dashboardData = await getDashboardInitialData(userId);
 
     log.response("GET", "/api/transactions/dashboard", 200, {
       providers: dashboardData.providerSummaries.length,

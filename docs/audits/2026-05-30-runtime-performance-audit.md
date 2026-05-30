@@ -5,6 +5,8 @@
 Branch: `codex/runtime-performance-audit`
 
 Baseline after merging `codex/transaction-payload-lazy-loading` into `main`.
+This report now also includes the payload split implementation performed on the
+same branch.
 The audit focused on runtime behavior with a dense local profile, especially:
 
 - navigation between Home, Dashboard, Checking, Investments, Crypto, Settings;
@@ -15,7 +17,7 @@ The audit focused on runtime behavior with a dense local profile, especially:
 
 ## Dataset
 
-Temporary local account: `rrtmprpmxat`
+Initial audit account: `rrtmprpmxat`
 
 Profile: `Runtime Dense`
 
@@ -35,6 +37,26 @@ Seed summary:
 | Daily asset history rows | 60848 |
 | Binance balance rows | 6 |
 
+Implementation QA account: `perfqaprr181y`
+
+Profile: `perfqaprr181y`
+
+Seed command:
+
+```bash
+pnpm run seed:performance -- --username=perfqaprr181y --profile=perfqaprr181y --years=12 --replace
+```
+
+Seed summary:
+
+| Area | Count |
+| --- | ---: |
+| Checking transactions | 2828 |
+| Investment transactions | 610 |
+| Crypto transactions | 447 |
+| Daily asset history rows | 72528 |
+| Binance balance rows | 6 |
+
 ## Verification
 
 Passed:
@@ -47,7 +69,7 @@ pnpm run test:run
 pnpm run build
 ```
 
-Test result: 53 files passed, 220 tests passed.
+Test result: 54 files passed, 225 tests passed.
 
 Build result: Next production build completed successfully.
 
@@ -68,6 +90,7 @@ Artifacts:
 
 - `artifacts/screenshots/runtime-performance-audit/`
 - `artifacts/screenshots/runtime-performance-audit-contained/`
+- `artifacts/screenshots/runtime-performance-qa/`
 - `artifacts/performance/runtime-audit/network-results.json`
 
 Result:
@@ -77,6 +100,12 @@ Result:
 - chart `ALL` remains daily over the full range;
 - transaction rows load incrementally on scroll;
 - visual screenshots were captured for all target sections.
+
+The final in-app browser reload after the last dev-server restart was blocked
+by the browser sandbox policy. The integrated browser pass had already covered
+Dashboard, Checking, Investments, Crypto, Settings, provider tabs and table
+scroll before that restart. A clean Playwright pass was then run against the
+same local app and dense 12-year profile.
 
 ## Findings
 
@@ -104,6 +133,56 @@ Recommended next implementation:
   object keys per day;
 - keep monthly data available for lightweight initial views while preserving
   daily data for `ALL` when requested.
+
+Applied payload split:
+
+- `/api/transactions/dashboard` now returns the financially complete overview
+  without provider/product/token detail maps.
+- `/api/transactions/dashboard/series` returns the requested detailed series
+  for `checking`, `investment`, or `crypto`.
+- `/api/transactions/checking` strips provider income/expense maps from the
+  initial payload.
+- `/api/transactions/checking/series` returns provider flow series on demand.
+- `/api/transactions/investment` and `/api/transactions/crypto` strip
+  `providerProducts` from the initial payload.
+- `/api/transactions/investment/series` and `/api/transactions/crypto/series`
+  return product/token-level provider series on demand.
+- Client hooks merge detailed series into cached base data only after the user
+  opens the corresponding tab/provider. Idle prefetch was removed so large
+  series are not fetched in the background.
+
+Live price behavior is preserved: provider summaries, holdings, quantities and
+the `/api/prices` request still run on first load, so portfolio/card totals can
+show live values immediately.
+
+12-year QA payload results after the split:
+
+| Endpoint | Trigger | Max decoded body |
+| --- | --- | ---: |
+| `/api/transactions/dashboard` | initial dashboard | 560,023 B |
+| `/api/transactions/dashboard/series?series=investment` | clicked dashboard investment tab | 1,462,120 B |
+| `/api/transactions/dashboard/series?series=crypto` | clicked dashboard crypto tab | 1,074,577 B |
+| `/api/transactions/checking` | opened Checking | 597,621 B |
+| `/api/transactions/checking/series?provider=bbva` | clicked BBVA provider | 876,509 B |
+| `/api/transactions/investment` | opened Investments | 448,853 B |
+| `/api/transactions/investment/series?provider=trade_republic` | clicked TR provider | 1,440,336 B |
+| `/api/transactions/crypto` | opened Crypto | 447,845 B |
+| `/api/transactions/crypto/series?provider=trade_republic` | clicked TR provider | 1,033,373 B |
+| `/api/prices` | first live price refresh | 247 B |
+
+Observed chart line counts in the clean browser pass:
+
+| Section | Visible line paths |
+| --- | ---: |
+| Dashboard | 4 |
+| Dashboard investment tab | 6 |
+| Dashboard crypto tab | 2 |
+| Checking | 4 |
+| Checking provider | 3 |
+| Investments | 2 |
+| Investments provider | 6 |
+| Crypto | 2 |
+| Crypto provider | 6 |
 
 ### P2 - Hidden dashboard stages still occupy DOM/render budget
 
@@ -143,6 +222,13 @@ Observed row page requests:
 - initial `limit=20&offset=0`;
 - then incremental `limit=10` pages at offsets `20`, `30`, `40`, `50`, `60`.
 
+Follow-up QA on the 12-year profile confirmed the same model:
+
+- initial provider row requests use `limit=20&offset=0`;
+- table scroll triggered `limit=10&offset=20` and `limit=10&offset=30`;
+- visible checking rows increased from 60 to 80 after scrolling, without loading
+  the full 2828-row dataset.
+
 This matches the desired scroll-driven loading model.
 
 ### P3 - Settings overlay keeps the last dashboard visible below it
@@ -161,10 +247,15 @@ Recommended follow-up:
 
 ## Current State
 
-The branch is healthy after the first runtime optimization. The most valuable
-next step is a payload-focused change, not more loader work:
+The branch is healthy after the payload split and hidden-stage containment.
+Initial views still show the same totals, cards, live prices and daily `ALL`
+charts, while deep provider/product/token series are now fetched only when the
+user opens the relevant detailed tab/provider.
 
-1. introduce separate initial summary vs detailed chart endpoints;
-2. move detailed product/token daily maps behind on-demand requests;
-3. re-run the same dense-profile network baseline and compare raw bytes and
-   navigation timings.
+Recommended next optimization:
+
+1. compact the base daily chart transport, because repeated JSON object keys are
+   now the largest remaining initial-payload cost;
+2. consider server-side memoization for expensive dense-profile series builders;
+3. pause or contain the active background dashboard while settings/profile/upload
+   overlays are open.

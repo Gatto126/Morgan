@@ -106,7 +106,7 @@ export function buildPortfolioChartData({
       });
 
       point.balance = Math.abs(bucket.providers[activeTab] || 0);
-      const prodData = bucket.providerProducts[activeTab] || {};
+      const prodData = bucket.providerProducts?.[activeTab] || {};
 
       activeProvider?.products.forEach(product => {
         const productName = product.productName;

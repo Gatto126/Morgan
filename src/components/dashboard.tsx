@@ -136,7 +136,8 @@ export function Dashboard({
     data,
     hasBinancePortfolio,
     investmentCount,
-    transactionCount
+    transactionCount,
+    userId
   });
   const {
     getGlobalCryptoLiveTotal,
