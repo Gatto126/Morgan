@@ -50,10 +50,7 @@ Apply migrations and validate:
 
 ```powershell
 pnpm run db:migrate
-pnpm run lint
-pnpm exec tsc --noEmit
-pnpm run test:run
-pnpm run build
+pnpm run release:check
 pnpm run smoke:upload-panel
 ```
 
@@ -113,12 +110,10 @@ pnpm dlx vercel --prod
 
 - Docker Postgres is healthy.
 - `pnpm run db:migrate` succeeds against the target database.
-- `pnpm run lint` succeeds.
-- `pnpm exec tsc --noEmit` succeeds.
-- `pnpm run test:run` succeeds.
-- `pnpm run build` succeeds.
+- `pnpm run release:check` succeeds.
 - `pnpm run smoke:upload-panel` succeeds against the local Postgres database.
 - `pnpm run smoke:upload-panel:docker` succeeds against the Docker production app.
 - `pnpm run e2e:docker:full` succeeds for release-candidate checks; Binance is
   included only when test API variables are provided.
 - Vercel Preview uses a preview database, not production.
+- `docs/deployment/release-readiness.md` is complete for the target release.

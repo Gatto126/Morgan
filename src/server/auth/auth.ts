@@ -33,7 +33,13 @@ const isNextProductionBuild =
 
 if (!isNextProductionBuild && !authConfigWarningState.__morganAuthConfigWarningsEmitted) {
   authConfigWarningState.__morganAuthConfigWarningsEmitted = true;
-  for (const warning of getAuthDeploymentWarnings()) {
+  const deploymentWarnings = getAuthDeploymentWarnings();
+
+  if (process.env.NODE_ENV === "production" && deploymentWarnings.length > 0) {
+    throw new Error(`Invalid production deployment configuration:\n- ${deploymentWarnings.join("\n- ")}`);
+  }
+
+  for (const warning of deploymentWarnings) {
     console.warn(`[auth-config] ${warning}`);
   }
 }

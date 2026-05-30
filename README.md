@@ -119,6 +119,7 @@ pnpm run lint             # Run ESLint
 pnpm run typecheck        # Typecheck application code without tests
 pnpm run typecheck:test   # Typecheck tests and fixtures
 pnpm run test:run         # Run unit tests
+pnpm run release:check    # Run lint, typecheck, tests, and production build
 pnpm run test:unit        # Run tests already migrated under tests/unit
 pnpm run test:scripts     # Run script helper tests
 pnpm run test:rate-limit:clear # Clear Better Auth test rate limits on safe local/explicit test DBs
@@ -179,6 +180,7 @@ src/
 - [Runtime targets and storage decision](docs/architecture/targets.md)
 - [Repository structure and duplication rules](docs/architecture/repo-structure.md)
 - [Docker pre-production](docs/deployment/docker-preprod.md)
+- [Release readiness](docs/deployment/release-readiness.md)
 - [SQLite local runtime scaffold](docs/deployment/sqlite-local.md)
 - [Vercel and Postgres deployment](docs/deployment/vercel-postgres.md)
 - [Testing and script layout](docs/testing/README.md)
