@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect } from "react";
 import type { UIEvent } from "react";
 
+import { SlotValue } from "@/components/finance-shell/slot-value";
 import { scheduleIdleTask, useDeferredTransactionRows } from "@/hooks/use-deferred-transaction-rows";
 import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transaction-rows";
 import { cn } from "@/shared/utils";
@@ -59,7 +60,7 @@ export function CheckingProviderCards({
                   {formatProviderLabel(provider.sourceInstitution)}
                 </span>
                 <span className="text-sm font-bold text-[color:var(--text-main)]">
-                  {formatEuroCents(provider.total)}
+                  <SlotValue value={formatEuroCents(provider.total)} />
                 </span>
               </div>
               <div className="mt-4 space-y-1.5 text-sm">
@@ -67,26 +68,26 @@ export function CheckingProviderCards({
                 <div className="flex justify-between">
                   <span className="pl-3 text-[color:var(--text-dim)] font-medium">Income</span>
                   <span className="font-semibold text-[color:var(--text-main)]">
-                    {formatEuroCents(provider.income)}
+                    <SlotValue value={formatEuroCents(provider.income)} />
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="pl-3 text-[color:var(--text-dim)] font-medium">Expenses</span>
                   <span className="font-semibold text-[color:var(--text-main)]">
-                    {formatEuroCents(provider.expenses)}
+                    <SlotValue value={formatEuroCents(provider.expenses)} />
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="pl-3 text-[color:var(--text-dim)] font-medium">Interest</span>
                   <span className="font-semibold text-[color:var(--text-main)]">
-                    {formatEuroCents(provider.interest)}
+                    <SlotValue value={formatEuroCents(provider.interest)} />
                   </span>
                 </div>
                 {provider.cashback !== 0 && (
                   <div className="flex justify-between">
                     <span className="pl-3 text-[color:var(--text-dim)] font-medium">Cashback</span>
                     <span className="font-semibold text-[color:var(--text-main)]">
-                      {formatEuroCents(provider.cashback)}
+                      <SlotValue value={formatEuroCents(provider.cashback)} />
                     </span>
                   </div>
                 )}
@@ -94,7 +95,7 @@ export function CheckingProviderCards({
                   <div className="flex justify-between">
                     <span className="pl-3 text-[color:var(--text-dim)] font-medium">Tax</span>
                     <span className="font-semibold text-[color:var(--text-main)]">
-                      {formatEuroCents(provider.tax)}
+                      <SlotValue value={formatEuroCents(provider.tax)} />
                     </span>
                   </div>
                 )}

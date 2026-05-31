@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChartPie } from "lucide-react";
-import { Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import { Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 
 import { SelectableChartDot } from "@/components/chart-primitives/selectable-chart-dot";
 import {
@@ -18,7 +18,6 @@ import type { AccountTab, BinanceBalanceRow, DashboardData } from "@/components/
 import { useDashboardLivePrices } from "@/components/dashboard/use-dashboard-live-prices";
 import { useDashboardLiveTotals } from "@/components/dashboard/use-dashboard-live-totals";
 import { DashboardTopbarTab } from "@/components/finance-shell/dashboard-topbar-tab";
-import { PortfolioPreviewChart } from "@/components/portfolio-preview-chart";
 import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
 
 import type { UserRecord } from "./types";
@@ -50,6 +49,7 @@ type HeritageTooltipProps = {
 
 const FALLBACK_CHART_SIZE = { width: 520, height: 320 };
 const WELCOME_HERITAGE_BODY = "Your Heritage value across all profiles, cash, ETF, stock and crypto positions.";
+const WELCOME_BACKGROUND_GRID_LINES = [22, 42, 62, 82];
 
 function WelcomeHeritageTooltip({ active, payload, setActivePoint }: HeritageTooltipProps) {
   useEffect(() => {
@@ -77,7 +77,7 @@ export function WelcomeHeritagePreview({
     () => records.flatMap((record) => record.binanceBalances),
     [records]
   );
-  const livePrices = useDashboardLivePrices(combinedData?.providerSummaries, {
+  const { livePrices } = useDashboardLivePrices(combinedData?.providerSummaries, {
     isActive,
     shouldLoad: shouldLoad && !!combinedData
   });
@@ -106,22 +106,12 @@ export function WelcomeHeritagePreview({
     : Number(latestPoint?.heritage ?? 0);
   const topbarValue = Number(activePoint?.heritage ?? currentHeritageValue);
   const yDomain = getWelcomeYDomain(heritageValues);
-  const yGridLines = getWelcomeGridLines(yDomain);
   const hasChartData = heritageValues.length > 0;
   const xAxisLabels = useMemo(
-    () => xAxisTicks.map((tick) => formatWelcomeXAxisTick(tick)),
-    [xAxisTicks]
+    () => hasChartData ? xAxisTicks.map((tick) => formatWelcomeXAxisTick(tick)) : [],
+    [hasChartData, xAxisTicks]
   );
-
-  if (!hasChartData) {
-    return (
-      <PortfolioPreviewChart
-        ariaLabel="Heritage preview"
-        body={WELCOME_HERITAGE_BODY}
-        className="max-w-[520px]"
-      />
-    );
-  }
+  const topbarDisplayValue = formatEuroCents(hasChartData ? topbarValue : 0);
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[520px] flex-col justify-center">
@@ -129,13 +119,36 @@ export function WelcomeHeritagePreview({
         <div className="hide-scrollbar absolute left-0 top-10 z-20 flex gap-2 overflow-x-auto px-1 pb-1 [&_.dashboard-topbar-currency-icon]:h-3.5 [&_.dashboard-topbar-currency-icon]:w-3.5 [&_.dashboard-topbar-line]:gap-2 [&_.dashboard-topbar-tab]:h-10 [&_.dashboard-topbar-tab]:w-[146px] [&_.dashboard-topbar-tab]:rounded-[14px] [&_.dashboard-topbar-tab]:px-2 sm:top-12 sm:[&_.dashboard-topbar-currency-icon]:h-4 sm:[&_.dashboard-topbar-currency-icon]:w-4 sm:[&_.dashboard-topbar-line]:gap-3 sm:[&_.dashboard-topbar-tab]:h-12 sm:[&_.dashboard-topbar-tab]:w-[178px] sm:[&_.dashboard-topbar-tab]:rounded-[16px] sm:[&_.dashboard-topbar-tab]:px-3">
           <DashboardTopbarTab
             active
-            ariaLabel="Heritage preview"
+            animateChanges={hasChartData && !activePoint}
+            ariaLabel={hasChartData ? "Heritage preview" : "Heritage preview loading"}
             icon={ChartPie}
-            value={formatEuroCents(topbarValue)}
+            value={topbarDisplayValue}
           />
         </div>
 
         <div ref={chartContainerRef} className="absolute inset-x-0 top-0 h-[320px] overflow-visible">
+          <svg
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full overflow-visible"
+            focusable="false"
+            role="presentation"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+          >
+            {WELCOME_BACKGROUND_GRID_LINES.map((value) => (
+              <line
+                key={value}
+                x1="5.4"
+                x2="94.6"
+                y1={value}
+                y2={value}
+                stroke="rgba(154,154,154,0.12)"
+                strokeDasharray="3 3"
+                strokeWidth="0.35"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </svg>
           <LineChart
             accessibilityLayer={false}
             data={chartData}
@@ -162,20 +175,11 @@ export function WelcomeHeritagePreview({
               tickLine={false}
               width={0}
             />
-            {yGridLines.map((value) => (
-              <ReferenceLine
-                ifOverflow="extendDomain"
-                key={value}
-                stroke="rgba(154,154,154,0.12)"
-                strokeDasharray="3 3"
-                y={value}
-              />
-            ))}
             <Tooltip
               content={<WelcomeHeritageTooltip setActivePoint={setActivePoint} />}
               cursor={{ stroke: "rgba(255,255,255,0.12)", strokeWidth: 1, fill: "transparent" }}
             />
-            {frameReady ? (
+            {frameReady && hasChartData ? (
               <Line
                 activeDot={(props: HeritageActiveDotProps) => (
                   <SelectableChartDot
@@ -233,18 +237,16 @@ export function WelcomeHeritagePreview({
 }
 
 function getWelcomeYDomain(values: number[]): [number, number] {
+  if (values.length === 0) {
+    return [0, 5];
+  }
+
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = Math.max(1, max - min);
   const padding = Math.max(50_000, Math.round(range * 0.12));
 
   return [Math.max(0, min - padding), max + padding];
-}
-
-function getWelcomeGridLines([min, max]: [number, number]) {
-  const step = (max - min) / 4;
-
-  return [0, 1, 2, 3].map((index) => Math.round(min + step * (index + 1)));
 }
 
 function getCombinedDashboardData(records: AccountPortfolioPreviewRecord[]): DashboardData | null {

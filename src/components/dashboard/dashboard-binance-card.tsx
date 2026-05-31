@@ -1,6 +1,8 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
+import { SlotValue } from "@/components/finance-shell/slot-value";
+
 import {
   DashboardAssetHeader,
   DashboardMetricRow
@@ -67,7 +69,7 @@ export function DashboardBinanceCard({
               : <Eye className="h-3.5 w-3.5" strokeWidth={2.2} />}
           </div>
           <span className="text-sm font-bold text-[color:var(--text-main)]">
-            {euroFormatter.format(totalValue)}
+            <SlotValue animateChanges value={euroFormatter.format(totalValue)} />
           </span>
         </div>
       </div>
@@ -80,6 +82,7 @@ export function DashboardBinanceCard({
             <div key={token.tokenSymbol}>
               <hr className="mb-3 border-[color:var(--line-strong)] opacity-50" />
               <DashboardAssetHeader
+                animateValueChanges
                 name={token.tokenName ? `${token.tokenName} (${token.tokenSymbol})` : token.tokenSymbol}
                 value={euroFormatter.format(token.eurValue)}
               />
@@ -94,7 +97,7 @@ export function DashboardBinanceCard({
                     value={token.lockedAmount.toLocaleString("it-IT", { maximumFractionDigits: 8 })}
                   />
                 )}
-                <DashboardMetricRow label="Current Value" value={euroFormatter.format(token.eurValue)} />
+                <DashboardMetricRow animateValueChanges label="Current Value" value={euroFormatter.format(token.eurValue)} />
               </div>
             </div>
           );

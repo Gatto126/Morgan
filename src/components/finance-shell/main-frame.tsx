@@ -2,6 +2,7 @@ import type { ChangeEvent, ReactNode, RefObject } from "react";
 
 import PlusIcon from "../ui/plus-icon";
 import { DashboardStageStack } from "./dashboard-stage-stack";
+import { DashboardTopbarShell } from "./dashboard-topbar-shell";
 import { SidebarNavigation } from "./sidebar-navigation";
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
@@ -87,7 +88,13 @@ export function FinanceShellMainFrame({
 
           <div className="min-w-0">
             <div className="flex h-16 w-full items-center justify-between rounded-[22px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-shell)] px-3">
-              <div ref={dashboardTabsPortalRef} id="dashboard-tabs-portal" className="flex h-full min-w-0 flex-1 items-center overflow-x-auto hide-scrollbar mr-2" />
+              <div ref={dashboardTabsPortalRef} id="dashboard-tabs-portal" className="flex h-full min-w-0 flex-1 items-center overflow-x-auto hide-scrollbar mr-2">
+                <DashboardTopbarShell
+                  activeUser={activeUser}
+                  isDashboardStage={isDashboardStage}
+                  stage={stage}
+                />
+              </div>
               {activeUser ? (
                 <button
                   aria-label="Add document"

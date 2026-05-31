@@ -8,28 +8,35 @@ import {
   getDashboardTopbarValueParts,
   getDashboardTopbarValueTextClass
 } from "./dashboard-topbar-tab-model";
+import { SlotValue } from "./slot-value";
 
 type DashboardTopbarTabProps = {
   active: boolean;
+  animateChanges?: boolean;
   ariaLabel?: string;
   icon?: LucideIcon;
   label?: string;
   onClick?: () => void;
   value: string;
+  valueIdentity?: string;
 };
 
 export function DashboardTopbarTab({
   active,
+  animateChanges = false,
   ariaLabel,
   icon: Icon,
   label,
   onClick,
-  value
+  value,
+  valueIdentity
 }: DashboardTopbarTabProps) {
   const { amount, currency } = getDashboardTopbarValueParts(value);
   const showEuroIcon = currency === "EUR" || currency === "\u20ac";
+  const hasTextIdentity = !!label;
   const valueClassName = cn(
-    "dashboard-topbar-value flex h-5 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap text-center font-extrabold leading-none text-white tabular-nums",
+    "dashboard-topbar-value flex h-5 shrink-0 items-center justify-end overflow-hidden whitespace-nowrap text-right font-extrabold leading-none text-white tabular-nums",
+    hasTextIdentity ? "w-[72px]" : "w-[82px] sm:w-[86px]",
     getDashboardTopbarValueTextClass(value)
   );
 
@@ -38,19 +45,18 @@ export function DashboardTopbarTab({
       aria-label={ariaLabel}
       aria-disabled={active ? "true" : undefined}
       className={cn(
-        "dashboard-topbar-tab flex h-12 w-[178px] flex-shrink-0 items-center justify-center rounded-[16px] border-2 px-3 text-[11px] font-extrabold uppercase transition-colors has-lucide",
+        "dashboard-topbar-tab flex h-12 w-[178px] flex-shrink-0 items-center justify-center rounded-[16px] border-2 px-3 text-[11px] font-extrabold uppercase has-lucide",
         onClick && !active ? "cursor-pointer" : "cursor-default",
         active
           ? "border-white bg-[color:var(--surface-panel)] text-white"
-          : "border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--text-dim)]",
-        onClick && !active && "hover:border-white hover:bg-[color:var(--surface-elevated)] hover:text-white"
+          : "border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--text-dim)]"
       )}
       data-active={active ? "true" : "false"}
       onClick={active ? undefined : onClick}
       type="button"
     >
-      <span className="dashboard-topbar-line flex h-5 min-w-0 items-center justify-center gap-3">
-        <span className="dashboard-topbar-identity flex h-5 shrink-0 items-center justify-center overflow-hidden">
+      <span className="dashboard-topbar-line flex h-5 w-full min-w-0 items-center justify-center gap-3">
+        <span className={cn("dashboard-topbar-identity flex h-5 shrink-0 items-center justify-center overflow-hidden", hasTextIdentity ? "w-[34px]" : "w-4 sm:w-5")}>
           {label ? (
             <span className={cn("flex h-5 items-center whitespace-nowrap text-center font-extrabold leading-none", getDashboardTopbarIdentityTextClass(label))}>
               {label}
@@ -59,11 +65,11 @@ export function DashboardTopbarTab({
             <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={2.2} />
           ) : null}
         </span>
-        <span className="dashboard-topbar-money flex h-5 min-w-0 items-center justify-center gap-1.5">
+        <span className={cn("dashboard-topbar-money flex h-5 shrink-0 items-center justify-end gap-1.5", hasTextIdentity ? "w-[94px]" : "w-[104px] sm:w-[108px]")}>
           <span className={valueClassName} title={value}>
-            {amount}
+            <SlotValue animateChanges={animateChanges} identityKey={valueIdentity} value={amount} />
           </span>
-          <span className="dashboard-topbar-currency flex h-5 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap text-[11px] font-extrabold leading-none text-white" title={currency}>
+          <span className="dashboard-topbar-currency flex h-5 w-4 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap text-[11px] font-extrabold leading-none text-white" title={currency}>
             {showEuroIcon ? (
               <Euro aria-hidden="true" className="dashboard-topbar-currency-icon block h-4 w-4 -translate-y-px text-white" stroke="white" strokeWidth={2.4} />
             ) : currency}

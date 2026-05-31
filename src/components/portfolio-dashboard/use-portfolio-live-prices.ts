@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchAndCacheLivePrices, globalLivePricesCache } from "@/shared/live-prices";
+import {
+  fetchAndCacheLivePrices,
+  globalLivePricesCache
+} from "@/shared/live-prices";
 
 import type { PortfolioDashboardConfig, PortfolioProviderSummary } from "./types";
 
@@ -11,6 +14,40 @@ type UsePortfolioLivePricesOptions = {
   shouldLoad: boolean;
 };
 
+const livePriceValueMaxAgeMs = 15_000;
+
+function getRequiredPriceKeys(providers: PortfolioProviderSummary[] | undefined) {
+  if (!providers) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      providers
+        .flatMap((provider) => provider.products)
+        .filter((product) => product.isin && product.quantity > 0.000001)
+        .map((product) => product.isin as string)
+    )
+  ].sort();
+}
+
+function getPriceRequestKey(
+  providers: PortfolioProviderSummary[] | undefined,
+  priceQueryParam: PortfolioDashboardConfig["priceQueryParam"]
+) {
+  const keys = getRequiredPriceKeys(providers);
+
+  return keys.length > 0 ? `${priceQueryParam}:${keys.join(",")}` : "";
+}
+
+function areLivePricesReady(keys: string[], livePrices: Record<string, number | null>) {
+  if (keys.length === 0) {
+    return true;
+  }
+
+  return keys.every((key) => livePrices[key] != null);
+}
+
 export function usePortfolioLivePrices({
   providers,
   priceQueryParam,
@@ -18,6 +55,8 @@ export function usePortfolioLivePrices({
   shouldLoad
 }: UsePortfolioLivePricesOptions) {
   const [livePrices, setLivePrices] = useState<Record<string, number | null>>(globalLivePricesCache);
+  const [readyRequestKey, setReadyRequestKey] = useState("");
+  const [pricesReady, setPricesReady] = useState(false);
   const lastPreloadKeyRef = useRef("");
 
   const fetchLivePrices = useCallback(async (currentProviders: PortfolioProviderSummary[]) => {
@@ -31,8 +70,18 @@ export function usePortfolioLivePrices({
 
     const prices = await fetchAndCacheLivePrices({
       [priceQueryParam]: [...allIsins]
-    });
+    }, { maxAgeMs: livePriceValueMaxAgeMs });
+    const requiredKeys = getRequiredPriceKeys(currentProviders);
+    const requestKey = getPriceRequestKey(currentProviders, priceQueryParam);
+
     setLivePrices(prev => ({ ...prev, ...prices }));
+    if (areLivePricesReady(requiredKeys, prices)) {
+      setReadyRequestKey(requestKey);
+      setPricesReady(true);
+    } else {
+      setReadyRequestKey("");
+      setPricesReady(false);
+    }
   }, [priceQueryParam]);
 
   useEffect(() => {
@@ -76,5 +125,10 @@ export function usePortfolioLivePrices({
     };
   }, [providers, fetchLivePrices, isActive]);
 
-  return livePrices;
+  const requestKey = getPriceRequestKey(providers, priceQueryParam);
+
+  return {
+    livePrices,
+    pricesReady: requestKey === "" || (pricesReady && readyRequestKey === requestKey)
+  };
 }

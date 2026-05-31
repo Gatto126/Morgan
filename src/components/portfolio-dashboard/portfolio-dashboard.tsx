@@ -67,7 +67,7 @@ export function PortfolioDashboard({
   const completedImportRefreshVersionRef = useRef(0);
   const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
   const isMobile = useIsMobile();
-  const livePrices = usePortfolioLivePrices({
+  const { livePrices } = usePortfolioLivePrices({
     providers: data?.providers,
     priceQueryParam: config.priceQueryParam,
     isActive,
@@ -85,8 +85,8 @@ export function PortfolioDashboard({
     setHiddenSeries(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const tabsPortalNode = usePortalNode("dashboard-tabs-portal");
   const cardsPortalNode = usePortalNode("dashboard-cards-portal");
+  const dashboardStage = config.endpoint.includes("/crypto") ? "crypto" : "investment";
 
   const activeProvider = useMemo(() => {
     return data?.providers.find(p => p.sourceInstitution === activeTab) || null;
@@ -117,6 +117,34 @@ export function PortfolioDashboard({
       })
     );
   }, [activeProvider, activeTab, chartData, data]);
+
+  const getProviderLiveTotal = (provider: PortfolioProviderSummary) => {
+    let liveTotal = 0;
+    let hasHoldings = false;
+    for (const prod of provider.products) {
+      if (Math.abs(prod.quantity) > 0.000001) {
+        hasHoldings = true;
+        const livePrice = prod.isin ? livePrices[prod.isin] : null;
+        if (livePrice != null) {
+          liveTotal += Math.round(prod.quantity * livePrice * 100);
+        } else {
+          liveTotal += prod.investedValue;
+        }
+      }
+    }
+    return hasHoldings ? liveTotal : provider.total;
+  };
+  const allTotal = data?.providers.reduce((sum, p) => sum + getProviderLiveTotal(p), 0) ?? 0;
+  const tabs: PortfolioDashboardTab[] = data
+    ? [
+        { key: "ALL", label: config.rootLabel, total: allTotal },
+        ...data.providers.map(p => ({
+          key: p.sourceInstitution,
+          label: formatProviderLabel(p.sourceInstitution),
+          total: getProviderLiveTotal(p)
+        }))
+      ]
+    : [{ key: "ALL", label: config.rootLabel, total: 0 }];
 
   const effectiveChartReady = !isPanelOpen && chartReady;
   const initialVisualReady =
@@ -167,30 +195,19 @@ export function PortfolioDashboard({
         style={getDashboardStageVisibilityStyle(isActive)}
       >
         <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
+        <PortfolioDashboardTabs
+          tabs={tabs}
+          activeTab={activeTab}
+          activePoint={null}
+          rootIcon={config.rootIcon}
+          valuesKnown={false}
+          stage={dashboardStage}
+          userId={userId}
+          onSelectTab={setActiveTab}
+        />
       </div>
     );
   }
-
-  const getProviderLiveTotal = (provider: PortfolioProviderSummary) => {
-    let liveTotal = 0;
-    let hasHoldings = false;
-    for (const prod of provider.products) {
-      if (Math.abs(prod.quantity) > 0.000001) {
-        hasHoldings = true;
-        const livePrice = prod.isin ? livePrices[prod.isin] : null;
-        if (livePrice != null) {
-          liveTotal += Math.round(prod.quantity * livePrice * 100);
-        } else {
-          liveTotal += prod.investedValue;
-        }
-      }
-    }
-    // Only return liveTotal if there are actual holdings, else use the static total (for historical pure cash accounts etc)
-    return hasHoldings ? liveTotal : provider.total;
-  };
-
-  const allTotal = data.providers.reduce((sum, p) => sum + getProviderLiveTotal(p), 0);
-  const tabs: PortfolioDashboardTab[] = [{ key: "ALL", label: config.rootLabel, total: allTotal }, ...data.providers.map(p => ({ key: p.sourceInstitution, label: formatProviderLabel(p.sourceInstitution), total: getProviderLiveTotal(p) }))];
 
   return (
     <div
@@ -199,12 +216,12 @@ export function PortfolioDashboard({
     >
       <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
       <PortfolioDashboardTabs
-        portalNode={tabsPortalNode}
         tabs={tabs}
         activeTab={activeTab}
         activePoint={activePoint}
         rootIcon={config.rootIcon}
-        isActive={isActive}
+        stage={dashboardStage}
+        userId={userId}
         onSelectTab={setActiveTab}
       />
 

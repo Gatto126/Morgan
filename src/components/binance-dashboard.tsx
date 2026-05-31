@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { Bitcoin, X } from "lucide-react";
 import { Line, LineChart, CartesianGrid, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { ChartLegend } from "./chart-primitives/chart-legend";
@@ -9,7 +8,6 @@ import { ChartReferenceLabel } from "./chart-primitives/chart-reference-label";
 import { ChartTimeRangeControls } from "./chart-primitives/chart-time-range-controls";
 import { SelectableChartDot } from "./chart-primitives/selectable-chart-dot";
 import { BinanceChartTooltip } from "./binance-dashboard/binance-chart-tooltip";
-import { DashboardTopbarTab } from "./finance-shell/dashboard-topbar-tab";
 import {
   BINANCE_CHART_LEGEND_ITEMS,
   BINANCE_TIME_RANGES,
@@ -26,8 +24,8 @@ import {
   fetchDashboardStageData,
   readDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
+import { usePublishDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
 import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
-import { usePortalNode } from "@/hooks/use-portal-node";
 import { cn } from "@/shared/utils";
 import type { ActiveDotProps } from "@/types/chart";
 
@@ -92,6 +90,7 @@ export function BinanceDashboard({
   const [balances, setBalances] = useState<BinanceBalance[]>(
     Array.isArray(initialBinancePayload?.balances) ? initialBinancePayload.balances as BinanceBalance[] : []
   );
+  const [balancesLoaded, setBalancesLoaded] = useState(!!initialBinancePayload);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
@@ -108,6 +107,7 @@ export function BinanceDashboard({
     if (Array.isArray(data.balances)) {
       setBalances(data.balances as BinanceBalance[]);
     }
+    setBalancesLoaded(true);
   }, [binanceRefreshKey, userId]);
 
   useEffect(() => {
@@ -140,6 +140,7 @@ export function BinanceDashboard({
 
       if (Array.isArray(data.balances)) {
         setBalances(data.balances);
+        setBalancesLoaded(true);
       } else {
         await loadBalances({ force: true });
       }
@@ -153,13 +154,13 @@ export function BinanceDashboard({
   }
 
   const totalEur = useMemo(() => balances.reduce((sum, b) => sum + b.eurValue, 0), [balances]);
+  const topbarValue = balancesLoaded ? formatBinanceEuro(totalEur) : "--";
 
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;
   const { chartContainerRef, renderedChartSize, seriesReady } = useStableChartFrame({
     fallbackSize: FALLBACK_CHART_SIZE
   });
-  const tabsPortalNode = usePortalNode("dashboard-tabs-portal");
 
   const allDailyData = useMemo(() => buildBinanceDailyChartData(totalEur), [totalEur]);
   const chartData = useMemo(() => filterBinanceChartData(allDailyData, timeRange), [allDailyData, timeRange]);
@@ -193,23 +194,19 @@ export function BinanceDashboard({
       {userSelectElement}
     </div>
   ) : null;
+  const topbarItems = useMemo(() => [{
+    active: true,
+    animateChanges: true,
+    icon: Bitcoin,
+    id: "binance",
+    label: "BINANCE",
+    value: topbarValue
+  }], [topbarValue]);
+
+  usePublishDashboardTopbar("binance", userId, topbarItems);
 
   return (
     <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4 overflow-hidden", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
-      {/* Tabs Portal */}
-      {tabsPortalNode &&
-        createPortal(
-          <div className={cn("flex items-center gap-2", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
-            <DashboardTopbarTab
-              active
-              icon={Bitcoin}
-              label="BINANCE"
-              value={formatBinanceEuro(totalEur)}
-            />
-          </div>,
-          tabsPortalNode
-        )}
-
       {/* Chart Area */}
       <div className="relative flex w-full flex-1 flex-col justify-center overflow-hidden rounded-[18px] min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px]">
         <div

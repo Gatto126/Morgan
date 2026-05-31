@@ -1,54 +1,53 @@
-import { createPortal } from "react-dom";
+import { useMemo } from "react";
 import { Landmark } from "lucide-react";
 
-import { DashboardTopbarTab } from "@/components/finance-shell/dashboard-topbar-tab";
-import { cn } from "@/shared/utils";
+import { usePublishDashboardTopbar, type DashboardTopbarItem } from "@/components/finance-shell/dashboard-topbar-store";
 import type { ChartPoint } from "@/types/chart";
 
 import { formatEuroCents, getAbbreviatedLabel } from "./formatters";
 import type { CheckingDashboardTab } from "./types";
 
 type CheckingDashboardTabsProps = {
-  portalNode: HTMLElement | null;
   tabs: CheckingDashboardTab[];
   activeTab: string;
   activePoint: ChartPoint | null;
-  isActive: boolean;
+  valuesKnown?: boolean;
+  userId: string;
   onSelectTab: (tabKey: string) => void;
 };
 
 export function CheckingDashboardTabs({
-  portalNode,
   tabs,
   activeTab,
   activePoint,
-  isActive,
+  valuesKnown = true,
+  userId,
   onSelectTab
 }: CheckingDashboardTabsProps) {
-  if (!portalNode) return null;
-
-  return createPortal(
-    <div className={cn("flex items-center gap-2", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
-      {tabs.map((tab) => {
+  const items = useMemo<DashboardTopbarItem[]>(
+    () => tabs.map((tab) => {
         const isSelected = activeTab === tab.key;
-        const value = formatEuroCents(
-          activePoint
-            ? Number(tab.key === "ALL" ? (activePoint.heritage ?? 0) : (activePoint[tab.key] ?? 0))
-            : tab.total
-        );
+        const value = valuesKnown
+          ? formatEuroCents(
+              activePoint
+                ? Number(tab.key === "ALL" ? (activePoint.heritage ?? 0) : (activePoint[tab.key] ?? 0))
+                : tab.total
+            )
+          : "--";
 
-        return (
-          <DashboardTopbarTab
-            active={isSelected}
-            icon={tab.key === "ALL" ? Landmark : undefined}
-            key={tab.key}
-            label={tab.key === "ALL" ? undefined : getAbbreviatedLabel(tab.label)}
-            onClick={() => onSelectTab(tab.key)}
-            value={value}
-          />
-        );
-      })}
-    </div>,
-    portalNode
+        return {
+          active: isSelected,
+          icon: tab.key === "ALL" ? Landmark : undefined,
+          id: tab.key === "ALL" ? "checking" : `checking:${tab.key}`,
+          label: tab.key === "ALL" ? undefined : getAbbreviatedLabel(tab.label),
+          onClick: () => onSelectTab(tab.key),
+          value
+        };
+      }),
+    [activePoint, activeTab, onSelectTab, tabs, valuesKnown]
   );
+
+  usePublishDashboardTopbar("checking", userId, items);
+
+  return null;
 }

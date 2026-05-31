@@ -20,6 +20,10 @@ type DashboardCryptoCardsProps = {
   getProviderCryptoLiveTotal: (provider: ProviderSummary) => number;
 };
 
+function getFallbackUnitPriceCents(investedValue: number, quantity: number) {
+  return Math.abs(quantity) > 0.000001 ? Math.round(investedValue / quantity) : investedValue;
+}
+
 export function DashboardCryptoCards({
   providers,
   livePrices,
@@ -43,26 +47,36 @@ export function DashboardCryptoCards({
 
   return (
     <div className="flex flex-col gap-5">
-      {providersWithTokens.map((provider) => (
-        <DashboardCardShell
-          key={`crypto-${provider.sourceInstitution}`}
-          title={formatProviderLabel(provider.sourceInstitution)}
-          value={formatEuroCents(getProviderCryptoLiveTotal(provider))}
-        >
-          <div className="space-y-4">
-            {provider.cryptoTokens.map((token) => {
+      {providersWithTokens.map((provider) => {
+        const providerHasLivePrice = provider.cryptoTokens.some((token) =>
+          token.tokenSymbol ? livePrices[token.tokenSymbol] != null : false
+        );
+
+        return (
+          <DashboardCardShell
+            animateValueChanges={providerHasLivePrice}
+            key={`crypto-${provider.sourceInstitution}`}
+            title={formatProviderLabel(provider.sourceInstitution)}
+            value={formatEuroCents(getProviderCryptoLiveTotal(provider))}
+          >
+            <div className="space-y-4">
+              {provider.cryptoTokens.map((token) => {
               const price = token.tokenSymbol ? livePrices[token.tokenSymbol] : null;
               const currentValueCents = price == null
                 ? token.investedValue
                 : Math.round(token.quantity * price * 100);
+              const unitPriceCents = price == null
+                ? getFallbackUnitPriceCents(token.investedValue, token.quantity)
+                : Math.round(price * 100);
 
               return (
                 <div key={token.tokenName}>
                   <hr className="mb-3 border-[color:var(--line-strong)] opacity-50" />
                   <DashboardAssetHeader
                     align="center"
+                    animateValueChanges={price != null}
                     name={token.tokenName}
-                    value={price != null ? formatEuroCents(Math.round(price * 100)) : "-"}
+                    value={formatEuroCents(unitPriceCents)}
                   />
                   <div className="space-y-1.5 text-sm">
                     <DashboardMetricRow
@@ -71,6 +85,7 @@ export function DashboardCryptoCards({
                     />
                     <DashboardMetricRow label="Invested Value" value={formatEuroCents(token.investedValue)} />
                     <DashboardMetricRow
+                      animateValueChanges={price != null}
                       label="Current Value"
                       value={formatEuroCents(currentValueCents)}
                       valueClassName={price == null
@@ -80,10 +95,11 @@ export function DashboardCryptoCards({
                   </div>
                 </div>
               );
-            })}
-          </div>
-        </DashboardCardShell>
-      ))}
+              })}
+            </div>
+          </DashboardCardShell>
+        );
+      })}
 
       <DashboardBinanceCard
         balances={binanceBalances}

@@ -76,7 +76,6 @@ export function CheckingDashboard({
     }));
   };
 
-  const tabsPortalNode = usePortalNode("dashboard-tabs-portal");
   const cardsPortalNode = usePortalNode("dashboard-cards-portal");
 
   const chartData = useMemo(() => {
@@ -90,6 +89,17 @@ export function CheckingDashboard({
   const xAxisTicks = useMemo(() => {
     return getCheckingXAxisTicks(chartData);
   }, [chartData]);
+  const allTotal = data?.providers.reduce((sum, provider) => sum + provider.total, 0) ?? 0;
+  const tabs: CheckingDashboardTab[] = data
+    ? [
+        { key: "ALL", label: "CHECKING", total: allTotal },
+        ...data.providers.map(provider => ({
+          key: provider.sourceInstitution,
+          label: formatProviderLabel(provider.sourceInstitution),
+          total: provider.total
+        }))
+      ]
+    : [{ key: "ALL", label: "CHECKING", total: 0 }];
 
   const hasRenderableChartData = useMemo(() => {
     if (!data) {
@@ -160,19 +170,17 @@ export function CheckingDashboard({
         style={getDashboardStageVisibilityStyle(isActive)}
       >
         <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
+        <CheckingDashboardTabs
+          tabs={tabs}
+          activeTab={activeTab}
+          activePoint={null}
+          valuesKnown={false}
+          userId={userId}
+          onSelectTab={setActiveTab}
+        />
       </div>
     );
   }
-
-  const allTotal = data.providers.reduce((sum, provider) => sum + provider.total, 0);
-  const tabs: CheckingDashboardTab[] = [
-    { key: "ALL", label: "CHECKING", total: allTotal },
-    ...data.providers.map(provider => ({
-      key: provider.sourceInstitution,
-      label: formatProviderLabel(provider.sourceInstitution),
-      total: provider.total
-    }))
-  ];
 
   return (
     <div
@@ -181,11 +189,10 @@ export function CheckingDashboard({
     >
       <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
       <CheckingDashboardTabs
-        portalNode={tabsPortalNode}
         tabs={tabs}
         activeTab={activeTab}
         activePoint={activeChartPoint}
-        isActive={isActive}
+        userId={userId}
         onSelectTab={setActiveTab}
       />
 

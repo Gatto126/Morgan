@@ -90,7 +90,7 @@ export function Dashboard({
     shouldLoad,
     transactionCount
   });
-  const livePrices = useDashboardLivePrices(data?.providerSummaries, {
+  const { livePrices } = useDashboardLivePrices(data?.providerSummaries, {
     isActive,
     shouldLoad: shouldLoad && !!data
   });
@@ -101,7 +101,6 @@ export function Dashboard({
   const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0;
   const requiresInitialUpload = transactionCount === 0 && !hasBinancePortfolio;
   const shouldShowUploadPanel = showUploadView && !showSettingsView && !showUserSelectView;
-  const portalNode = usePortalNode("dashboard-tabs-portal");
   const cardsPortalNode = usePortalNode("dashboard-cards-portal");
   const {
     isMobile,
@@ -173,21 +172,20 @@ export function Dashboard({
       style={getDashboardStageVisibilityStyle(isActive)}
     >
       <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
+      <DashboardTabs
+        visibleTabs={visibleTabs}
+        activeTab={activeTab}
+        activePoint={data ? activeChartPoint : null}
+        data={data}
+        userId={userId}
+        onActiveTabChange={setActiveTab}
+        getGlobalInvestmentLiveTotal={getGlobalInvestmentLiveTotal}
+        getGlobalCryptoLiveTotal={getGlobalCryptoLiveTotal}
+        getProviderInvestmentLiveTotal={getProviderInvestmentLiveTotal}
+        getProviderCryptoLiveTotal={getProviderCryptoLiveTotal}
+      />
       {data ? (
         <>
-          <DashboardTabs
-            portalNode={portalNode}
-            isActive={isActive}
-            contentVisible={contentVisible}
-            visibleTabs={visibleTabs}
-            activeTab={activeTab}
-            activePoint={activeChartPoint}
-            data={data}
-            onActiveTabChange={setActiveTab}
-            getGlobalInvestmentLiveTotal={getGlobalInvestmentLiveTotal}
-            getGlobalCryptoLiveTotal={getGlobalCryptoLiveTotal}
-          />
-
           <DashboardChart
             showSettingsView={showSettingsView}
             isClosingSettings={isClosingSettings}

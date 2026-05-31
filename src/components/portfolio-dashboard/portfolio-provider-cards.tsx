@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo } from "react";
 import type { UIEvent } from "react";
 
+import { SlotValue } from "@/components/finance-shell/slot-value";
 import { scheduleIdleTask, useDeferredTransactionRows } from "@/hooks/use-deferred-transaction-rows";
 import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transaction-rows";
 import { cn } from "@/shared/utils";
@@ -23,6 +24,10 @@ type PortfolioProviderCardsProps = {
 const INITIAL_TRANSACTION_ROWS = 20;
 const NEXT_TRANSACTION_ROWS = 10;
 const LOAD_MORE_SCROLL_THRESHOLD_PX = 160;
+
+function getFallbackUnitPriceCents(investedValue: number, quantity: number) {
+  return Math.abs(quantity) > 0.000001 ? Math.round(investedValue / quantity) : investedValue;
+}
 
 export function PortfolioProviderCards({
   portalNode,
@@ -59,7 +64,12 @@ export function PortfolioProviderCards({
 
   return createPortal(
     <div className={cn("flex flex-col gap-5 w-full pb-6 lg:pb-0", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
-      {providers.map((provider) => (
+      {providers.map((provider) => {
+        const providerHasLivePrice = provider.products.some((product) =>
+          product.isin ? livePrices[product.isin] != null : false
+        );
+
+        return (
           <div key={provider.sourceInstitution} className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
             <div className="flex flex-col rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4 h-full">
               <div className="flex items-center justify-between">
@@ -67,7 +77,7 @@ export function PortfolioProviderCards({
                   {formatProviderLabel(provider.sourceInstitution)}
                 </span>
                 <span className="text-sm font-bold text-[color:var(--text-main)]">
-                  {formatEuroCents(getProviderLiveTotal(provider))}
+                  <SlotValue animateChanges={providerHasLivePrice} value={formatEuroCents(getProviderLiveTotal(provider))} />
                 </span>
               </div>
 
@@ -82,7 +92,16 @@ export function PortfolioProviderCards({
                       <span className="text-xs font-bold text-[color:var(--text-main)] flex-shrink-0 pt-[1px]">
                         {(() => {
                           const price = product.isin ? livePrices[product.isin] : null;
-                          return price != null ? formatEuroCents(Math.round(price * 100)) : "-";
+                          const priceCents = price != null
+                            ? Math.round(price * 100)
+                            : getFallbackUnitPriceCents(product.investedValue, product.quantity);
+
+                          return (
+                            <SlotValue
+                              animateChanges={price != null}
+                              value={formatEuroCents(priceCents)}
+                            />
+                          );
                         })()}
                       </span>
                     </div>
@@ -97,13 +116,13 @@ export function PortfolioProviderCards({
                       <div className="flex justify-between">
                         <span className="pl-3 text-[color:var(--text-dim)] font-medium">Quantity</span>
                         <span className="font-semibold text-[color:var(--text-main)]">
-                          {product.quantity.toLocaleString("it-IT", { maximumFractionDigits: 6 })}
+                          <SlotValue value={product.quantity.toLocaleString("it-IT", { maximumFractionDigits: 6 })} />
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="pl-3 text-[color:var(--text-dim)] font-medium">Invested Value</span>
                         <span className="font-semibold text-[color:var(--text-main)]">
-                          {formatEuroCents(product.investedValue)}
+                          <SlotValue value={formatEuroCents(product.investedValue)} />
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -113,14 +132,14 @@ export function PortfolioProviderCards({
                           if (price == null) {
                             return (
                               <span className="font-semibold text-[color:var(--text-dim)] underline decoration-dotted decoration-[color:var(--text-dim)]">
-                                {formatEuroCents(product.investedValue)}
+                                <SlotValue value={formatEuroCents(product.investedValue)} />
                               </span>
                             );
                           }
                           const currentValueCents = Math.round(product.quantity * price * 100);
                           return (
                             <span className="font-semibold text-[color:var(--text-main)]">
-                              {formatEuroCents(currentValueCents)}
+                              <SlotValue animateChanges value={formatEuroCents(currentValueCents)} />
                             </span>
                           );
                         })()}
@@ -129,7 +148,7 @@ export function PortfolioProviderCards({
                         <div className="flex justify-between">
                           <span className="pl-3 text-[color:var(--text-dim)] font-medium">Cashback</span>
                           <span className="font-semibold text-[color:var(--text-main)]">
-                            {formatEuroCents(product.cashback)}
+                            <SlotValue value={formatEuroCents(product.cashback)} />
                           </span>
                         </div>
                       )}
@@ -149,7 +168,8 @@ export function PortfolioProviderCards({
               />
             </div>
           </div>
-      ))}
+        );
+      })}
     </div>,
     portalNode
   );
