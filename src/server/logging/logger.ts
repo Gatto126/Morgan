@@ -147,6 +147,10 @@ export function shouldLogInfoMessage(detail: LogDetail = getLogDetail()) {
   return detail !== "minimal" && shouldLog("info");
 }
 
+export function shouldLogPerformance() {
+  return process.env.MORGAN_PERF_LOGS !== "0" && shouldLog("info");
+}
+
 export function apiLogger(module: string) {
   const prefix = color(`[${module}]`, COLORS.cyan);
 
@@ -183,6 +187,14 @@ export function apiLogger(module: string) {
 
       console.warn(
         `${color(timestamp(), COLORS.dim)} ${prefix} ${color("!", COLORS.yellow)} ${sanitizeLogText(message)}`
+      );
+    },
+
+    performance(event: string, body?: unknown) {
+      if (!shouldLogPerformance()) return;
+
+      console.log(
+        `${color(timestamp(), COLORS.dim)} ${prefix} ${color("~ perf", COLORS.magenta)} ${event}${formatLogBody(body, "standard")}`
       );
     },
 

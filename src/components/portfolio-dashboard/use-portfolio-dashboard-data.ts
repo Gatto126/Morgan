@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  fetchDashboardStageData,
+  isDashboardStageDataCacheFresh,
+  readDashboardStageDataCache
+} from "@/components/finance-shell/dashboard-stage-data-cache";
+
 import type { PortfolioData } from "./types";
 
 type UsePortfolioDashboardDataOptions = {
@@ -11,6 +17,10 @@ type UsePortfolioDashboardDataOptions = {
   shouldLoad: boolean;
 };
 
+function getPortfolioStageFromEndpoint(endpoint: string) {
+  return endpoint.includes("/crypto") ? "crypto" : "investment";
+}
+
 export function usePortfolioDashboardData({
   endpoint,
   fetchErrorMessage,
@@ -19,8 +29,10 @@ export function usePortfolioDashboardData({
   isActive,
   shouldLoad
 }: UsePortfolioDashboardDataOptions) {
-  const [data, setData] = useState<PortfolioData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const stage = getPortfolioStageFromEndpoint(endpoint);
+  const initialData = readDashboardStageDataCache(stage, userId, transactionCount);
+  const [data, setData] = useState<PortfolioData | null>(initialData);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [importRefreshVersion, setImportRefreshVersion] = useState(0);
@@ -28,13 +40,15 @@ export function usePortfolioDashboardData({
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
   const pendingImportRefreshRef = useRef(false);
   const lastRefreshTransactionCountRef = useRef(transactionCount);
-  const hasLoadedRef = useRef(false);
+  const hasLoadedRef = useRef(!!initialData);
 
-  const fetchDashboard = useCallback(async () => {
+  const fetchDashboard = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     try {
-      const response = await fetch(`${endpoint}?userId=${userId}`, { cache: "no-store" });
-      const payload = (await response.json()) as PortfolioData & { error?: string };
-      if (!response.ok) throw new Error(payload.error ?? fetchErrorMessage);
+      const payload = await fetchDashboardStageData(stage, userId, {
+        fallbackErrorMessage: fetchErrorMessage,
+        force,
+        version: transactionCount
+      });
 
       const currentKeys = new Set(payload.providers.map((provider) => provider.sourceInstitution));
       if (pendingImportRefreshRef.current) {
@@ -59,7 +73,12 @@ export function usePortfolioDashboardData({
         setImportRefreshVersion(version => version + 1);
       }
     }
-  }, [endpoint, fetchErrorMessage, userId]);
+  }, [fetchErrorMessage, stage, transactionCount, userId]);
+  const fetchDashboardIfStale = useCallback(() => {
+    if (!isDashboardStageDataCacheFresh(stage, userId, transactionCount)) {
+      void fetchDashboard({ force: true });
+    }
+  }, [fetchDashboard, stage, transactionCount, userId]);
 
   useEffect(() => {
     if (!shouldLoad || hasLoadedRef.current) {
@@ -79,14 +98,14 @@ export function usePortfolioDashboardData({
       hasLoadedRef.current = true;
       void fetchDashboard();
     }
-    const interval = window.setInterval(() => { void fetchDashboard(); }, 60_000);
-    const handleFocus = () => { void fetchDashboard(); };
+    const interval = window.setInterval(fetchDashboardIfStale, 60_000);
+    const handleFocus = () => { fetchDashboardIfStale(); };
     window.addEventListener("focus", handleFocus);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [fetchDashboard, isActive]);
+  }, [fetchDashboard, fetchDashboardIfStale, isActive]);
 
   useEffect(() => {
     if (!shouldLoad || loading || lastRefreshTransactionCountRef.current === transactionCount) {
@@ -95,7 +114,7 @@ export function usePortfolioDashboardData({
 
     lastRefreshTransactionCountRef.current = transactionCount;
     pendingImportRefreshRef.current = true;
-    void fetchDashboard();
+    void fetchDashboard({ force: true });
   }, [transactionCount, shouldLoad, loading, fetchDashboard]);
 
   return {

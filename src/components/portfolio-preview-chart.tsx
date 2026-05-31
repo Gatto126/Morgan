@@ -6,7 +6,7 @@ import { Line, LineChart as RechartsLineChart, ReferenceLine, Tooltip, XAxis, YA
 
 import { SelectableChartDot } from "@/components/chart-primitives/selectable-chart-dot";
 import { DashboardTopbarTab } from "@/components/finance-shell/dashboard-topbar-tab";
-import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
+import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
 
 type PortfolioPreviewRawPoint = {
   rawMonth: string;
@@ -125,6 +125,7 @@ const portfolioPreviewXAxisLabels = [
 ];
 const portfolioPreviewXAxisTicks = [0, 2, 4, 6, 8, 10, 11.9];
 const portfolioPreviewYGridLines = [500000, 600000, 700000, 800000];
+const portfolioPreviewFallbackChartSize = { width: 460, height: 290 };
 const portfolioPreviewEuroFormatter = new Intl.NumberFormat("it-IT", {
   style: "currency",
   currency: "EUR",
@@ -179,8 +180,9 @@ export function PortfolioPreviewChart({
   const [activePoint, setActivePoint] = useState<PortfolioPreviewPoint | null>(null);
   const latestPoint = portfolioPreviewData[portfolioPreviewData.length - 1];
   const topbarPoint = activePoint ?? latestPoint;
-  const { chartContainerRef, chartReady, chartSize } = useChartContainerReady();
-  const renderedChartSize = chartReady ? chartSize : { width: 460, height: 290 };
+  const { chartContainerRef, renderedChartSize, seriesReady } = useStableChartFrame({
+    fallbackSize: portfolioPreviewFallbackChartSize
+  });
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[460px] flex-col justify-center">
@@ -237,28 +239,30 @@ export function PortfolioPreviewChart({
               content={<PortfolioPreviewSilentTooltip setActivePoint={setActivePoint} />}
               cursor={{ stroke: "rgba(255,255,255,0.12)", strokeWidth: 1, fill: "transparent" }}
             />
-            <Line
-              activeDot={(props: PortfolioPreviewActiveDotProps) => (
-                <SelectableChartDot
-                  color="#ffffff"
-                  cx={props.cx}
-                  cy={props.cy}
-                  onSelectPoint={() => undefined}
-                  payload={props.payload}
-                  seriesKey="value"
-                />
-              )}
-              connectNulls={false}
-              dataKey="value"
-              dot={false}
-              isAnimationActive={false}
-              name="value"
-              stroke="#ffffff"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2.5}
-              type="linear"
-            />
+            {seriesReady ? (
+              <Line
+                activeDot={(props: PortfolioPreviewActiveDotProps) => (
+                  <SelectableChartDot
+                    color="#ffffff"
+                    cx={props.cx}
+                    cy={props.cy}
+                    onSelectPoint={() => undefined}
+                    payload={props.payload}
+                    seriesKey="value"
+                  />
+                )}
+                connectNulls={false}
+                dataKey="value"
+                dot={false}
+                isAnimationActive={false}
+                name="value"
+                stroke="#ffffff"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                type="linear"
+              />
+            ) : null}
           </RechartsLineChart>
         </div>
       </div>

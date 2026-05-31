@@ -17,6 +17,7 @@ type UseFinanceProfilesParams = {
   activeUser: UserRecord | null;
   hasRestoredClientState: boolean;
   initialUsers: UserRecord[];
+  skipClientRestore: boolean;
   saving: boolean;
   showUserSelectView: boolean;
   stage: Stage;
@@ -44,6 +45,7 @@ export function useFinanceProfiles({
   activeUser,
   hasRestoredClientState,
   initialUsers,
+  skipClientRestore,
   saving,
   showUserSelectView,
   stage,
@@ -71,6 +73,7 @@ export function useFinanceProfiles({
     activeUser,
     hasRestoredClientState,
     initialUsers,
+    skipClientRestore,
     stage,
     setActiveSettingsSection,
     setActiveUser,

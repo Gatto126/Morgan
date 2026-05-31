@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { useEffect } from "react";
 import { CartesianGrid, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 
-import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
+import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
 import { cn } from "@/shared/utils";
 
 import { DashboardChartControls } from "./dashboard-chart-controls";
@@ -15,6 +14,8 @@ import { getMonthLabel } from "./formatters";
 import type { AccountTab, TimeRange } from "./types";
 
 export type { DashboardChartConfig, DashboardChartPoint } from "./dashboard-chart-types";
+
+const FALLBACK_CHART_SIZE = { width: 960, height: 460 };
 
 type DashboardChartProps = {
   showSettingsView: boolean;
@@ -91,7 +92,10 @@ export function DashboardChart({
   transactionCount,
   onChartReadyChange
 }: DashboardChartProps) {
-  const { chartContainerRef, chartReady, chartSize } = useChartContainerReady();
+  const { chartContainerRef, renderedChartSize, seriesReady } = useStableChartFrame({
+    fallbackSize: FALLBACK_CHART_SIZE,
+    onFrameReadyChange: onChartReadyChange
+  });
   const shouldShowEmptyState = transactionCount === 0 && !!emptyStateElement;
   const isPanelOpen = showSettingsView || showUserSelectView || shouldShowUploadPanel;
   const isPanelClosing =
@@ -99,11 +103,7 @@ export function DashboardChart({
     (showUserSelectView && isClosingUserSelect) ||
     (shouldShowUploadPanel && isClosingUpload);
   const isChartVisible = !isPanelOpen;
-  const shouldRevealChartContent = (shouldShowEmptyState || chartReady) && (!isPanelOpen || isPanelClosing);
-
-  useEffect(() => {
-    onChartReadyChange(isChartVisible && (shouldShowEmptyState || chartReady));
-  }, [chartReady, isChartVisible, onChartReadyChange, shouldShowEmptyState]);
+  const shouldRevealChartContent = (shouldShowEmptyState || renderedChartSize.width > 0) && (!isPanelOpen || isPanelClosing);
 
   return (
     <div data-testid="dashboard-chart" className="relative flex w-full flex-1 flex-col justify-center overflow-hidden rounded-[18px] min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px]">
@@ -135,56 +135,56 @@ export function DashboardChart({
                 }}
               >
                 <div id="chart-reference-overlay" className="absolute inset-0 pointer-events-none z-10" />
-                {chartReady ? (
-                  <LineChart
-                    width={chartSize.width}
-                    height={chartSize.height}
-                    data={processedChartData}
-                    margin={{
-                      top: 8,
-                      right: marginRight,
-                      bottom: 0,
-                      left: marginLeft
+                <LineChart
+                  width={renderedChartSize.width}
+                  height={renderedChartSize.height}
+                  data={processedChartData}
+                  margin={{
+                    top: 8,
+                    right: marginRight,
+                    bottom: 0,
+                    left: marginLeft
+                  }}
+                  style={{ outline: "none", overflow: "visible" }}
+                  accessibilityLayer={false}
+                >
+                  <XAxis
+                    dataKey="rawMonth"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#666666", fontSize: isMobile ? 9 : 11 }}
+                    dy={8}
+                    padding={{ left: isMobile ? 16 : 0, right: isMobile ? 16 : 0 }}
+                    minTickGap={isMobile ? 20 : 10}
+                    ticks={xAxisTicks}
+                    tickFormatter={(value) => {
+                      if (!value) return "";
+                      if (value.length === 7) {
+                        return getMonthLabel(value);
+                      }
+                      const [year, month] = value.split("-");
+                      return getMonthLabel(`${year}-${month}`);
                     }}
-                    style={{ outline: "none", overflow: "visible" }}
-                    accessibilityLayer={false}
-                  >
-                    <XAxis
-                      dataKey="rawMonth"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#666666", fontSize: isMobile ? 9 : 11 }}
-                      dy={8}
-                      padding={{ left: isMobile ? 16 : 0, right: isMobile ? 16 : 0 }}
-                      minTickGap={isMobile ? 20 : 10}
-                      ticks={xAxisTicks}
-                      tickFormatter={(value) => {
-                        if (!value) return "";
-                        if (value.length === 7) {
-                          return getMonthLabel(value);
-                        }
-                        const [year, month] = value.split("-");
-                        return getMonthLabel(`${year}-${month}`);
-                      }}
-                    />
-                    <YAxis
-                      tick={{ fill: "#a8a8a8", fontSize: isMobile ? 9 : 10, dx: isMobile ? 4 : 0 }}
-                      axisLine={false}
-                      tickLine={false}
-                      mirror={isMobile}
-                      tickFormatter={(value: number) => {
-                        if (isMobile && value >= 100000) {
-                          return `${Math.round(value / 100000)}k €`;
-                        }
-                        return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value / 100);
-                      }}
-                      width={yAxisWidth}
-                    />
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,154,154,0.12)" vertical={false} />
-                    <Tooltip
-                      content={<DashboardChartTooltip setActivePoint={setActiveChartPoint} />}
-                      cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1, fill: "transparent" }}
-                    />
+                  />
+                  <YAxis
+                    tick={{ fill: "#a8a8a8", fontSize: isMobile ? 9 : 10, dx: isMobile ? 4 : 0 }}
+                    axisLine={false}
+                    tickLine={false}
+                    mirror={isMobile}
+                    tickFormatter={(value: number) => {
+                      if (isMobile && value >= 100000) {
+                        return `${Math.round(value / 100000)}k €`;
+                      }
+                      return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value / 100);
+                    }}
+                    width={yAxisWidth}
+                  />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,154,154,0.12)" vertical={false} />
+                  <Tooltip
+                    content={<DashboardChartTooltip setActivePoint={setActiveChartPoint} />}
+                    cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1, fill: "transparent" }}
+                  />
+                  {seriesReady ? (
                     <DashboardChartLines
                       activeTab={activeTab}
                       chartConfig={chartConfig}
@@ -193,8 +193,8 @@ export function DashboardChart({
                       setSelectedMonth={setSelectedMonth}
                       setSelectedSeriesKey={setSelectedSeriesKey}
                     />
-                  </LineChart>
-                ) : null}
+                  ) : null}
+                </LineChart>
               </div>
             </div>
 

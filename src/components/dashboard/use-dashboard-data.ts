@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
+import {
+  fetchDashboardStageData,
+  isDashboardStageDataCacheFresh,
+  readDashboardStageDataCache
+} from "@/components/finance-shell/dashboard-stage-data-cache";
+
 import type { DashboardData } from "./types";
 
 type UseDashboardDataOptions = {
@@ -39,8 +46,9 @@ export function useDashboardData({
   shouldLoad,
   transactionCount
 }: UseDashboardDataOptions) {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialData = readDashboardStageDataCache("dashboard", userId, transactionCount);
+  const [data, setData] = useState<DashboardData | null>(initialData);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [importRefreshVersion, setImportRefreshVersion] = useState(0);
@@ -48,19 +56,16 @@ export function useDashboardData({
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
   const pendingImportRefreshRef = useRef(false);
   const lastRefreshTransactionCountRef = useRef(transactionCount);
-  const hasLoadedRef = useRef(false);
+  const hasLoadedRef = useRef(!!initialData);
 
   const fetchDashboard = useCallback(
-    async () => {
+    async ({ force = false }: { force?: boolean } = {}) => {
       try {
-        const response = await fetch(`/api/transactions/dashboard?userId=${userId}`, {
-          cache: "no-store"
+        const payload = await fetchDashboardStageData("dashboard", userId, {
+          fallbackErrorMessage: "Errore nel caricamento della dashboard.",
+          force,
+          version: transactionCount
         });
-        const payload = (await response.json()) as DashboardData & { error?: string };
-
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Errore nel caricamento della dashboard.");
-        }
 
         const currentKeys = getProviderKeys(payload.providerSummaries);
         if (pendingImportRefreshRef.current) {
@@ -86,8 +91,13 @@ export function useDashboardData({
         }
       }
     },
-    [userId]
+    [transactionCount, userId]
   );
+  const fetchDashboardIfStale = useCallback(() => {
+    if (!isDashboardStageDataCacheFresh("dashboard", userId, transactionCount)) {
+      void fetchDashboard({ force: true });
+    }
+  }, [fetchDashboard, transactionCount, userId]);
 
   useEffect(() => {
     if (!shouldLoad || hasLoadedRef.current) {
@@ -112,11 +122,11 @@ export function useDashboardData({
     }, 0);
 
     const interval = window.setInterval(() => {
-      void fetchDashboard();
+      fetchDashboardIfStale();
     }, 60_000);
 
     function handleFocus() {
-      void fetchDashboard();
+      fetchDashboardIfStale();
     }
 
     window.addEventListener("focus", handleFocus);
@@ -126,7 +136,7 @@ export function useDashboardData({
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [fetchDashboard, isActive]);
+  }, [fetchDashboard, fetchDashboardIfStale, isActive]);
 
   useEffect(() => {
     if (!shouldLoad || loading || lastRefreshTransactionCountRef.current === transactionCount) {
@@ -135,7 +145,7 @@ export function useDashboardData({
 
     lastRefreshTransactionCountRef.current = transactionCount;
     pendingImportRefreshRef.current = true;
-    void fetchDashboard();
+    void fetchDashboard({ force: true });
   }, [transactionCount, fetchDashboard, shouldLoad, loading]);
 
   return {

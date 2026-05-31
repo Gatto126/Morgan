@@ -41,7 +41,170 @@ const signupInviteCode = process.env.MORGAN_SIGNUP_INVITE_CODE ?? "local-test-in
 const profileName = `Real Flow ${runId.slice(-6)}`;
 const secondProfileName = `Real Flow Extra ${runId.slice(-6)}`;
 const browserErrors = [];
+const dashboardApiEndpoints = [
+  "/api/binance/balances",
+  "/api/binance/sync",
+  "/api/prices",
+  "/api/transactions/checking",
+  "/api/transactions/checking/rows",
+  "/api/transactions/crypto",
+  "/api/transactions/crypto/rows",
+  "/api/transactions/dashboard",
+  "/api/transactions/investment",
+  "/api/transactions/investment/rows"
+];
+const navigationMetrics = [];
+const requestSamples = new Map();
 const steps = [];
+let activeNavigationSample = null;
+
+function matchingDashboardEndpoint(url) {
+  try {
+    const { pathname } = new URL(url);
+    return dashboardApiEndpoints.find((endpoint) => pathname === endpoint) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function attachDashboardRequestRecorder(page) {
+  page.on("request", (request) => {
+    const endpoint = matchingDashboardEndpoint(request.url());
+    if (!endpoint) return;
+
+    const sample = {
+      cacheControl: null,
+      durationMs: null,
+      endpoint,
+      failed: false,
+      method: request.method(),
+      startedAt: Date.now(),
+      status: null
+    };
+
+    requestSamples.set(request, sample);
+    activeNavigationSample?.requests.push(sample);
+  });
+
+  page.on("response", (response) => {
+    const sample = requestSamples.get(response.request());
+    if (!sample) return;
+
+    sample.durationMs = Date.now() - sample.startedAt;
+    sample.status = response.status();
+    sample.cacheControl = response.headers()["cache-control"] ?? null;
+  });
+
+  page.on("requestfailed", (request) => {
+    const sample = requestSamples.get(request);
+    if (!sample) return;
+
+    sample.durationMs = Date.now() - sample.startedAt;
+    sample.failed = true;
+  });
+}
+
+function startNavigationSample(label) {
+  activeNavigationSample = {
+    label,
+    requests: [],
+    startedAt: Date.now()
+  };
+}
+
+function finishNavigationSample() {
+  const sample = activeNavigationSample;
+  activeNavigationSample = null;
+  return sample;
+}
+
+async function measureStageNavigation(page, label, buttonName, waitForReady) {
+  const button = page.getByRole("button", { name: buttonName, exact: true });
+  await button.waitFor({ state: "visible", timeout: 20_000 });
+
+  startNavigationSample(label);
+  const startedAt = Date.now();
+  await button.click();
+  await waitForReady();
+  await page.waitForTimeout(250);
+  const sample = finishNavigationSample();
+
+  navigationMetrics.push({
+    label,
+    stage: buttonName,
+    durationMs: Date.now() - startedAt,
+    requests: (sample?.requests ?? []).map((request) => ({
+      cacheControl: request.cacheControl,
+      durationMs: request.durationMs,
+      endpoint: request.endpoint,
+      failed: request.failed,
+      method: request.method,
+      status: request.status
+    }))
+  });
+}
+
+async function measurePageReload(page, label, stage, waitForReady) {
+  startNavigationSample(label);
+  const startedAt = Date.now();
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await waitForReady();
+  await page.waitForTimeout(250);
+  const sample = finishNavigationSample();
+  const requests = (sample?.requests ?? []).map((request) => ({
+    cacheControl: request.cacheControl,
+    durationMs: request.durationMs,
+    endpoint: request.endpoint,
+    failed: request.failed,
+    method: request.method,
+    status: request.status
+  }));
+
+  navigationMetrics.push({
+    label,
+    stage,
+    durationMs: Date.now() - startedAt,
+    requests
+  });
+
+  return requests;
+}
+
+async function runSectionNavigationMeasurements(page) {
+  await measureStageNavigation(page, "dashboard_first_open", "Dashboard", async () => {
+    await waitForAny(page.getByText("TRADE REPUBLIC", { exact: true }), "dashboard Trade Republic provider");
+    await waitForAny(page.getByText("BBVA", { exact: true }), "dashboard BBVA provider");
+  });
+  await measureStageNavigation(page, "checking_first_open", "Checking", async () => {
+    await waitForAny(page.getByText("CHECKING", { exact: true }), "checking stage title");
+  });
+  await waitForAny(page.getByText("Realistic checking expense", { exact: false }), "checking transaction text");
+  await measureStageNavigation(page, "investment_first_open", "Investments", async () => {
+    await waitForAny(page.getByText("Core MSCI World", { exact: false }), "investment product text");
+  });
+  await measureStageNavigation(page, "crypto_first_open", "Crypto", async () => {
+    await waitForAny(page.getByText("Bitcoin", { exact: false }), "crypto product text");
+  });
+  await measureStageNavigation(page, "dashboard_return_warm", "Dashboard", async () => {
+    await waitForAny(page.getByText("TRADE REPUBLIC", { exact: true }), "warm dashboard Trade Republic provider");
+  });
+  await measureStageNavigation(page, "checking_return_warm", "Checking", async () => {
+    await waitForAny(page.getByText("CHECKING", { exact: true }), "warm checking stage title");
+  });
+  await measureStageNavigation(page, "investment_return_warm", "Investments", async () => {
+    await waitForAny(page.getByText("Core MSCI World", { exact: false }), "warm investment product text");
+  });
+  await measureStageNavigation(page, "crypto_return_warm", "Crypto", async () => {
+    await waitForAny(page.getByText("Bitcoin", { exact: false }), "warm crypto product text");
+  });
+  const reloadRequests = await measurePageReload(page, "crypto_reload_server_primed", "Crypto", async () => {
+    await waitForAny(page.getByText("Bitcoin", { exact: false }), "server-primed crypto product text after reload");
+  });
+  assert(
+    !reloadRequests.some((request) => request.endpoint === "/api/transactions/crypto"),
+    "Expected crypto summary to be server-primed on reload without a client summary fetch."
+  );
+}
 
 async function prepareFixtures() {
   const tradeRepublicRows = [];
@@ -251,6 +414,18 @@ async function runBinanceFlow(page, profileId) {
   const settingsText = await page.locator('[role="dialog"][data-modal-panel="settings"]').innerText({ timeout: 10_000 });
   const balanceCount = await prisma.binanceBalance.count({ where: { userId: profileId } });
 
+  const closeSettingsButton = page.locator('[title="Esci dalle impostazioni"]').filter({ visible: true });
+  await closeSettingsButton.waitFor({ state: "visible", timeout: 10_000 });
+  await closeSettingsButton.click();
+  await page.locator('[role="dialog"][data-modal-panel="settings"]').waitFor({ state: "detached", timeout: 10_000 });
+  await measureStageNavigation(page, "binance_after_sync", "Binance", async () => {
+    await waitForAny(page.getByText("BINANCE", { exact: true }), "Binance dashboard title");
+  });
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("heading", { name: "General Settings", exact: true }).waitFor({ state: "visible", timeout: 10_000 });
+  await page.locator("button").filter({ hasText: "API Key" }).click();
+  await page.getByRole("heading", { name: "BINANCE", exact: true }).waitFor({ state: "visible", timeout: 10_000 });
   await deleteButton.click();
   await page.getByRole("button", { name: "API + Data", exact: true }).click();
   await page.locator('button[title="Save API Keys"]').waitFor({ state: "visible", timeout: 20_000 });
@@ -284,6 +459,7 @@ try {
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1572, height: 1270 } });
   page = await context.newPage();
+  attachDashboardRequestRecorder(page);
   page.on("console", (message) => {
     if (["error", "warning"].includes(message.type())) {
       browserErrors.push({ type: message.type(), text: message.text().slice(0, 500) });
@@ -335,15 +511,9 @@ try {
   "after BBVA import");
   await saveScreenshot(page, "after-primary-imports.png");
 
-  await page.getByRole("button", { name: "Dashboard", exact: true }).click();
-  await waitForAny(page.getByText("BBVA", { exact: true }), "dashboard BBVA provider");
-  await waitForAny(page.getByText("TRADE REPUBLIC", { exact: true }), "dashboard Trade Republic provider");
-  await page.getByRole("button", { name: "Checking", exact: true }).click();
-  await waitForAny(page.getByText("Realistic checking expense", { exact: false }), "checking transaction text");
-  await page.getByRole("button", { name: "Investments", exact: true }).click();
-  await waitForAny(page.getByText("Core MSCI World", { exact: false }), "investment product text");
+  await runSectionNavigationMeasurements(page);
   await saveScreenshot(page, "dashboard-and-tabs.png");
-  steps.push("verified_dashboard_checking_investments");
+  steps.push("measured_dashboard_section_navigation");
 
   await createSecondProfile(page);
   await importFile(page, bbvaPath, fixtureSummary.bbvaRows, "imported_bbva_on_second_profile");
@@ -391,6 +561,7 @@ try {
     afterBbva,
     afterSecondProfile,
     binanceResult,
+    navigationMetrics,
     browserErrors,
     screenshots: {
       afterPrimaryImports: path.join(outDir, "after-primary-imports.png"),
@@ -410,6 +581,7 @@ try {
     secondProfileName,
     primaryProfileId,
     steps,
+    navigationMetrics,
     error: error instanceof Error ? error.message : String(error),
     forcedCleanup,
     browserErrors,

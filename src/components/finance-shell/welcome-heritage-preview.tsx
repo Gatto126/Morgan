@@ -12,21 +12,24 @@ import {
   collectCryptoTokens,
   collectInvestmentProducts
 } from "@/components/dashboard/dashboard-chart-data-model";
-import { getXAxisTicks } from "@/components/dashboard/dashboard-chart-display-model";
 import type { DashboardChartPoint } from "@/components/dashboard/dashboard-chart-types";
-import { formatEuroCents, getMonthLabel } from "@/components/dashboard/formatters";
+import { formatEuroCents } from "@/components/dashboard/formatters";
 import type { AccountTab, BinanceBalanceRow, DashboardData } from "@/components/dashboard/types";
 import { useDashboardLivePrices } from "@/components/dashboard/use-dashboard-live-prices";
 import { useDashboardLiveTotals } from "@/components/dashboard/use-dashboard-live-totals";
 import { DashboardTopbarTab } from "@/components/finance-shell/dashboard-topbar-tab";
 import { PortfolioPreviewChart } from "@/components/portfolio-preview-chart";
-import { useChartContainerReady } from "@/hooks/use-chart-container-ready";
+import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
 
 import type { UserRecord } from "./types";
 import {
   type AccountPortfolioPreviewRecord,
   useAccountPortfolioPreviewData
 } from "./use-account-portfolio-preview-data";
+import {
+  formatWelcomeXAxisTick,
+  getWelcomeXAxisTicks
+} from "./welcome-heritage-preview-axis";
 
 type WelcomeHeritagePreviewProps = {
   isActive: boolean;
@@ -45,7 +48,7 @@ type HeritageTooltipProps = {
   setActivePoint: (point: DashboardChartPoint | null) => void;
 };
 
-const FALLBACK_CHART_SIZE = { width: 460, height: 310 };
+const FALLBACK_CHART_SIZE = { width: 520, height: 310 };
 
 function WelcomeHeritageTooltip({ active, payload, setActivePoint }: HeritageTooltipProps) {
   useEffect(() => {
@@ -57,10 +60,12 @@ function WelcomeHeritageTooltip({ active, payload, setActivePoint }: HeritageToo
 
 export function WelcomeHeritagePreview({
   isActive,
-  users
+  users = []
 }: WelcomeHeritagePreviewProps) {
   const [activePoint, setActivePoint] = useState<DashboardChartPoint | null>(null);
-  const { chartContainerRef, chartReady, chartSize } = useChartContainerReady();
+  const { chartContainerRef, renderedChartSize, seriesReady } = useStableChartFrame({
+    fallbackSize: FALLBACK_CHART_SIZE
+  });
   const shouldLoad = isActive && users.length > 0;
   const { error, loading, records } = useAccountPortfolioPreviewData({
     isActive: shouldLoad,
@@ -90,7 +95,7 @@ export function WelcomeHeritagePreview({
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value)),
     [chartData]
   );
-  const xAxisTicks = useMemo(() => getWelcomeXAxisTicks(getXAxisTicks(chartData)), [chartData]);
+  const xAxisTicks = useMemo(() => getWelcomeXAxisTicks(chartData), [chartData]);
   const latestPoint = useMemo(
     () => [...chartData].reverse().find((point) => typeof point.heritage === "number") ?? null,
     [chartData]
@@ -99,14 +104,17 @@ export function WelcomeHeritagePreview({
     ? combinedData.accountTotals.checking + getGlobalInvestmentLiveTotal() + getGlobalCryptoLiveTotal()
     : Number(latestPoint?.heritage ?? 0);
   const topbarValue = Number(activePoint?.heritage ?? currentHeritageValue);
-  const renderedChartSize = chartReady ? chartSize : FALLBACK_CHART_SIZE;
   const yDomain = getWelcomeYDomain(heritageValues);
   const yGridLines = getWelcomeGridLines(yDomain);
   const hasChartData = heritageValues.length > 0;
+  const xAxisLabels = useMemo(
+    () => xAxisTicks.map((tick) => formatWelcomeXAxisTick(tick)),
+    [xAxisTicks]
+  );
 
   if (loading && records.length === 0) {
     return (
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-[460px] flex-col justify-center">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[520px] flex-col justify-center">
         <div className="h-[310px] animate-pulse rounded-[18px] border border-[color:var(--line-soft)]/40 bg-[color:var(--surface-panel)]/40 sm:h-[340px]" />
         <div className="mt-3 h-16 animate-pulse rounded-[12px] bg-[color:var(--surface-panel)]/40" />
       </div>
@@ -123,8 +131,8 @@ export function WelcomeHeritagePreview({
   }
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-[460px] flex-col justify-center">
-      <div className="relative h-[310px] sm:h-[325px] lg:h-[340px]">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[520px] flex-col justify-center">
+      <div className="relative h-[330px] sm:h-[360px] lg:h-[380px]">
         <div className="hide-scrollbar absolute left-0 top-10 z-20 flex gap-2 overflow-x-auto px-1 pb-1 [&_.dashboard-topbar-currency-icon]:h-3.5 [&_.dashboard-topbar-currency-icon]:w-3.5 [&_.dashboard-topbar-line]:gap-2 [&_.dashboard-topbar-tab]:h-10 [&_.dashboard-topbar-tab]:w-[146px] [&_.dashboard-topbar-tab]:rounded-[14px] [&_.dashboard-topbar-tab]:px-2 sm:top-12 sm:[&_.dashboard-topbar-currency-icon]:h-4 sm:[&_.dashboard-topbar-currency-icon]:w-4 sm:[&_.dashboard-topbar-line]:gap-3 sm:[&_.dashboard-topbar-tab]:h-12 sm:[&_.dashboard-topbar-tab]:w-[178px] sm:[&_.dashboard-topbar-tab]:rounded-[16px] sm:[&_.dashboard-topbar-tab]:px-3">
           <DashboardTopbarTab
             active
@@ -139,17 +147,18 @@ export function WelcomeHeritagePreview({
             accessibilityLayer={false}
             data={chartData}
             height={renderedChartSize.height}
-            margin={{ top: 8, right: 14, bottom: 26, left: 14 }}
+            margin={{ top: 8, right: 28, bottom: 26, left: 28 }}
             style={{ outline: "none", overflow: "visible" }}
             width={renderedChartSize.width}
           >
             <XAxis
               axisLine={false}
               dataKey="rawMonth"
-              dy={10}
+              height={30}
+              interval={0}
               minTickGap={8}
-              tick={{ fill: "#666666", fontSize: 10 }}
-              tickFormatter={formatWelcomeTick}
+              padding={{ left: 18, right: 18 }}
+              tick={false}
               tickLine={false}
               ticks={xAxisTicks}
             />
@@ -173,29 +182,48 @@ export function WelcomeHeritagePreview({
               content={<WelcomeHeritageTooltip setActivePoint={setActivePoint} />}
               cursor={{ stroke: "rgba(255,255,255,0.12)", strokeWidth: 1, fill: "transparent" }}
             />
-            <Line
-              activeDot={(props: HeritageActiveDotProps) => (
-                <SelectableChartDot
-                  color="#ffffff"
-                  cx={props.cx}
-                  cy={props.cy}
-                  onSelectPoint={() => undefined}
-                  payload={props.payload}
-                  seriesKey="heritage"
-                />
-              )}
-              connectNulls={false}
-              dataKey="heritage"
-              dot={false}
-              isAnimationActive={false}
-              name="heritage"
-              stroke="#ffffff"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2.5}
-              type="linear"
-            />
+            {seriesReady ? (
+              <Line
+                activeDot={(props: HeritageActiveDotProps) => (
+                  <SelectableChartDot
+                    color="#ffffff"
+                    cx={props.cx}
+                    cy={props.cy}
+                    onSelectPoint={() => undefined}
+                    payload={props.payload}
+                    seriesKey="heritage"
+                  />
+                )}
+                connectNulls={false}
+                dataKey="heritage"
+                dot={false}
+                isAnimationActive={false}
+                name="heritage"
+                stroke="#ffffff"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                type="linear"
+              />
+            ) : null}
           </LineChart>
+          <div className="pointer-events-none absolute bottom-6 left-[46px] right-[46px] h-3 text-[10px] font-medium text-[#666666]">
+            {xAxisLabels.map((label, index) => {
+              const left = xAxisLabels.length <= 1
+                ? 50
+                : (index / (xAxisLabels.length - 1)) * 100;
+
+              return (
+                <span
+                  className="absolute top-0 -translate-x-1/2 whitespace-nowrap"
+                  key={`${label}-${index}`}
+                  style={{ left: `${left}%` }}
+                >
+                  {label}
+                </span>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -209,20 +237,6 @@ export function WelcomeHeritagePreview({
       </div>
     </div>
   );
-}
-
-function getWelcomeXAxisTicks(ticks: string[]) {
-  if (ticks.length <= 7) return ticks;
-
-  return ticks.filter((_, index) => index % 2 === 0 || index === ticks.length - 1);
-}
-
-function formatWelcomeTick(value?: string) {
-  if (!value) return "";
-  if (value.length === 7) return getMonthLabel(value);
-
-  const [year, month] = value.split("-");
-  return getMonthLabel(`${year}-${month}`);
 }
 
 function getWelcomeYDomain(values: number[]): [number, number] {

@@ -1,8 +1,9 @@
 import { createPortal } from "react-dom";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { UIEvent } from "react";
 
-import { useTransactionRows } from "@/hooks/use-transaction-rows";
+import { scheduleIdleTask, useDeferredTransactionRows } from "@/hooks/use-deferred-transaction-rows";
+import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transaction-rows";
 import { cn } from "@/shared/utils";
 
 import { formatEuroCents, formatProviderLabel } from "./formatters";
@@ -33,6 +34,27 @@ export function PortfolioProviderCards({
   userId,
   getProviderLiveTotal
 }: PortfolioProviderCardsProps) {
+  useEffect(() => {
+    if (!isActive || providers.length === 0) {
+      return;
+    }
+
+    const cancelIdleTask = scheduleIdleTask(() => {
+      for (const provider of providers.slice(0, 2)) {
+        void prefetchTransactionRows<PortfolioTransaction>({
+          endpoint: transactionRowsEndpoint,
+          initialPageSize: INITIAL_TRANSACTION_ROWS,
+          pageSize: NEXT_TRANSACTION_ROWS,
+          sourceInstitution: provider.sourceInstitution,
+          totalCount: provider.transactionCount,
+          userId
+        });
+      }
+    }, 2_200);
+
+    return cancelIdleTask;
+  }, [isActive, providers, transactionRowsEndpoint, userId]);
+
   if (!portalNode) return null;
 
   return createPortal(
@@ -147,6 +169,10 @@ function PortfolioTransactionTable({
   transactionFilter: (transaction: PortfolioTransaction) => boolean;
 }) {
   const {
+    rowsContainerRef,
+    shouldLoadRows
+  } = useDeferredTransactionRows(isActive, provider.transactionCount);
+  const {
     error,
     hasMore,
     loading,
@@ -157,6 +183,7 @@ function PortfolioTransactionTable({
     initialPageSize: INITIAL_TRANSACTION_ROWS,
     isActive,
     pageSize: NEXT_TRANSACTION_ROWS,
+    shouldLoad: shouldLoadRows,
     sourceInstitution: provider.sourceInstitution,
     totalCount: provider.transactionCount,
     userId
@@ -180,6 +207,7 @@ function PortfolioTransactionTable({
   return (
     <>
       <div
+        ref={rowsContainerRef}
         className="min-h-0 flex-1 overflow-auto rounded-t-[20px] hide-scrollbar"
         onScroll={handleScroll}
       >

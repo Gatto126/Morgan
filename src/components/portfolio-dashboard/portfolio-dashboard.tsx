@@ -60,9 +60,10 @@ export function PortfolioDashboard({
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const [showSoldAssets, setShowSoldAssets] = useState(false);
   const [chartReady, setChartReady] = useState(false);
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
-  const [contentVisible, setContentVisible] = useState(false);
-  const firstLoadCompletedRef = useRef(false);
+  const hasInitialData = !!data && !loading;
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(!hasInitialData);
+  const [contentVisible, setContentVisible] = useState(hasInitialData);
+  const firstLoadCompletedRef = useRef(hasInitialData);
   const completedImportRefreshVersionRef = useRef(0);
   const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
   const isMobile = useIsMobile();

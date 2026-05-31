@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { privateJson } from "@/server/api/cache-control";
+
 const DEFAULT_TRANSACTION_ROW_LIMIT = 100;
 const MAX_TRANSACTION_ROW_LIMIT = 500;
 
@@ -70,11 +72,11 @@ export function transactionRowsJson<TTransaction>({
 }) {
   const nextOffset = offset + transactions.length;
 
-  return NextResponse.json({
+  return privateJson({
     limit,
     nextOffset: nextOffset < total ? nextOffset : null,
     offset,
     total,
     transactions
-  });
+  }, { maxAgeSeconds: 60, staleWhileRevalidateSeconds: 300 });
 }

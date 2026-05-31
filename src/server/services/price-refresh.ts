@@ -1,5 +1,9 @@
 import { apiLogger } from "@/server/logging/logger";
 import {
+  measurePerformanceStep,
+  type PerformanceTrace
+} from "@/server/logging/performance";
+import {
   marketDataRepository,
   type MarketDataRepository
 } from "@/server/repositories/market-data-repository";
@@ -28,6 +32,10 @@ type PriceLogger = Pick<ReturnType<typeof apiLogger>, "error" | "info">;
 export type PriceRefreshRequest = {
   isins: string[];
   cryptos: string[];
+};
+
+type FetchPricesOptions = {
+  trace?: PerformanceTrace;
 };
 
 export type PriceRefreshRepository = Pick<MarketDataRepository, "listLatestHistoricalPrices">;
@@ -331,31 +339,46 @@ export function createPriceRefreshService({
       return rateLimiter.getRetryAfterMs(userId);
     },
 
-    async fetchPrices({ isins, cryptos }: PriceRefreshRequest) {
+    async fetchPrices({ isins, cryptos }: PriceRefreshRequest, { trace }: FetchPricesOptions = {}) {
       const requestKeys = [...isins, ...cryptos];
-      const historicalPrices = await repository.listLatestHistoricalPrices(requestKeys);
-      const [isinResults, cryptoResults] = await Promise.all([
-        fetchPriceResults(
-          "isin",
-          isins,
-          isinConcurrency,
-          fetchIsinPrice,
-          inFlightIsinPrices,
-          historicalPrices,
-          historicalFallbackGraceMs,
-          logger
-        ),
-        fetchPriceResults(
-          "crypto",
-          cryptos,
-          cryptoConcurrency,
-          fetchCryptoPrice,
-          inFlightCryptoPrices,
-          historicalPrices,
-          historicalFallbackGraceMs,
-          logger
-        )
-      ]);
+      const historicalPrices = await measurePerformanceStep(
+        trace,
+        "prices.repository.listLatestHistoricalPrices",
+        () => repository.listLatestHistoricalPrices(requestKeys),
+        (rows) => ({ requestKeys: requestKeys.length, rows: rows.size })
+      );
+      const [isinResults, cryptoResults] = await measurePerformanceStep(
+        trace,
+        "prices.external.fetchLivePrices",
+        () => Promise.all([
+          fetchPriceResults(
+            "isin",
+            isins,
+            isinConcurrency,
+            fetchIsinPrice,
+            inFlightIsinPrices,
+            historicalPrices,
+            historicalFallbackGraceMs,
+            logger
+          ),
+          fetchPriceResults(
+            "crypto",
+            cryptos,
+            cryptoConcurrency,
+            fetchCryptoPrice,
+            inFlightCryptoPrices,
+            historicalPrices,
+            historicalFallbackGraceMs,
+            logger
+          )
+        ]),
+        ([isinRows, cryptoRows]) => ({
+          cryptoKeys: cryptos.length,
+          cryptoResults: cryptoRows.length,
+          isinKeys: isins.length,
+          isinResults: isinRows.length
+        })
+      );
 
       const fetchResults = [...isinResults, ...cryptoResults];
       const prices: Record<string, number | null> = {};

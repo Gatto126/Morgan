@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   assetHistoryFindMany: vi.fn(),
+  queryRaw: vi.fn(),
   investmentCount: vi.fn(),
   cryptoCount: vi.fn()
 }));
 
 vi.mock("@/server/db/prisma", () => ({
   prisma: {
+    $queryRaw: mocks.queryRaw,
     assetHistory: {
       findMany: mocks.assetHistoryFindMany
     },
@@ -25,9 +27,11 @@ import { marketDataRepository } from "@/server/repositories/market-data-reposito
 describe("market data repository", () => {
   beforeEach(() => {
     mocks.assetHistoryFindMany.mockReset();
+    mocks.queryRaw.mockReset();
     mocks.investmentCount.mockReset();
     mocks.cryptoCount.mockReset();
     mocks.assetHistoryFindMany.mockResolvedValue([]);
+    mocks.queryRaw.mockResolvedValue([]);
     mocks.investmentCount.mockResolvedValue(0);
     mocks.cryptoCount.mockResolvedValue(0);
   });
@@ -49,10 +53,27 @@ describe("market data repository", () => {
     });
   });
 
+  it("can limit portfolio history to the profile transaction window", async () => {
+    await marketDataRepository.listPortfolioHistory(["BTC"], { fromDate: "2026-01-01" });
+
+    expect(mocks.assetHistoryFindMany).toHaveBeenCalledWith({
+      where: {
+        isin: { in: ["BTC"] },
+        currency: "EUR",
+        date: { gte: "2026-01-01" }
+      },
+      select: {
+        isin: true,
+        date: true,
+        value: true
+      },
+      orderBy: { date: "asc" }
+    });
+  });
+
   it("deduplicates latest prices by first sorted history row", async () => {
-    mocks.assetHistoryFindMany.mockResolvedValueOnce([
+    mocks.queryRaw.mockResolvedValueOnce([
       { isin: "BTC", value: 60_000 },
-      { isin: "BTC", value: 55_000 },
       { isin: "ETH", value: 2_400 }
     ]);
 
@@ -62,6 +83,7 @@ describe("market data repository", () => {
       ["BTC", 60_000],
       ["ETH", 2_400]
     ]));
+    expect(mocks.queryRaw).toHaveBeenCalledTimes(1);
   });
 
   it("checks whether a market key belongs to a profile portfolio", async () => {

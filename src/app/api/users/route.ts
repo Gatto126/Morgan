@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { privateJson } from "@/server/api/cache-control";
 import { authGuardResponse, requireAuth } from "@/server/auth/auth-guard";
 import { apiLogger } from "@/server/logging/logger";
 import {
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
 
     log.response("GET", "/api/users", 200, { count: users.length });
 
-    return NextResponse.json({ users });
+    return privateJson({ users }, { maxAgeSeconds: 15, staleWhileRevalidateSeconds: 60 });
   } catch (error) {
     const response = authGuardResponse(error);
     if (response) return response;

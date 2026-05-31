@@ -35,14 +35,46 @@ describe("dashboard repository", () => {
 
     expect(mocks.checkingFindMany).toHaveBeenCalledWith({
       where: { userId: "profile-1" },
+      select: {
+        amountCents: true,
+        balanceCents: true,
+        bookingDate: true,
+        description: true,
+        direction: true,
+        sourceInstitution: true,
+        typeLabel: true
+      },
       orderBy: { bookingDate: "asc" }
     });
     expect(mocks.investmentFindMany).toHaveBeenCalledWith({
       where: { userId: "profile-1" },
+      select: {
+        amountCents: true,
+        bookingDate: true,
+        description: true,
+        direction: true,
+        isin: true,
+        productName: true,
+        quantityUnits: true,
+        sourceInstitution: true,
+        tradeType: true,
+        typeLabel: true
+      },
       orderBy: { bookingDate: "asc" }
     });
     expect(mocks.cryptoFindMany).toHaveBeenCalledWith({
       where: { userId: "profile-1" },
+      select: {
+        amountCents: true,
+        bookingDate: true,
+        description: true,
+        direction: true,
+        quantityUnits: true,
+        sourceInstitution: true,
+        tokenName: true,
+        tokenSymbol: true,
+        typeLabel: true
+      },
       orderBy: { bookingDate: "asc" }
     });
   });
@@ -57,6 +89,24 @@ describe("dashboard repository", () => {
       where: {
         isin: { in: ["BTC", "IE00B4L5Y983"] },
         currency: "EUR"
+      },
+      select: {
+        isin: true,
+        date: true,
+        value: true
+      },
+      orderBy: { date: "asc" }
+    });
+  });
+
+  it("can limit dashboard history to the profile transaction window", async () => {
+    await dashboardRepository.listAssetHistory(["BTC"], { fromDate: "2026-01-01" });
+
+    expect(mocks.assetHistoryFindMany).toHaveBeenCalledWith({
+      where: {
+        isin: { in: ["BTC"] },
+        currency: "EUR",
+        date: { gte: "2026-01-01" }
       },
       select: {
         isin: true,

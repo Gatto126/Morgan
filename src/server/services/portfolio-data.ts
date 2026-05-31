@@ -12,6 +12,10 @@ import {
   transactionReadRepository,
   type TransactionReadRepository
 } from "@/server/repositories/transaction-read-repository";
+import {
+  measurePerformanceStep,
+  type PerformanceTrace
+} from "@/server/logging/performance";
 
 type PortfolioDataDependencies = {
   transactionRepository?: Pick<
@@ -20,6 +24,7 @@ type PortfolioDataDependencies = {
   >;
   marketRepository?: Pick<MarketDataRepository, "listPortfolioHistory">;
   now?: Date;
+  trace?: PerformanceTrace;
 };
 
 type PortfolioSummaryProvider = Omit<PortfolioProviderSummary, "transactions"> & {
@@ -36,11 +41,30 @@ function toPortfolioSummaryData(data: ReturnType<typeof buildPortfolioTimeSeries
   return {
     dailyData: data.dailyData,
     monthlyData: data.monthlyData,
-    providers: data.providers.map(({ transactions, ...provider }) => ({
+    providers: data.providers.map(({ transactionCount, transactions, ...provider }) => ({
       ...provider,
-      transactionCount: transactions.length
+      transactionCount: transactionCount ?? transactions.length
     }))
   };
+}
+
+function toHistoryDateKey(date: Date) {
+  return date.toISOString().split("T")[0];
+}
+
+function getFirstTransactionDate(transactions: Array<{ bookingDate: Date }>) {
+  if (transactions.length === 0) {
+    return undefined;
+  }
+
+  let firstDate = transactions[0].bookingDate;
+  for (const transaction of transactions) {
+    if (transaction.bookingDate < firstDate) {
+      firstDate = transaction.bookingDate;
+    }
+  }
+
+  return toHistoryDateKey(firstDate);
 }
 
 export async function getInvestmentPortfolioData(
@@ -48,20 +72,42 @@ export async function getInvestmentPortfolioData(
   {
     transactionRepository = transactionReadRepository,
     marketRepository = marketDataRepository,
-    now = new Date()
+    now = new Date(),
+    trace
   }: PortfolioDataDependencies = {}
 ) {
-  const transactions = await transactionRepository.listInvestmentTransactions(userId);
+  const transactions = await measurePerformanceStep(
+    trace,
+    "investment.repository.listTransactions",
+    () => transactionRepository.listInvestmentTransactions(userId),
+    (rows) => ({ rows: rows.length })
+  );
   const priceKeys = getPortfolioPriceKeys(transactions, (isin) => isin.length === 12);
-  const historyPrices = await marketRepository.listPortfolioHistory(priceKeys);
+  const historyPrices = await measurePerformanceStep(
+    trace,
+    "investment.repository.listPortfolioHistory",
+    () => marketRepository.listPortfolioHistory(priceKeys, {
+      fromDate: getFirstTransactionDate(transactions)
+    }),
+    (rows) => ({ priceKeys: priceKeys.length, rows: rows.length })
+  );
 
   return {
-    result: buildPortfolioTimeSeries({
-      transactions,
-      historyPrices,
-      priceKeys,
-      now
-    }),
+    result: await measurePerformanceStep(
+      trace,
+      "investment.builder.buildTimeSeries",
+      async () => buildPortfolioTimeSeries({
+        transactions,
+        historyPrices,
+        priceKeys,
+        now
+      }),
+      (result) => ({
+        dailyPoints: result.dailyData.length,
+        monthlyPoints: result.monthlyData.length,
+        providers: result.providers.length
+      })
+    ),
     transactionCount: transactions.length
   };
 }
@@ -70,11 +116,47 @@ export async function getInvestmentPortfolioSummaryData(
   userId: string,
   dependencies: PortfolioDataDependencies = {}
 ) {
-  const { result, transactionCount } = await getInvestmentPortfolioData(userId, dependencies);
+  const {
+    transactionRepository = transactionReadRepository,
+    marketRepository = marketDataRepository,
+    now = new Date(),
+    trace
+  } = dependencies;
+  const transactions = await measurePerformanceStep(
+    trace,
+    "investment.repository.listTransactions",
+    () => transactionRepository.listInvestmentTransactions(userId),
+    (rows) => ({ rows: rows.length })
+  );
+  const priceKeys = getPortfolioPriceKeys(transactions, (isin) => isin.length === 12);
+  const historyPrices = await measurePerformanceStep(
+    trace,
+    "investment.repository.listPortfolioHistory",
+    () => marketRepository.listPortfolioHistory(priceKeys, {
+      fromDate: getFirstTransactionDate(transactions)
+    }),
+    (rows) => ({ priceKeys: priceKeys.length, rows: rows.length })
+  );
+  const result = await measurePerformanceStep(
+    trace,
+    "investment.builder.buildSummary",
+    async () => buildPortfolioTimeSeries({
+      includeProviderTransactions: false,
+      transactions,
+      historyPrices,
+      priceKeys,
+      now
+    }),
+    (result) => ({
+      dailyPoints: result.dailyData.length,
+      monthlyPoints: result.monthlyData.length,
+      providers: result.providers.length
+    })
+  );
 
   return {
     result: toPortfolioSummaryData(result),
-    transactionCount
+    transactionCount: transactions.length
   };
 }
 
@@ -83,21 +165,48 @@ export async function getTradeRepublicCryptoPortfolioData(
   {
     transactionRepository = transactionReadRepository,
     marketRepository = marketDataRepository,
-    now = new Date()
+    now = new Date(),
+    trace
   }: PortfolioDataDependencies = {}
 ) {
-  const dbTransactions = await transactionRepository.listTradeRepublicCryptoTransactions(userId);
-  const transactions = dbTransactions.map(toCryptoPortfolioTransaction);
+  const dbTransactions = await measurePerformanceStep(
+    trace,
+    "crypto.repository.listTransactions",
+    () => transactionRepository.listTradeRepublicCryptoTransactions(userId),
+    (rows) => ({ rows: rows.length })
+  );
+  const transactions = await measurePerformanceStep(
+    trace,
+    "crypto.builder.mapTransactions",
+    async () => dbTransactions.map(toCryptoPortfolioTransaction),
+    (rows) => ({ rows: rows.length })
+  );
   const priceKeys = getPortfolioPriceKeys(transactions);
-  const historyPrices = await marketRepository.listPortfolioHistory(priceKeys);
+  const historyPrices = await measurePerformanceStep(
+    trace,
+    "crypto.repository.listPortfolioHistory",
+    () => marketRepository.listPortfolioHistory(priceKeys, {
+      fromDate: getFirstTransactionDate(transactions)
+    }),
+    (rows) => ({ priceKeys: priceKeys.length, rows: rows.length })
+  );
 
   return {
-    result: buildPortfolioTimeSeries({
-      transactions,
-      historyPrices,
-      priceKeys,
-      now
-    }),
+    result: await measurePerformanceStep(
+      trace,
+      "crypto.builder.buildTimeSeries",
+      async () => buildPortfolioTimeSeries({
+        transactions,
+        historyPrices,
+        priceKeys,
+        now
+      }),
+      (result) => ({
+        dailyPoints: result.dailyData.length,
+        monthlyPoints: result.monthlyData.length,
+        providers: result.providers.length
+      })
+    ),
     transactionCount: transactions.length
   };
 }
@@ -106,11 +215,53 @@ export async function getTradeRepublicCryptoPortfolioSummaryData(
   userId: string,
   dependencies: PortfolioDataDependencies = {}
 ) {
-  const { result, transactionCount } = await getTradeRepublicCryptoPortfolioData(userId, dependencies);
+  const {
+    transactionRepository = transactionReadRepository,
+    marketRepository = marketDataRepository,
+    now = new Date(),
+    trace
+  } = dependencies;
+  const dbTransactions = await measurePerformanceStep(
+    trace,
+    "crypto.repository.listTransactions",
+    () => transactionRepository.listTradeRepublicCryptoTransactions(userId),
+    (rows) => ({ rows: rows.length })
+  );
+  const transactions = await measurePerformanceStep(
+    trace,
+    "crypto.builder.mapTransactions",
+    async () => dbTransactions.map(toCryptoPortfolioTransaction),
+    (rows) => ({ rows: rows.length })
+  );
+  const priceKeys = getPortfolioPriceKeys(transactions);
+  const historyPrices = await measurePerformanceStep(
+    trace,
+    "crypto.repository.listPortfolioHistory",
+    () => marketRepository.listPortfolioHistory(priceKeys, {
+      fromDate: getFirstTransactionDate(transactions)
+    }),
+    (rows) => ({ priceKeys: priceKeys.length, rows: rows.length })
+  );
+  const result = await measurePerformanceStep(
+    trace,
+    "crypto.builder.buildSummary",
+    async () => buildPortfolioTimeSeries({
+      includeProviderTransactions: false,
+      transactions,
+      historyPrices,
+      priceKeys,
+      now
+    }),
+    (result) => ({
+      dailyPoints: result.dailyData.length,
+      monthlyPoints: result.monthlyData.length,
+      providers: result.providers.length
+    })
+  );
 
   return {
     result: toPortfolioSummaryData(result),
-    transactionCount
+    transactionCount: transactions.length
   };
 }
 

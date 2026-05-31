@@ -12,6 +12,7 @@ import {
 
 import { Input } from "@/components/ui/input";
 import { getAuthLandingResetState, getAuthSubmitButtonClass } from "@/components/auth-shell-helpers";
+import { clearPersistedFinanceProfileSelection } from "@/components/finance-shell/use-finance-profile-persistence";
 import { PortfolioPreviewChart } from "@/components/portfolio-preview-chart";
 import { authClient } from "@/client/auth-client";
 import {
@@ -203,8 +204,7 @@ export function AuthShell() {
         throw new Error(authErrorMessage(result.error.message || ""));
       }
 
-      localStorage.removeItem("morgan_active_user");
-      localStorage.removeItem("morgan_stage");
+      clearPersistedFinanceProfileSelection();
 
       if (view === "signIn") {
         setSuccessMessage("Login successful.");

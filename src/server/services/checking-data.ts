@@ -7,6 +7,10 @@ import {
   transactionReadRepository,
   type TransactionReadRepository
 } from "@/server/repositories/transaction-read-repository";
+import {
+  measurePerformanceStep,
+  type PerformanceTrace
+} from "@/server/logging/performance";
 
 type CheckingSummaryProvider = Omit<CheckingProviderSummary, "transactions"> & {
   transactionCount: number;
@@ -21,29 +25,64 @@ export type CheckingSummaryData = {
 export async function getCheckingData(
   userId: string,
   repository: Pick<TransactionReadRepository, "listCheckingTransactions"> = transactionReadRepository,
-  now = new Date()
+  now = new Date(),
+  trace?: PerformanceTrace
 ) {
-  const transactions = await repository.listCheckingTransactions(userId);
+  const transactions = await measurePerformanceStep(
+    trace,
+    "checking.repository.listTransactions",
+    () => repository.listCheckingTransactions(userId),
+    (rows) => ({ rows: rows.length })
+  );
 
-  return buildCheckingTimeSeries({
-    transactions: transactions satisfies CheckingTransaction[],
-    now
-  });
+  return measurePerformanceStep(
+    trace,
+    "checking.builder.buildTimeSeries",
+    async () => buildCheckingTimeSeries({
+      transactions: transactions satisfies CheckingTransaction[],
+      now
+    }),
+    (result) => ({
+      dailyPoints: result.dailyData.length,
+      monthlyPoints: result.monthlyData.length,
+      providers: result.providers.length
+    })
+  );
 }
 
 export async function getCheckingSummaryData(
   userId: string,
   repository: Pick<TransactionReadRepository, "listCheckingTransactions"> = transactionReadRepository,
-  now = new Date()
+  now = new Date(),
+  trace?: PerformanceTrace
 ): Promise<CheckingSummaryData> {
-  const data = await getCheckingData(userId, repository, now);
+  const transactions = await measurePerformanceStep(
+    trace,
+    "checking.repository.listTransactions",
+    () => repository.listCheckingTransactions(userId),
+    (rows) => ({ rows: rows.length })
+  );
+  const data = await measurePerformanceStep(
+    trace,
+    "checking.builder.buildSummary",
+    async () => buildCheckingTimeSeries({
+      includeProviderTransactions: false,
+      transactions: transactions satisfies CheckingTransaction[],
+      now
+    }),
+    (result) => ({
+      dailyPoints: result.dailyData.length,
+      monthlyPoints: result.monthlyData.length,
+      providers: result.providers.length
+    })
+  );
 
   return {
     dailyData: data.dailyData,
     monthlyData: data.monthlyData,
-    providers: data.providers.map(({ transactions, ...provider }) => ({
+    providers: data.providers.map(({ transactionCount, transactions, ...provider }) => ({
       ...provider,
-      transactionCount: transactions.length
+      transactionCount: transactionCount ?? transactions.length
     }))
   };
 }

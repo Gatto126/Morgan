@@ -97,15 +97,47 @@ describe("binance service", () => {
     );
   });
 
-  it("prices balances in EUR using stablecoins, direct pairs and USDT fallback pairs", async () => {
+  it("uses Binance server time for signed balance requests when no test clock is supplied", async () => {
+    const signedUrls: string[] = [];
     const fetcher = (async (input) => {
       const url = String(input);
 
-      if (url.endsWith("BTCEUR")) return jsonResponse({ price: "30000" });
-      if (url.endsWith("EURUSDT")) return jsonResponse({ price: "1.2" });
-      if (url.endsWith("ADAUSDT")) return jsonResponse({ price: "0.6" });
-      if (url.endsWith("ADAEUR") || url.endsWith("UNKNOWNEUR")) return jsonResponse({}, 404);
-      if (url.endsWith("UNKNOWNUSDT")) return jsonResponse({}, 404);
+      if (url.includes("/api/v3/time")) {
+        return jsonResponse({ serverTime: 1_800_000_000_000 });
+      }
+
+      signedUrls.push(url);
+
+      if (url.includes("/sapi/v3/asset/getUserAsset")) return jsonResponse([]);
+      if (url.includes("/sapi/v1/asset/get-funding-asset")) return jsonResponse([]);
+      if (url.includes("/sapi/v1/simple-earn/flexible/position")) return jsonResponse({ rows: [] });
+      if (url.includes("/sapi/v1/simple-earn/locked/position")) return jsonResponse({ rows: [] });
+
+      throw new Error(`Unexpected URL: ${url}`);
+    }) as BinanceFetch;
+
+    await fetchBalances({ apiKey: "api-key", secret: "secret" }, { fetcher });
+
+    expect(signedUrls).toHaveLength(4);
+    for (const signedUrl of signedUrls) {
+      expect(signedUrl).toContain("timestamp=1800000000000");
+      expect(signedUrl).toContain("recvWindow=60000");
+    }
+  });
+
+  it("prices balances in EUR using stablecoins, direct pairs and USDT fallback pairs", async () => {
+    const requestedUrls: string[] = [];
+    const fetcher = (async (input) => {
+      const url = String(input);
+      requestedUrls.push(url);
+
+      if (url === "https://api.binance.com/api/v3/ticker/price") {
+        return jsonResponse([
+          { symbol: "BTCEUR", price: "30000" },
+          { symbol: "EURUSDT", price: "1.2" },
+          { symbol: "ADAUSDT", price: "0.6" }
+        ]);
+      }
 
       throw new Error(`Unexpected URL: ${url}`);
     }) as BinanceFetch;
@@ -128,6 +160,27 @@ describe("binance service", () => {
     expect(bySymbol.BTC.eurValue).toBe(3_000);
     expect(bySymbol.ADA.eurValue).toBe(75);
     expect(bySymbol.UNKNOWN.eurValue).toBe(0);
+    expect(requestedUrls).toEqual(["https://api.binance.com/api/v3/ticker/price"]);
+  });
+
+  it("falls back to pair lookups when all Binance ticker prices are unavailable", async () => {
+    const fetcher = (async (input) => {
+      const url = String(input);
+
+      if (url === "https://api.binance.com/api/v3/ticker/price") return jsonResponse({}, 500);
+      if (url.endsWith("SOLEUR")) return jsonResponse({}, 404);
+      if (url.endsWith("SOLUSDT")) return jsonResponse({ price: "120" });
+      if (url.endsWith("EURUSDT")) return jsonResponse({ price: "1.2" });
+
+      throw new Error(`Unexpected URL: ${url}`);
+    }) as BinanceFetch;
+
+    const priced = await priceBalances(
+      new Map([["SOL", { free: 2, locked: 0 }]]),
+      { fetcher }
+    );
+
+    expect(priced[0]?.eurValue).toBe(200);
   });
 
   it("falls back to USDT pricing when the direct EUR ticker request fails", async () => {

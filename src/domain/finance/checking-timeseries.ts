@@ -21,6 +21,7 @@ export type CheckingProviderSummary = {
   interest: number;
   cashback: number;
   tax: number;
+  transactionCount?: number;
   transactions: {
     id: string;
     bookingDate: Date;
@@ -45,6 +46,7 @@ export type CheckingDailyBucket = Omit<CheckingMonthBucket, "month"> & {
 };
 
 type BuildCheckingTimeSeriesOptions = {
+  includeProviderTransactions?: boolean;
   transactions: CheckingTransaction[];
   now?: Date;
 };
@@ -133,6 +135,7 @@ function cloneRecord(value: Record<string, number>) {
 }
 
 export function buildCheckingTimeSeries({
+  includeProviderTransactions = true,
   transactions,
   now = new Date()
 }: BuildCheckingTimeSeriesOptions) {
@@ -143,21 +146,25 @@ export function buildCheckingTimeSeries({
 
   for (const transaction of descendingTransactions) {
     const provider = getOrCreateProvider(providerMap, transaction.sourceInstitution);
-    provider.transactions.push({
-      id: transaction.id,
-      bookingDate: transaction.bookingDate,
-      typeLabel: transaction.typeLabel,
-      description: transaction.description,
-      direction: transaction.direction,
-      amountCents: transaction.amountCents
-    });
+    provider.transactionCount = (provider.transactionCount ?? 0) + 1;
+
+    if (includeProviderTransactions) {
+      provider.transactions.push({
+        id: transaction.id,
+        bookingDate: transaction.bookingDate,
+        typeLabel: transaction.typeLabel,
+        description: transaction.description,
+        direction: transaction.direction,
+        amountCents: transaction.amountCents
+      });
+    }
 
     const category = classifyCheckingFlow(transaction);
     applyProviderFlow(provider, category, transaction.amountCents);
 
     if (transaction.sourceInstitution === BBVA_INSTITUTION) {
       provider.total = provider.income + provider.interest + provider.cashback - provider.expenses - provider.tax;
-    } else if (provider.transactions.length === 1) {
+    } else if (provider.transactionCount === 1) {
       provider.total = transaction.balanceCents;
     }
   }

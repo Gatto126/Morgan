@@ -2,16 +2,21 @@
 
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 
+import {
+  ACTIVE_PROFILE_PERSISTENCE_KEY,
+  ACTIVE_STAGE_PERSISTENCE_KEY,
+  type PersistedFinanceSelection,
+  resolveRestoredStage
+} from "./persistence-state";
 import type { SettingsSection } from "./settings-panel-types";
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
-
-const restorableStages = new Set<Stage>(["welcome", "select", "create", "dashboard", "checking", "investment", "settings", "binance", "crypto"]);
 
 type UseFinanceProfilePersistenceParams = {
   activeUser: UserRecord | null;
   hasRestoredClientState: boolean;
   initialUsers: UserRecord[];
+  skipClientRestore: boolean;
   stage: Stage;
   setActiveSettingsSection: Dispatch<SetStateAction<SettingsSection | null>>;
   setActiveUser: Dispatch<SetStateAction<UserRecord | null>>;
@@ -20,24 +25,50 @@ type UseFinanceProfilePersistenceParams = {
   setStage: Dispatch<SetStateAction<Stage>>;
 };
 
-function isRestorableStage(value: string | null): value is Stage {
-  return value !== null && restorableStages.has(value as Stage);
-}
+function writePersistenceCookie(name: string, value: string | null) {
+  const encodedName = encodeURIComponent(name);
 
-function resolveRestoredStage(savedStage: string | null) {
-  if (!isRestorableStage(savedStage) || savedStage === "select" || savedStage === "create") {
-    return "dashboard" as Stage;
+  if (!value) {
+    document.cookie = `${encodedName}=; Path=/; Max-Age=0; SameSite=Lax`;
+    return;
   }
 
-  return savedStage;
+  document.cookie = `${encodedName}=${encodeURIComponent(value)}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
-export function resolveInitialFinanceState(initialUsers: UserRecord[]) {
+function writePersistedFinanceSelectionCookies(activeUser: UserRecord | null, stage: Stage) {
+  writePersistenceCookie(ACTIVE_PROFILE_PERSISTENCE_KEY, activeUser?.id ?? null);
+  writePersistenceCookie(ACTIVE_STAGE_PERSISTENCE_KEY, stage);
+}
+
+function clearPersistedFinanceSelectionCookies() {
+  writePersistenceCookie(ACTIVE_PROFILE_PERSISTENCE_KEY, null);
+  writePersistenceCookie(ACTIVE_STAGE_PERSISTENCE_KEY, null);
+}
+
+export function resolveInitialFinanceState(
+  initialUsers: UserRecord[],
+  persistedSelection: PersistedFinanceSelection | null = null
+) {
+  const persistedUser = persistedSelection?.activeUserId
+    ? initialUsers.find((user) => user.id === persistedSelection.activeUserId) ?? null
+    : null;
+
+  if (persistedUser) {
+    return {
+      activeUser: persistedUser,
+      restoredFromServer: true,
+      showUploadView: false,
+      stage: resolveRestoredStage(persistedSelection?.stage ?? null)
+    };
+  }
+
   const onlyUser = initialUsers.length === 1 ? initialUsers[0] : null;
 
   if (onlyUser) {
     return {
       activeUser: onlyUser,
+      restoredFromServer: false,
       showUploadView: false,
       stage: "dashboard" as Stage
     };
@@ -45,20 +76,23 @@ export function resolveInitialFinanceState(initialUsers: UserRecord[]) {
 
   return {
     activeUser: null,
+    restoredFromServer: false,
     showUploadView: false,
     stage: initialUsers.length > 0 ? "welcome" as Stage : "create" as Stage
   };
 }
 
 export function clearPersistedFinanceProfileSelection() {
-  localStorage.removeItem("morgan_active_user");
-  localStorage.removeItem("morgan_stage");
+  localStorage.removeItem(ACTIVE_PROFILE_PERSISTENCE_KEY);
+  localStorage.removeItem(ACTIVE_STAGE_PERSISTENCE_KEY);
+  clearPersistedFinanceSelectionCookies();
 }
 
 export function useFinanceProfilePersistence({
   activeUser,
   hasRestoredClientState,
   initialUsers,
+  skipClientRestore,
   stage,
   setActiveSettingsSection,
   setActiveUser,
@@ -67,12 +101,17 @@ export function useFinanceProfilePersistence({
   setStage
 }: UseFinanceProfilePersistenceParams) {
   useEffect(() => {
+    if (skipClientRestore) {
+      setHasRestoredClientState(true);
+      return;
+    }
+
     let cancelled = false;
 
     const restoreTimer = window.setTimeout(() => {
       try {
-        const savedUserId = localStorage.getItem("morgan_active_user");
-        const savedStage = localStorage.getItem("morgan_stage");
+        const savedUserId = localStorage.getItem(ACTIVE_PROFILE_PERSISTENCE_KEY);
+        const savedStage = localStorage.getItem(ACTIVE_STAGE_PERSISTENCE_KEY);
         const savedUser = savedUserId ? initialUsers.find((user) => user.id === savedUserId) ?? null : null;
 
         if (!cancelled && savedUser) {
@@ -102,6 +141,7 @@ export function useFinanceProfilePersistence({
     };
   }, [
     initialUsers,
+    skipClientRestore,
     setActiveSettingsSection,
     setActiveUser,
     setHasRestoredClientState,
@@ -114,13 +154,14 @@ export function useFinanceProfilePersistence({
 
     try {
       if (activeUser) {
-        localStorage.setItem("morgan_active_user", activeUser.id);
+        localStorage.setItem(ACTIVE_PROFILE_PERSISTENCE_KEY, activeUser.id);
       } else {
-        localStorage.removeItem("morgan_active_user");
+        localStorage.removeItem(ACTIVE_PROFILE_PERSISTENCE_KEY);
       }
-      localStorage.setItem("morgan_stage", stage);
+      localStorage.setItem(ACTIVE_STAGE_PERSISTENCE_KEY, stage);
+      writePersistedFinanceSelectionCookies(activeUser, stage);
     } catch (err) {
-      console.warn("Could not write localStorage for persistence", err);
+      console.warn("Could not write persisted finance selection", err);
     }
   }, [stage, activeUser, hasRestoredClientState]);
 

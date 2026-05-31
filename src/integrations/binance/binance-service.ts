@@ -43,6 +43,7 @@ export const TOKEN_NAMES: Record<string, string> = {
 const BINANCE_BASE_URL = "https://api.binance.com";
 const PRICE_TIMEOUT_MS = 5_000;
 const ACCOUNT_TIMEOUT_MS = 10_000;
+const SIGNED_REQUEST_RECV_WINDOW_MS = 60_000;
 const EUR_STABLES = new Set(["EURL", "EURS", "SEUR", "EURC", "EURI"]);
 const USD_STABLES = new Set(["USDT", "USDC", "BUSD", "DAI", "TUSD", "USDP", "GUSD"]);
 
@@ -69,6 +70,7 @@ export type BinanceCredentials = {
 export type BinanceServiceDependencies = {
   fetcher?: BinanceFetch;
   now?: () => Date;
+  serverTime?: () => Promise<number>;
 };
 
 type SpotAsset = {
@@ -81,6 +83,11 @@ type SpotAsset = {
 
 type EarnPage<T> = {
   rows?: T[];
+};
+
+type BinanceTickerPrice = {
+  symbol?: string;
+  price?: string;
 };
 
 export class BinanceApiError extends Error {
@@ -131,13 +138,14 @@ export async function fetchBalances(
 ) {
   const fetcher = dependencies.fetcher ?? fetch;
   const { apiKey, secret } = credentials;
+  const timestamp = await resolveSignedRequestTimestamp(fetcher, dependencies);
 
   // All 4 endpoints in parallel. Total regular-case weight: 5 + 1 + 150 + 150.
   const [spotMap, fundingMap, flexibleMap, lockedMap] = await Promise.all([
-    fetchSpot(fetcher, apiKey, secret, dependencies),
-    fetchFunding(fetcher, apiKey, secret, dependencies),
-    fetchFlexibleEarn(fetcher, apiKey, secret, dependencies),
-    fetchLockedEarn(fetcher, apiKey, secret, dependencies),
+    fetchSpot(fetcher, apiKey, secret, timestamp),
+    fetchFunding(fetcher, apiKey, secret, timestamp),
+    fetchFlexibleEarn(fetcher, apiKey, secret, timestamp),
+    fetchLockedEarn(fetcher, apiKey, secret, timestamp),
   ]);
 
   const flexibleBalances = new Map<string, TokenBalance>();
@@ -187,14 +195,22 @@ export async function priceBalances(
   balances: Map<string, TokenBalance>,
   dependencies: BinanceServiceDependencies = {}
 ) {
+  const fetcher = dependencies.fetcher ?? fetch;
   const entries = [...balances.entries()].filter(([, balance]) => balance.free + balance.locked > 0);
   const prices = new Map<string, number>();
+  const tickerPrices = await fetchAllTickerPrices(fetcher);
 
-  await Promise.all(
-    entries.map(async ([symbol]) => {
-      prices.set(symbol, await getEurPrice(symbol, dependencies));
-    })
-  );
+  if (tickerPrices) {
+    for (const [symbol] of entries) {
+      prices.set(symbol, getEurPriceFromTickerMap(symbol, tickerPrices));
+    }
+  } else {
+    await Promise.all(
+      entries.map(async ([symbol]) => {
+        prices.set(symbol, await getEurPrice(symbol, dependencies));
+      })
+    );
+  }
 
   return entries.map(([symbol, balance]) => {
     const total = balance.free + balance.locked;
@@ -213,13 +229,46 @@ function currentTimestamp(dependencies: BinanceServiceDependencies) {
   return (dependencies.now?.() ?? new Date()).getTime();
 }
 
+async function resolveSignedRequestTimestamp(
+  fetcher: BinanceFetch,
+  dependencies: BinanceServiceDependencies
+) {
+  if (dependencies.now) {
+    return currentTimestamp(dependencies);
+  }
+
+  if (dependencies.serverTime) {
+    const serverTime = await dependencies.serverTime();
+    if (Number.isFinite(serverTime)) {
+      return serverTime;
+    }
+  }
+
+  try {
+    const response = await fetcher(`${BINANCE_BASE_URL}/api/v3/time`, {
+      signal: AbortSignal.timeout(PRICE_TIMEOUT_MS)
+    });
+    if (!response.ok) {
+      return currentTimestamp(dependencies);
+    }
+
+    const data = (await response.json()) as { serverTime?: number };
+    return Number.isFinite(data.serverTime) ? Number(data.serverTime) : currentTimestamp(dependencies);
+  } catch {
+    return currentTimestamp(dependencies);
+  }
+}
+
 async function fetchSpot(
   fetcher: BinanceFetch,
   apiKey: string,
   secret: string,
-  dependencies: BinanceServiceDependencies
+  timestamp: number
 ) {
-  const queryString = makeSignedQuery(secret, { timestamp: currentTimestamp(dependencies) });
+  const queryString = makeSignedQuery(secret, {
+    timestamp,
+    recvWindow: SIGNED_REQUEST_RECV_WINDOW_MS
+  });
   const res = await fetcher(`${BINANCE_BASE_URL}/sapi/v3/asset/getUserAsset?${queryString}`, {
     method: "POST",
     headers: { "X-MBX-APIKEY": apiKey },
@@ -247,9 +296,12 @@ async function fetchFunding(
   fetcher: BinanceFetch,
   apiKey: string,
   secret: string,
-  dependencies: BinanceServiceDependencies
+  timestamp: number
 ) {
-  const queryString = makeSignedQuery(secret, { timestamp: currentTimestamp(dependencies) });
+  const queryString = makeSignedQuery(secret, {
+    timestamp,
+    recvWindow: SIGNED_REQUEST_RECV_WINDOW_MS
+  });
   const res = await fetcher(
     `${BINANCE_BASE_URL}/sapi/v1/asset/get-funding-asset?${queryString}`,
     {
@@ -278,14 +330,15 @@ async function fetchFlexibleEarn(
   fetcher: BinanceFetch,
   apiKey: string,
   secret: string,
-  dependencies: BinanceServiceDependencies
+  timestamp: number
 ) {
   const map = new Map<string, number>();
   let page = 1;
 
   while (true) {
     const queryString = makeSignedQuery(secret, {
-      timestamp: currentTimestamp(dependencies),
+      timestamp,
+      recvWindow: SIGNED_REQUEST_RECV_WINDOW_MS,
       current: page,
       size: 100,
     });
@@ -317,14 +370,15 @@ async function fetchLockedEarn(
   fetcher: BinanceFetch,
   apiKey: string,
   secret: string,
-  dependencies: BinanceServiceDependencies
+  timestamp: number
 ) {
   const map = new Map<string, number>();
   let page = 1;
 
   while (true) {
     const queryString = makeSignedQuery(secret, {
-      timestamp: currentTimestamp(dependencies),
+      timestamp,
+      recvWindow: SIGNED_REQUEST_RECV_WINDOW_MS,
       current: page,
       size: 10,
     });
@@ -374,6 +428,53 @@ async function fetchTickerPrice(fetcher: BinanceFetch, pairSymbol: string) {
   } catch {
     return null;
   }
+}
+
+async function fetchAllTickerPrices(fetcher: BinanceFetch) {
+  try {
+    const response = await fetcher(`${BINANCE_BASE_URL}/api/v3/ticker/price`, {
+      signal: AbortSignal.timeout(PRICE_TIMEOUT_MS)
+    });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (!Array.isArray(data)) return null;
+
+    const prices = new Map<string, number>();
+    for (const item of data as BinanceTickerPrice[]) {
+      if (!item.symbol) continue;
+
+      const price = parsePositiveNumber(item.price);
+      if (price !== null) {
+        prices.set(item.symbol.toUpperCase(), price);
+      }
+    }
+
+    return prices.size > 0 ? prices : null;
+  } catch {
+    return null;
+  }
+}
+
+function getEurPriceFromTickerMap(symbol: string, prices: Map<string, number>) {
+  const normalizedSymbol = symbol.toUpperCase();
+
+  if (EUR_STABLES.has(normalizedSymbol)) return 1;
+
+  const directEurPrice = prices.get(`${normalizedSymbol}EUR`);
+  if (directEurPrice !== undefined) return directEurPrice;
+
+  const eurUsdtPrice = prices.get("EURUSDT");
+  if (USD_STABLES.has(normalizedSymbol)) {
+    return eurUsdtPrice ? 1 / eurUsdtPrice : 1 / 1.08;
+  }
+
+  const tokenUsdtPrice = prices.get(`${normalizedSymbol}USDT`);
+  if (tokenUsdtPrice !== undefined && eurUsdtPrice) {
+    return tokenUsdtPrice / eurUsdtPrice;
+  }
+
+  return 0;
 }
 
 function parseNumber(value: string | null | undefined) {

@@ -1,8 +1,9 @@
 import { createPortal } from "react-dom";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import type { UIEvent } from "react";
 
-import { useTransactionRows } from "@/hooks/use-transaction-rows";
+import { scheduleIdleTask, useDeferredTransactionRows } from "@/hooks/use-deferred-transaction-rows";
+import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transaction-rows";
 import { cn } from "@/shared/utils";
 
 import { formatEuroCents, formatProviderLabel, formatSignedEuroCents } from "./formatters";
@@ -25,6 +26,27 @@ export function CheckingProviderCards({
   userId,
   isActive
 }: CheckingProviderCardsProps) {
+  useEffect(() => {
+    if (!isActive || providers.length === 0) {
+      return;
+    }
+
+    const cancelIdleTask = scheduleIdleTask(() => {
+      for (const provider of providers.slice(0, 2)) {
+        void prefetchTransactionRows<CheckingTransaction>({
+          endpoint: "/api/transactions/checking/rows",
+          initialPageSize: INITIAL_TRANSACTION_ROWS,
+          pageSize: NEXT_TRANSACTION_ROWS,
+          sourceInstitution: provider.sourceInstitution,
+          totalCount: provider.transactionCount,
+          userId
+        });
+      }
+    }, 2_200);
+
+    return cancelIdleTask;
+  }, [isActive, providers, userId]);
+
   if (!portalNode) return null;
 
   return createPortal(
@@ -103,6 +125,10 @@ function CheckingTransactionTable({
   userId: string;
 }) {
   const {
+    rowsContainerRef,
+    shouldLoadRows
+  } = useDeferredTransactionRows(isActive, provider.transactionCount);
+  const {
     error,
     hasMore,
     loading,
@@ -113,6 +139,7 @@ function CheckingTransactionTable({
     initialPageSize: INITIAL_TRANSACTION_ROWS,
     isActive,
     pageSize: NEXT_TRANSACTION_ROWS,
+    shouldLoad: shouldLoadRows,
     sourceInstitution: provider.sourceInstitution,
     totalCount: provider.transactionCount,
     userId
@@ -132,6 +159,7 @@ function CheckingTransactionTable({
   return (
     <>
       <div
+        ref={rowsContainerRef}
         className="min-h-0 flex-1 overflow-auto rounded-t-[20px] hide-scrollbar"
         onScroll={handleScroll}
       >

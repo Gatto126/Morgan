@@ -2,9 +2,12 @@
 
 import { useRef, useState, useEffect } from "react";
 import { AuthShell } from "./auth-shell";
+import { seedDashboardStageDataCache } from "./finance-shell/dashboard-stage-data-cache";
+import type { DashboardStageKey } from "./finance-shell/dashboard-stage-items";
 import { FrameOverlayPanels } from "./finance-shell/frame-overlay-panels";
 import { FinanceShellMainFrame } from "./finance-shell/main-frame";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
+import type { PersistedFinanceSelection } from "./finance-shell/persistence-state";
 import type { SettingsSection } from "./finance-shell/settings-panel";
 import { useFinanceShellContent } from "./finance-shell/use-finance-shell-content";
 import type { UserRecord } from "./finance-shell/types";
@@ -19,16 +22,46 @@ import { useFinanceNavigation } from "./finance-shell/use-finance-navigation";
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
 import { dashboardStages, getStageTitle } from "./finance-shell/stage-title";
 
+export type PrimedDashboardStageData = {
+  data: unknown;
+  stage: DashboardStageKey;
+  userId: string;
+  version: number;
+};
+
 function getSuggestedFirstProfileName(accountName: string) {
   const trimmedName = accountName.trim();
   const emailLocalPart = trimmedName.includes("@") ? trimmedName.split("@")[0] : trimmedName;
   return emailLocalPart.trim().slice(0, 24);
 }
 
-export function FinanceShell({ accountName, initialUsers }: { accountName: string; initialUsers: UserRecord[] }) {
-  const [initialFinanceState] = useState(() => resolveInitialFinanceState(initialUsers));
+export function FinanceShell({
+  accountName,
+  initialDashboardStageData,
+  initialSelection,
+  initialUsers
+}: {
+  accountName: string;
+  initialDashboardStageData?: PrimedDashboardStageData | null;
+  initialSelection?: PersistedFinanceSelection | null;
+  initialUsers: UserRecord[];
+}) {
+  const [initialFinanceState] = useState(() => resolveInitialFinanceState(initialUsers, initialSelection ?? null));
+  const [hasSeededInitialStageData] = useState(() => {
+    if (initialDashboardStageData) {
+      seedDashboardStageDataCache(
+        initialDashboardStageData.stage,
+        initialDashboardStageData.userId,
+        initialDashboardStageData.version,
+        initialDashboardStageData.data as never
+      );
+    }
+
+    return true;
+  });
+  void hasSeededInitialStageData;
   const suggestedFirstProfileName = initialUsers.length === 0 ? getSuggestedFirstProfileName(accountName) : "";
-  const [hasRestoredClientState, setHasRestoredClientState] = useState(false);
+  const [hasRestoredClientState, setHasRestoredClientState] = useState(initialFinanceState.restoredFromServer);
   const [users, setUsers] = useState<UserRecord[]>(initialUsers);
   const [activeUser, setActiveUser] = useState<UserRecord | null>(initialFinanceState.activeUser);
   const [saving, setSaving] = useState(false);
@@ -147,6 +180,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
     activeUser,
     hasRestoredClientState,
     initialUsers,
+    skipClientRestore: initialFinanceState.restoredFromServer,
     saving,
     showUserSelectView,
     stage,
@@ -177,6 +211,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
   }, [applyImportedTransactionCounts]);
   const isDashboardStage = dashboardStages.has(stage);
   const title = isRestoringProfileSelection ? "Morgan" : getStageTitle(stage, hasUsers);
+  const warmupDelayMs = initialDashboardStageData && initialFinanceState.restoredFromServer ? 1_400 : 0;
   const visibleSettingsSection = getVisibleSettingsSection(activeSettingsSection, showSettingsView);
   const shellContent = useFinanceShellContent({
     accountName,
@@ -360,6 +395,7 @@ export function FinanceShell({ accountName, initialUsers }: { accountName: strin
         showUserSelectView={showUserSelectView}
         stage={stage}
         title={title}
+        warmupDelayMs={warmupDelayMs}
         onBackToSelection={goBackToSelection}
         onFileSelection={(event) => void handleFileSelection(event)}
         onFrameClick={() => {

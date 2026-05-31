@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { BinanceBalanceRow, DashboardData } from "@/components/dashboard/types";
 
+import { fetchDashboardStageData } from "./dashboard-stage-data-cache";
 import type { UserRecord } from "./types";
 
 export type AccountPortfolioPreviewRecord = {
@@ -30,30 +31,18 @@ const loadingPreviewState: AccountPortfolioPreviewState = {
   records: []
 };
 
-async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T> {
-  const response = await fetch(url, {
-    cache: "no-store",
-    signal
-  });
-  const payload = await response.json().catch(() => ({})) as T & { error?: string };
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? "Could not load portfolio preview.");
-  }
-
-  return payload;
-}
-
-async function fetchProfilePreviewRecord(
-  user: UserRecord,
-  signal: AbortSignal
-): Promise<AccountPortfolioPreviewRecord> {
+async function fetchProfilePreviewRecord(user: UserRecord): Promise<AccountPortfolioPreviewRecord> {
   const shouldLoadDashboard = user.transactionCount > 0;
   const dashboardPromise = shouldLoadDashboard
-    ? fetchJson<DashboardData>(`/api/transactions/dashboard?userId=${user.id}`, signal)
+    ? fetchDashboardStageData("dashboard", user.id, {
+        fallbackErrorMessage: "Could not load portfolio preview.",
+        version: user.transactionCount
+      })
     : Promise.resolve(null);
-  const binancePromise = shouldLoadDashboard && user.hasBinanceCredentials
-    ? fetchJson<{ balances?: BinanceBalanceRow[] }>(`/api/binance/balances?userId=${user.id}`, signal)
+  const binancePromise = user.hasBinanceCredentials
+    ? fetchDashboardStageData("binance", user.id, {
+        fallbackErrorMessage: "Could not load Binance balances."
+      })
     : Promise.resolve({ balances: [] });
   const [data, binancePayload] = await Promise.all([dashboardPromise, binancePromise]);
 
@@ -99,7 +88,7 @@ export function useAccountPortfolioPreviewData({
 
     try {
       const records = await Promise.all(
-        previewUsers.map((user) => fetchProfilePreviewRecord(user, signal))
+        previewUsers.map((user) => fetchProfilePreviewRecord(user))
       );
 
       if (signal.aborted) return;

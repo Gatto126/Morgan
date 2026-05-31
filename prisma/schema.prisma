@@ -116,6 +116,7 @@ model CheckingTransaction {
 
   @@unique([userId, fingerprint])
   @@index([userId, bookingDate])
+  @@index([userId, sourceInstitution, bookingDate, id])
 }
 
 model InvestmentTransaction {
@@ -143,6 +144,7 @@ model InvestmentTransaction {
   @@unique([userId, fingerprint])
   @@index([userId, bookingDate])
   @@index([userId, isin])
+  @@index([userId, sourceInstitution, bookingDate, id])
 }
 
 model CryptoTransaction {
@@ -169,6 +171,7 @@ model CryptoTransaction {
   @@unique([userId, fingerprint])
   @@index([userId, bookingDate])
   @@index([userId, tokenSymbol])
+  @@index([userId, sourceInstitution, bookingDate, id])
 }
 
 model Asset {
@@ -229,6 +232,7 @@ model AssetHistory {
 
   @@unique([isin, date, currency])
   @@index([isin, date])
+  @@index([currency, isin, date])
 }
 
 model PriceCache {

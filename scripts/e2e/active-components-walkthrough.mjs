@@ -256,7 +256,11 @@ async function expectTopbarTabActive(page, tabLabel) {
 }
 
 async function clickTopbarTab(page, tabLabel) {
-  await page.getByRole("button", { name: `${tabLabel} dashboard tab`, exact: true }).click();
+  const tab = page.getByRole("button", { name: `${tabLabel} dashboard tab`, exact: true });
+  const active = await tab.getAttribute("data-active", { timeout: 10_000 });
+  if (active !== "true") {
+    await tab.click();
+  }
   await expectTopbarTabActive(page, tabLabel);
 }
 

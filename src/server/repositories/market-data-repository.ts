@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import type { PortfolioHistoryPrice } from "@/domain/finance/portfolio-timeseries";
 import { prisma } from "@/server/db/prisma";
@@ -6,11 +6,6 @@ import { prisma } from "@/server/db/prisma";
 const portfolioHistorySelect = {
   isin: true,
   date: true,
-  value: true
-} as const;
-
-const latestPriceSelect = {
-  isin: true,
   value: true
 } as const;
 
@@ -24,20 +19,21 @@ export type AssetHistorySeriesPoint = Prisma.AssetHistoryGetPayload<{
 }>;
 
 export type MarketDataRepository = {
-  listPortfolioHistory(priceKeys: string[]): Promise<PortfolioHistoryPrice[]>;
+  listPortfolioHistory(priceKeys: string[], options?: { fromDate?: string }): Promise<PortfolioHistoryPrice[]>;
   listLatestHistoricalPrices(keys: string[]): Promise<Map<string, number>>;
   profileHasMarketKey(userId: string, key: string): Promise<boolean>;
   listAssetHistorySeries(isin: string, currency: string): Promise<AssetHistorySeriesPoint[]>;
 };
 
 export const marketDataRepository: MarketDataRepository = {
-  async listPortfolioHistory(priceKeys) {
+  async listPortfolioHistory(priceKeys, { fromDate }: { fromDate?: string } = {}) {
     if (priceKeys.length === 0) return [];
 
     return prisma.assetHistory.findMany({
       where: {
         isin: { in: priceKeys },
-        currency: "EUR"
+        currency: "EUR",
+        ...(fromDate ? { date: { gte: fromDate } } : {})
       },
       select: portfolioHistorySelect,
       orderBy: { date: "asc" }
@@ -49,17 +45,13 @@ export const marketDataRepository: MarketDataRepository = {
       return new Map<string, number>();
     }
 
-    const historyPoints = await prisma.assetHistory.findMany({
-      where: {
-        isin: { in: keys },
-        currency: "EUR"
-      },
-      select: latestPriceSelect,
-      orderBy: [
-        { isin: "asc" },
-        { date: "desc" }
-      ]
-    });
+    const historyPoints = await prisma.$queryRaw<Array<{ isin: string; value: number }>>`
+      SELECT DISTINCT ON ("isin") "isin", "value"
+      FROM "AssetHistory"
+      WHERE "currency" = 'EUR'
+        AND "isin" IN (${Prisma.join(keys)})
+      ORDER BY "isin" ASC, "date" DESC
+    `;
 
     const prices = new Map<string, number>();
     for (const point of historyPoints) {

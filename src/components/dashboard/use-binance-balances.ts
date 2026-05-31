@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
+import {
+  fetchDashboardStageData,
+  readDashboardStageDataCache
+} from "@/components/finance-shell/dashboard-stage-data-cache";
+
 import type { BinanceBalanceRow } from "./types";
 
 type UseBinanceBalancesOptions = {
@@ -14,7 +20,10 @@ export function useBinanceBalances({
   shouldLoad,
   binanceRefreshKey
 }: UseBinanceBalancesOptions) {
-  const [binanceBalances, setBinanceBalances] = useState<BinanceBalanceRow[]>([]);
+  const initialPayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey);
+  const [binanceBalances, setBinanceBalances] = useState<BinanceBalanceRow[]>(
+    Array.isArray(initialPayload?.balances) ? initialPayload.balances : []
+  );
   const [isBinanceNew, setIsBinanceNew] = useState(false);
   const [isBinanceSyncing, setIsBinanceSyncing] = useState(false);
   const [filterSmallBinance, setFilterSmallBinance] = useState(false);
@@ -22,13 +31,14 @@ export function useBinanceBalances({
   const binanceListRef = useRef<HTMLDivElement>(null);
   const lastPreloadKeyRef = useRef("");
 
-  const loadBinanceBalances = useCallback(async () => {
-    const response = await fetch(`/api/binance/balances?userId=${userId}`);
-    if (!response.ok) {
-      return null;
-    }
+  const loadBinanceBalances = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    const payload = await fetchDashboardStageData("binance", userId, {
+      force,
+      version: binanceRefreshKey
+    }).catch(() => null);
 
-    const payload = await response.json();
+    if (!payload) return null;
+
     if (Array.isArray(payload.balances)) {
       const wasEmpty = prevBinanceCountRef.current === 0;
       prevBinanceCountRef.current = payload.balances.length;
@@ -40,11 +50,11 @@ export function useBinanceBalances({
     }
 
     return payload as { isStale?: boolean; hasApiKey?: boolean };
-  }, [userId]);
+  }, [binanceRefreshKey, userId]);
 
   const fetchBinanceBalances = useCallback(async (syncIfStale = true) => {
     try {
-      const payload = await loadBinanceBalances();
+      const payload = await loadBinanceBalances({ force: syncIfStale });
       if (!payload) {
         return;
       }
@@ -57,7 +67,7 @@ export function useBinanceBalances({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userId })
           });
-          await loadBinanceBalances();
+          await loadBinanceBalances({ force: true });
         } catch {
           // Sync failures leave the last cached Binance balances visible.
         } finally {
@@ -88,13 +98,9 @@ export function useBinanceBalances({
       return;
     }
 
-    const initialLoad = window.setTimeout(() => {
-      void fetchBinanceBalances(true);
-    }, 0);
     const interval = window.setInterval(() => void fetchBinanceBalances(true), 600_000);
 
     return () => {
-      window.clearTimeout(initialLoad);
       window.clearInterval(interval);
     };
   }, [fetchBinanceBalances, binanceRefreshKey, isActive]);

@@ -256,20 +256,18 @@ button:active *,
 .chart-content-reveal,
 .panel-content-reveal {
   opacity: 0;
-  transform: translateY(14px) scale(0.996);
-  filter: blur(2px);
+  transform: translateY(8px);
   transition:
-    opacity 0.72s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.72s cubic-bezier(0.16, 1, 0.3, 1),
-    filter 0.52s ease-out;
-  will-change: opacity, transform, filter;
+    opacity 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
 }
 
 .chart-content-reveal[data-visible="true"],
 .panel-content-reveal[data-visible="true"] {
   opacity: 1;
-  transform: translateY(0) scale(1);
-  filter: blur(0);
+  transform: translateY(0);
+  will-change: auto;
 }
 
 .chart-content-reveal[data-visible="false"],

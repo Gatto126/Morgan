@@ -31,6 +31,7 @@ type FinanceShellMainFrameProps = {
   showUserSelectView: boolean;
   stage: Stage;
   title: string;
+  warmupDelayMs?: number;
   onBackToSelection: () => void;
   onFileSelection: (event: ChangeEvent<HTMLInputElement>) => void;
   onFrameClick: () => void;
@@ -65,6 +66,7 @@ export function FinanceShellMainFrame({
   showUserSelectView,
   stage,
   title,
+  warmupDelayMs,
   onBackToSelection,
   onFileSelection,
   onFrameClick,
@@ -163,6 +165,7 @@ export function FinanceShellMainFrame({
                     onImportRefreshComplete={onImportRefreshComplete}
                     renderInlineUploadState={renderInlineUploadState}
                     stage={stage}
+                    warmupDelayMs={warmupDelayMs}
                   />
 
                   {nonDashboardStageContent}

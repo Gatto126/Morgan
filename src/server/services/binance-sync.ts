@@ -14,6 +14,10 @@ import {
   hasBinanceCredentials,
   type BinanceCredentials
 } from "@/server/security/secrets";
+import {
+  measurePerformanceStep,
+  type PerformanceTrace
+} from "@/server/logging/performance";
 
 const STALE_MS = 10 * 60 * 1000;
 
@@ -21,6 +25,7 @@ export type BinanceSyncDependencies = {
   fetcher?: BinanceFetch;
   now?: () => Date;
   repository?: BinanceRepository;
+  trace?: PerformanceTrace;
 };
 
 export type SyncBinanceBalancesResult = {
@@ -43,15 +48,36 @@ export async function persistBalances(
   const repository = dependencies.repository ?? binanceRepository;
   const syncedAt = dependencies.now?.() ?? new Date();
 
-  for (const balance of balances) {
-    await repository.upsertBalance(userId, balance);
-  }
+  await measurePerformanceStep(
+    dependencies.trace,
+    "binance.repository.upsertBalances",
+    async () => {
+      for (const balance of balances) {
+        await repository.upsertBalance(userId, balance);
+      }
+    },
+    { rows: balances.length }
+  );
 
   const activeSymbols = balances.map((balance) => balance.tokenSymbol);
-  await repository.deleteInactiveBalances(userId, activeSymbols);
-  await repository.upsertSyncTimestamp(userId, syncedAt);
+  await measurePerformanceStep(
+    dependencies.trace,
+    "binance.repository.deleteInactiveBalances",
+    () => repository.deleteInactiveBalances(userId, activeSymbols),
+    { activeSymbols: activeSymbols.length }
+  );
+  await measurePerformanceStep(
+    dependencies.trace,
+    "binance.repository.upsertSyncTimestamp",
+    () => repository.upsertSyncTimestamp(userId, syncedAt)
+  );
 
-  const persistedBalances = await repository.listBalances(userId);
+  const persistedBalances = await measurePerformanceStep(
+    dependencies.trace,
+    "binance.repository.listBalances",
+    () => repository.listBalances(userId),
+    (rows) => ({ rows: rows.length })
+  );
 
   return { balances: persistedBalances, syncedAt };
 }
@@ -61,8 +87,18 @@ export async function syncBinanceBalances(
   credentials: BinanceCredentials,
   dependencies: BinanceSyncDependencies = {}
 ) {
-  const balances = await fetchBalances(credentials, dependencies);
-  const pricedBalances = await priceBalances(balances, dependencies);
+  const balances = await measurePerformanceStep(
+    dependencies.trace,
+    "binance.external.fetchBalances",
+    () => fetchBalances(credentials, dependencies),
+    (rows) => ({ tokens: rows.size })
+  );
+  const pricedBalances = await measurePerformanceStep(
+    dependencies.trace,
+    "binance.external.priceBalances",
+    () => priceBalances(balances, dependencies),
+    (rows) => ({ tokens: rows.length })
+  );
 
   return persistBalances(userId, pricedBalances, dependencies);
 }
@@ -72,7 +108,11 @@ export async function syncBinanceProfile(
   dependencies: BinanceSyncDependencies = {}
 ) {
   const repository = dependencies.repository ?? binanceRepository;
-  const credentialRecord = await repository.getCredentialRecord(userId);
+  const credentialRecord = await measurePerformanceStep(
+    dependencies.trace,
+    "binance.repository.getCredentialRecord",
+    () => repository.getCredentialRecord(userId)
+  );
   const credentials = decryptBinanceCredentials(credentialRecord);
 
   if (!credentials) {
@@ -89,7 +129,12 @@ export async function getBinanceBalancesStatus(
   const repository = dependencies.repository ?? binanceRepository;
   const now = dependencies.now?.() ?? new Date();
   const { balances, syncTimestamp, credentialRecord } =
-    await repository.getBalanceStatusRecords(userId);
+    await measurePerformanceStep(
+      dependencies.trace,
+      "binance.repository.getBalanceStatusRecords",
+      () => repository.getBalanceStatusRecords(userId),
+      (result) => ({ balances: result.balances.length })
+    );
 
   return {
     balances,

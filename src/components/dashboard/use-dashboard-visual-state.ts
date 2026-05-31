@@ -25,10 +25,11 @@ export function useDashboardVisualState({
   shouldShowUploadPanel,
   transactionCount
 }: UseDashboardVisualStateParams) {
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
-  const [contentVisible, setContentVisible] = useState(false);
+  const hasInitialData = !!data && !loading;
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(!hasInitialData);
+  const [contentVisible, setContentVisible] = useState(hasInitialData);
   const [chartReady, setChartReady] = useState(false);
-  const firstLoadCompletedRef = useRef(false);
+  const firstLoadCompletedRef = useRef(hasInitialData);
   const completedImportRefreshVersionRef = useRef(0);
   const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
 

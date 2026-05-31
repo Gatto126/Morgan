@@ -44,7 +44,9 @@ describe("portfolio data service", () => {
     });
 
     expect(transactionRepository.listInvestmentTransactions).toHaveBeenCalledWith("profile-1");
-    expect(marketRepository.listPortfolioHistory).toHaveBeenCalledWith(["IE00B4L5Y983"]);
+    expect(marketRepository.listPortfolioHistory).toHaveBeenCalledWith(["IE00B4L5Y983"], {
+      fromDate: "2026-01-01"
+    });
     expect(transactionCount).toBe(1);
     expect(result.dailyData.at(-1)).toMatchObject({
       total: 12000,
@@ -83,7 +85,9 @@ describe("portfolio data service", () => {
     });
 
     expect(transactionRepository.listTradeRepublicCryptoTransactions).toHaveBeenCalledWith("profile-1");
-    expect(marketRepository.listPortfolioHistory).toHaveBeenCalledWith(["BTC"]);
+    expect(marketRepository.listPortfolioHistory).toHaveBeenCalledWith(["BTC"], {
+      fromDate: "2026-01-01"
+    });
     expect(transactionCount).toBe(1);
     expect(result.providers[0].products[0]).toMatchObject({
       productName: "Bitcoin",

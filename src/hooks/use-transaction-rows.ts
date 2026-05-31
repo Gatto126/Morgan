@@ -14,6 +14,7 @@ type UseTransactionRowsOptions = {
   initialPageSize?: number;
   isActive: boolean;
   pageSize?: number;
+  shouldLoad?: boolean;
   sourceInstitution: string;
   totalCount: number;
   userId: string;
@@ -28,12 +29,51 @@ type TransactionRowsState<TTransaction> = {
   transactions: TTransaction[];
 };
 
-const TRANSACTION_ROWS_CACHE_MAX_AGE_MS = 5_000;
+const TRANSACTION_ROWS_CACHE_MAX_AGE_MS = 60_000;
 const transactionRowsCache = new Map<string, {
   payload: TransactionRowsPayload<unknown>;
   updatedAt: number;
 }>();
 const inFlightTransactionRows = new Map<string, Promise<TransactionRowsPayload<unknown>>>();
+
+type TransactionRowsPageRequestOptions = {
+  endpoint: string;
+  initialPageSize: number;
+  offset: number;
+  pageSize: number;
+  replace: boolean;
+  requestKey: string;
+  sourceInstitution: string;
+  totalCount: number;
+  userId: string;
+};
+
+function buildTransactionRowsPageRequest({
+  endpoint,
+  initialPageSize,
+  offset,
+  pageSize,
+  replace,
+  requestKey,
+  sourceInstitution,
+  totalCount,
+  userId
+}: TransactionRowsPageRequestOptions) {
+  const limit = replace ? initialPageSize : pageSize;
+  const pageKey = `${requestKey}|offset=${offset}|limit=${limit}`;
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+    provider: sourceInstitution,
+    v: String(totalCount),
+    userId
+  });
+
+  return {
+    pageKey,
+    url: `${endpoint}?${params.toString()}`
+  };
+}
 
 async function fetchTransactionRows<TTransaction>(cacheKey: string, url: string) {
   const cached = transactionRowsCache.get(cacheKey);
@@ -46,7 +86,7 @@ async function fetchTransactionRows<TTransaction>(cacheKey: string, url: string)
     return inFlightRequest as Promise<TransactionRowsPayload<TTransaction>>;
   }
 
-  const request = fetch(url, { cache: "no-store" })
+  const request = fetch(url, { cache: "default" })
     .then(async (response) => {
       const payload = (await response.json()) as TransactionRowsPayload<TTransaction>;
 
@@ -68,11 +108,40 @@ async function fetchTransactionRows<TTransaction>(cacheKey: string, url: string)
   return request;
 }
 
+export function prefetchTransactionRows<TTransaction = unknown>({
+  endpoint,
+  initialPageSize = 20,
+  pageSize = 10,
+  sourceInstitution,
+  totalCount,
+  userId
+}: Omit<UseTransactionRowsOptions, "isActive" | "shouldLoad">) {
+  if (totalCount === 0) {
+    return Promise.resolve(null);
+  }
+
+  const requestKey = `${endpoint}|${userId}|${sourceInstitution}|${totalCount}|${initialPageSize}|${pageSize}`;
+  const { pageKey, url } = buildTransactionRowsPageRequest({
+    endpoint,
+    initialPageSize,
+    offset: 0,
+    pageSize,
+    replace: true,
+    requestKey,
+    sourceInstitution,
+    totalCount,
+    userId
+  });
+
+  return fetchTransactionRows<TTransaction>(pageKey, url).catch(() => null);
+}
+
 export function useTransactionRows<TTransaction>({
   endpoint,
   initialPageSize = 20,
   isActive,
   pageSize = 10,
+  shouldLoad = isActive,
   sourceInstitution,
   totalCount,
   userId
@@ -115,13 +184,18 @@ export function useTransactionRows<TTransaction>({
     }));
 
     try {
-      const params = new URLSearchParams({
-        limit: String(limit),
-        offset: String(offset),
-        provider: sourceInstitution,
+      const { url } = buildTransactionRowsPageRequest({
+        endpoint,
+        initialPageSize,
+        offset,
+        pageSize,
+        replace,
+        requestKey: activeRequestKey,
+        sourceInstitution,
+        totalCount,
         userId
       });
-      const payload = await fetchTransactionRows<TTransaction>(pageKey, `${endpoint}?${params.toString()}`);
+      const payload = await fetchTransactionRows<TTransaction>(pageKey, url);
 
       if (currentRequestKeyRef.current !== activeRequestKey) {
         return;
@@ -164,12 +238,12 @@ export function useTransactionRows<TTransaction>({
   }, [endpoint, initialPageSize, pageSize, requestKey, sourceInstitution, totalCount, userId]);
 
   useEffect(() => {
-    if (!isActive || totalCount === 0) {
+    if (!isActive || !shouldLoad || totalCount === 0) {
       return;
     }
 
     void loadPage(0, true);
-  }, [isActive, loadPage, requestKey, totalCount]);
+  }, [isActive, loadPage, requestKey, shouldLoad, totalCount]);
 
   const loadNext = useCallback(() => {
     if (loading || nextOffset === null) {

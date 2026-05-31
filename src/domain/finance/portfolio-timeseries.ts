@@ -34,6 +34,7 @@ export type PortfolioProviderSummary = {
   interest: number;
   cashback: number;
   tax: number;
+  transactionCount?: number;
   transactions: {
     id: string;
     bookingDate: Date;
@@ -72,6 +73,7 @@ type PortfolioSnapshot = {
 };
 
 type BuildPortfolioTimeSeriesOptions = {
+  includeProviderTransactions?: boolean;
   transactions: PortfolioTransaction[];
   historyPrices: PortfolioHistoryPrice[];
   priceKeys: string[];
@@ -248,6 +250,7 @@ function calculateSnapshot(
 }
 
 export function buildPortfolioTimeSeries({
+  includeProviderTransactions = true,
   transactions,
   historyPrices,
   priceKeys,
@@ -279,17 +282,21 @@ export function buildPortfolioTimeSeries({
   const providerMap = new Map<string, PortfolioProviderSummary>();
   for (const transaction of transactions) {
     const provider = getOrCreateProvider(providerMap, transaction.sourceInstitution);
-    provider.transactions.push({
-      id: transaction.id,
-      bookingDate: transaction.bookingDate,
-      typeLabel: transaction.typeLabel,
-      description: transaction.description,
-      direction: transaction.direction,
-      amountCents: transaction.amountCents,
-      tradeType: transaction.tradeType,
-      productName: transaction.productName,
-      isin: transaction.isin
-    });
+    provider.transactionCount = (provider.transactionCount ?? 0) + 1;
+
+    if (includeProviderTransactions) {
+      provider.transactions.push({
+        id: transaction.id,
+        bookingDate: transaction.bookingDate,
+        typeLabel: transaction.typeLabel,
+        description: transaction.description,
+        direction: transaction.direction,
+        amountCents: transaction.amountCents,
+        tradeType: transaction.tradeType,
+        productName: transaction.productName,
+        isin: transaction.isin
+      });
+    }
     applyProviderFlow(provider, transaction);
   }
 
