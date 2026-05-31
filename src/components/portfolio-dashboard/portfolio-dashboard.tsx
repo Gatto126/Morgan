@@ -94,8 +94,16 @@ export function PortfolioDashboard({
 
   const chartData = useMemo(() => {
     if (!data) return [];
-    return buildPortfolioChartData({ data, activeTab, timeRange, activeProvider, livePrices, todayKey });
-  }, [data, activeTab, timeRange, activeProvider, livePrices, todayKey]);
+    return buildPortfolioChartData({
+      activeProvider,
+      activeTab,
+      applyLiveToday: pricesReady,
+      data,
+      livePrices,
+      timeRange,
+      todayKey
+    });
+  }, [data, activeTab, timeRange, activeProvider, livePrices, pricesReady, todayKey]);
   const todayChartPoint = useMemo(
     () => chartData.find((point) => point.rawMonth === todayKey) ?? chartData[chartData.length - 1] ?? null,
     [chartData, todayKey]

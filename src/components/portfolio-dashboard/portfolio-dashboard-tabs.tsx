@@ -5,6 +5,7 @@ import { usePublishDashboardTopbar, type DashboardTopbarItem } from "@/component
 import type { ChartPoint } from "@/types/chart";
 
 import { formatEuroCents, getAbbreviatedLabel } from "./formatters";
+import { getPortfolioPointValue } from "./portfolio-current-point";
 import type { PortfolioDashboardTab } from "./types";
 
 type PortfolioDashboardTabsProps = {
@@ -33,12 +34,9 @@ export function PortfolioDashboardTabs({
   const items = useMemo<DashboardTopbarItem[]>(
     () => tabs.map((tab) => {
         const isSelected = activeTab === tab.key;
-        const value = valuesKnown
-          ? formatEuroCents(
-              activePoint
-                ? Number(tab.key === "ALL" ? (activePoint.heritage ?? 0) : (activePoint[tab.key] ?? 0))
-                : tab.total
-            )
+        const pointValue = getPortfolioPointValue(activePoint, tab.key);
+        const value = valuesKnown && pointValue !== null
+          ? formatEuroCents(pointValue)
           : "--";
 
         return {

@@ -286,6 +286,41 @@ describe("dashboard chart data model", () => {
     });
   });
 
+  it("keeps the current chart point on the historical base until live prices are ready", () => {
+    const points = buildDashboardChartData({
+      activeTab: "heritage",
+      binanceTotalCents: 2000,
+      checkingProviders: collectCheckingProviders(dashboardData),
+      cryptoInstitutions: collectCryptoInstitutions(dashboardData),
+      cryptoTokens: collectCryptoTokens(dashboardData),
+      data: dashboardData,
+      hasBinancePortfolio: true,
+      investmentProducts: collectInvestmentProducts(dashboardData),
+      livePriceReadiness: {
+        crypto: false,
+        investment: false
+      },
+      livePrices: {
+        BTC: 70_000,
+        IE00B4L5Y983: 120
+      },
+      todayKey: "2026-01-03",
+      timeRange: "ALL"
+    });
+    const todayPoint = points.find((point) => point.rawMonth === "2026-01-03");
+
+    expect(todayPoint).toMatchObject({
+      "Core ETF": 25000,
+      Bitcoin: 5000,
+      binance: 2000,
+      crypto: 7000,
+      crypto_inst_trade_republic: 5000,
+      heritage: 42000,
+      investment: 25000,
+      value: 42000
+    });
+  });
+
   it("keeps Binance out of checking and investment tab values", () => {
     const checkingPoints = buildChartDataFor("checking");
     const investmentPoints = buildChartDataFor("investment");

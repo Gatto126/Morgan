@@ -5,15 +5,15 @@ import {
   usePublishDashboardTopbar,
   type DashboardTopbarItem
 } from "@/components/finance-shell/dashboard-topbar-store";
+import { getDashboardPointValue, isDashboardPointValueReady } from "./dashboard-current-point";
+import type { DashboardChartPoint } from "./dashboard-chart-types";
 import { formatEuroCents } from "./formatters";
 import type { AccountTab, DashboardData } from "./types";
-
-type ActivePoint = Record<string, string | number | null | undefined>;
 
 type DashboardTabsProps = {
   visibleTabs: { key: AccountTab; label: string }[];
   activeTab: AccountTab;
-  activePoint: ActivePoint | null;
+  activePoint: DashboardChartPoint | null;
   data: DashboardData | null;
   cryptoValuesKnown?: boolean;
   investmentValuesKnown?: boolean;
@@ -66,39 +66,21 @@ export function DashboardTabs({
         const tabIsActive = activeTab === tab.key;
         const Icon = TAB_ICONS[tab.key];
         const isChartInteraction = isTooltipActive;
-        const isLiveMarketValue = tab.key === "heritage" || tab.key === "investment" || tab.key === "crypto";
-        const liveMarketValueKnown = tab.key === "investment"
-          ? investmentValuesKnown
-          : tab.key === "crypto"
-            ? cryptoValuesKnown
-            : investmentValuesKnown && cryptoValuesKnown;
-        const tabValuesKnown = valuesKnown && (isChartInteraction || !isLiveMarketValue || liveMarketValueKnown);
-        const value = data && tabValuesKnown
-          ? formatEuroCents(
-              activePoint
-                ? (() => {
-                    const binancePoint = (activePoint.binance as number) || 0;
-                    if (tab.key === "crypto") {
-                      return typeof activePoint.crypto === "number" ? activePoint.crypto : binancePoint;
-                    }
-                    if (tab.key === "heritage") {
-                      return typeof activePoint.heritage === "number" ? activePoint.heritage : binancePoint;
-                    }
-                    return (activePoint[tab.key] as number) || 0;
-                  })()
-                : (tab.key === "investment"
-                    ? getGlobalInvestmentLiveTotal()
-                    : tab.key === "crypto"
-                      ? getGlobalCryptoLiveTotal()
-                      : tab.key === "heritage"
-                        ? data.accountTotals.checking + getGlobalInvestmentLiveTotal() + getGlobalCryptoLiveTotal()
-                        : data.accountTotals[tab.key])
-            )
+        const tabValuesKnown = isDashboardPointValueReady({
+          cryptoValuesKnown,
+          investmentValuesKnown,
+          isTooltipActive: isChartInteraction,
+          tabKey: tab.key,
+          valuesKnown
+        });
+        const pointValue = getDashboardPointValue(activePoint, tab.key);
+        const value = data && tabValuesKnown && pointValue !== null
+          ? formatEuroCents(pointValue ?? 0)
           : "--";
 
         return {
           active: tabIsActive,
-          animateChanges: isChartInteraction || isLiveMarketValue,
+          animateChanges: isChartInteraction || tab.key !== "checking",
           ariaLabel: `${tab.label} dashboard tab`,
           icon: Icon,
           id: tab.key,
@@ -112,8 +94,6 @@ export function DashboardTabs({
       activeTab,
       cryptoValuesKnown,
       data,
-      getGlobalCryptoLiveTotal,
-      getGlobalInvestmentLiveTotal,
       investmentValuesKnown,
       isTooltipActive,
       onActiveTabChange,

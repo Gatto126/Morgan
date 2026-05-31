@@ -13,6 +13,10 @@ type BuildDashboardChartDataParams = {
   data: DashboardData | null;
   hasBinancePortfolio: boolean;
   investmentProducts: string[];
+  livePriceReadiness?: {
+    crypto?: boolean;
+    investment?: boolean;
+  };
   livePrices?: Record<string, number | null>;
   todayKey?: string;
   timeRange: TimeRange;
@@ -59,6 +63,7 @@ export function buildDashboardChartData({
   data,
   hasBinancePortfolio,
   investmentProducts,
+  livePriceReadiness,
   livePrices = {},
   todayKey,
   timeRange
@@ -145,6 +150,10 @@ export function buildDashboardChartData({
         binanceTotalCents,
         data,
         hasBinancePortfolio,
+        livePriceReadiness: {
+          crypto: livePriceReadiness?.crypto ?? true,
+          investment: livePriceReadiness?.investment ?? true
+        },
         livePrices,
         todayKey
       })
@@ -287,6 +296,7 @@ function applyLiveTodayPoint(
     binanceTotalCents,
     data,
     hasBinancePortfolio,
+    livePriceReadiness,
     livePrices,
     todayKey
   }: {
@@ -294,6 +304,10 @@ function applyLiveTodayPoint(
     binanceTotalCents: number;
     data: DashboardData;
     hasBinancePortfolio: boolean;
+    livePriceReadiness: {
+      crypto: boolean;
+      investment: boolean;
+    };
     livePrices: Record<string, number | null>;
     todayKey: string;
   }
@@ -306,6 +320,7 @@ function applyLiveTodayPoint(
     binanceTotalCents,
     data,
     hasBinancePortfolio,
+    livePriceReadiness,
     livePrices
   });
   const todayPoint: DashboardChartPoint = {
@@ -331,20 +346,35 @@ function buildLiveTodayValues({
   binanceTotalCents,
   data,
   hasBinancePortfolio,
+  livePriceReadiness,
   livePrices
 }: {
   basePoint: DashboardChartPoint;
   binanceTotalCents: number;
   data: DashboardData;
   hasBinancePortfolio: boolean;
+  livePriceReadiness: {
+    crypto: boolean;
+    investment: boolean;
+  };
   livePrices: Record<string, number | null>;
 }) {
   const checkingVal = typeof basePoint.checking === "number"
     ? basePoint.checking
     : data.accountTotals.checking;
-  const investment = getLiveInvestmentValues(data.providerSummaries, livePrices);
-  const crypto = getLiveCryptoValues(data.providerSummaries, livePrices);
-  const cryptoWithBinance = crypto.total + (hasBinancePortfolio ? binanceTotalCents : 0);
+  const investment = livePriceReadiness.investment
+    ? getLiveInvestmentValues(data.providerSummaries, livePrices)
+    : getHistoricalInvestmentValues(data.providerSummaries, basePoint, data.accountTotals.investment);
+  const crypto = livePriceReadiness.crypto
+    ? getLiveCryptoValues(data.providerSummaries, livePrices)
+    : getHistoricalCryptoValues(data.providerSummaries, basePoint);
+  const cryptoWithBinance = livePriceReadiness.crypto
+    ? crypto.total + (hasBinancePortfolio ? binanceTotalCents : 0)
+    : typeof basePoint.crypto === "number"
+      ? basePoint.crypto
+      : hasBinancePortfolio
+        ? binanceTotalCents
+        : data.accountTotals.crypto;
   const liveValues: DashboardChartPoint = {
     checking: checkingVal,
     investment: investment.total,
@@ -394,6 +424,26 @@ function getLiveInvestmentValues(
   return { products, total };
 }
 
+function getHistoricalInvestmentValues(
+  providerSummaries: ProviderSummary[],
+  basePoint: DashboardChartPoint,
+  fallbackTotal: number
+) {
+  const products = new Map<string, number>();
+  const total = typeof basePoint.investment === "number" ? basePoint.investment : fallbackTotal;
+
+  providerSummaries.forEach((provider) => {
+    provider.investmentProducts.forEach((product) => {
+      const value = basePoint[product.productName];
+      if (typeof value === "number") {
+        products.set(product.productName, (products.get(product.productName) ?? 0) + value);
+      }
+    });
+  });
+
+  return { products, total };
+}
+
 function getLiveCryptoValues(
   providerSummaries: ProviderSummary[],
   livePrices: Record<string, number | null>
@@ -423,6 +473,31 @@ function getLiveCryptoValues(
     if (providerTotal > 0) {
       institutions.set(provider.sourceInstitution, providerTotal);
     }
+  });
+
+  return { institutions, tokens, total };
+}
+
+function getHistoricalCryptoValues(
+  providerSummaries: ProviderSummary[],
+  basePoint: DashboardChartPoint
+) {
+  const institutions = new Map<string, number>();
+  const tokens = new Map<string, number>();
+  const total = typeof basePoint.crypto === "number" ? basePoint.crypto : 0;
+
+  providerSummaries.forEach((provider) => {
+    const institutionValue = basePoint[`crypto_inst_${provider.sourceInstitution}`];
+    if (typeof institutionValue === "number") {
+      institutions.set(provider.sourceInstitution, institutionValue);
+    }
+
+    provider.cryptoTokens.forEach((token) => {
+      const value = basePoint[token.tokenName];
+      if (typeof value === "number") {
+        tokens.set(token.tokenName, (tokens.get(token.tokenName) ?? 0) + value);
+      }
+    });
   });
 
   return { institutions, tokens, total };

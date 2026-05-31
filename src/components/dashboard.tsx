@@ -95,6 +95,10 @@ export function Dashboard({
     isActive,
     shouldLoad: shouldLoad && !!data
   });
+  const livePriceReadiness = useMemo(() => ({
+    crypto: cryptoPricesReady,
+    investment: investmentPricesReady
+  }), [cryptoPricesReady, investmentPricesReady]);
   const binanceTotalCents = useMemo(
     () => Math.round(binanceBalances.reduce((sum, balance) => sum + balance.eurValue, 0) * 100),
     [binanceBalances]
@@ -138,6 +142,7 @@ export function Dashboard({
     data,
     hasBinancePortfolio,
     investmentCount,
+    livePriceReadiness,
     livePrices,
     transactionCount
   });

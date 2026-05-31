@@ -32,6 +32,7 @@ type BuildPortfolioChartDataOptions = {
   activeTab: string;
   timeRange: TimeRange;
   activeProvider: PortfolioProviderSummary | null;
+  applyLiveToday?: boolean;
   livePrices?: Record<string, number | null>;
   todayKey?: string;
 };
@@ -41,6 +42,7 @@ export function buildPortfolioChartData({
   activeTab,
   timeRange,
   activeProvider,
+  applyLiveToday = true,
   livePrices = {},
   todayKey
 }: BuildPortfolioChartDataOptions) {
@@ -130,7 +132,7 @@ export function buildPortfolioChartData({
     return point;
   });
 
-  return todayKey
+  return todayKey && applyLiveToday
     ? applyLiveTodayPoint(chartPoints, {
         activeProvider,
         activeTab,

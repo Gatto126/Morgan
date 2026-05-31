@@ -28,6 +28,10 @@ type UseDashboardChartModelParams = {
   data: DashboardData | null;
   hasBinancePortfolio: boolean;
   investmentCount: number;
+  livePriceReadiness?: {
+    crypto?: boolean;
+    investment?: boolean;
+  };
   livePrices: Record<string, number | null>;
   transactionCount: number;
 };
@@ -40,6 +44,7 @@ export function useDashboardChartModel({
   data,
   hasBinancePortfolio,
   investmentCount,
+  livePriceReadiness,
   livePrices,
   transactionCount
 }: UseDashboardChartModelParams) {
@@ -98,6 +103,7 @@ export function useDashboardChartModel({
     data,
     hasBinancePortfolio,
     investmentProducts,
+    livePriceReadiness,
     livePrices,
     todayKey,
     timeRange
@@ -110,6 +116,7 @@ export function useDashboardChartModel({
     data,
     hasBinancePortfolio,
     investmentProducts,
+    livePriceReadiness,
     livePrices,
     todayKey,
     timeRange
