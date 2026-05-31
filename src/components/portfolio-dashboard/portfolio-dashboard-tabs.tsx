@@ -11,6 +11,7 @@ type PortfolioDashboardTabsProps = {
   tabs: PortfolioDashboardTab[];
   activeTab: string;
   activePoint: ChartPoint | null;
+  isTooltipActive?: boolean;
   rootIcon: LucideIcon;
   valuesKnown?: boolean;
   stage: "crypto" | "investment";
@@ -22,6 +23,7 @@ export function PortfolioDashboardTabs({
   tabs,
   activeTab,
   activePoint,
+  isTooltipActive = !!activePoint,
   rootIcon: RootIcon,
   valuesKnown = true,
   stage,
@@ -46,11 +48,11 @@ export function PortfolioDashboardTabs({
           id: tab.key === "ALL" ? stage : `${stage}:${tab.key}`,
           label: tab.key === "ALL" ? undefined : getAbbreviatedLabel(tab.label),
           onClick: () => onSelectTab(tab.key),
-          suppressInitialChanges: !activePoint,
+          suppressInitialChanges: !isTooltipActive,
           value
         };
       }),
-    [RootIcon, activePoint, activeTab, onSelectTab, stage, tabs, valuesKnown]
+    [RootIcon, activePoint, activeTab, isTooltipActive, onSelectTab, stage, tabs, valuesKnown]
   );
 
   usePublishDashboardTopbar(stage, userId, items);

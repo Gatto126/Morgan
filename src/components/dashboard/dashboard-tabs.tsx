@@ -15,6 +15,7 @@ type DashboardTabsProps = {
   activeTab: AccountTab;
   activePoint: ActivePoint | null;
   data: DashboardData | null;
+  isTooltipActive?: boolean;
   valuesKnown: boolean;
   userId: string;
   onActiveTabChange: (tab: AccountTab) => void;
@@ -47,6 +48,7 @@ export function DashboardTabs({
   activeTab,
   activePoint,
   data,
+  isTooltipActive = !!activePoint,
   valuesKnown,
   userId,
   onActiveTabChange,
@@ -59,7 +61,7 @@ export function DashboardTabs({
     () => visibleTabs.map((tab) => {
         const tabIsActive = activeTab === tab.key;
         const Icon = TAB_ICONS[tab.key];
-        const isChartInteraction = !!activePoint;
+        const isChartInteraction = isTooltipActive;
         const isLiveMarketValue = tab.key === "heritage" || tab.key === "investment" || tab.key === "crypto";
         const value = data && valuesKnown
           ? formatEuroCents(
@@ -101,6 +103,7 @@ export function DashboardTabs({
       data,
       getGlobalCryptoLiveTotal,
       getGlobalInvestmentLiveTotal,
+      isTooltipActive,
       onActiveTabChange,
       valuesKnown,
       visibleTabs

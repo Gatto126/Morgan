@@ -85,7 +85,7 @@ export function Dashboard({
     shouldLoad,
     binanceRefreshKey
   });
-  const { data, dataFresh, loading, error, importRefreshVersion } = useDashboardData({
+  const { data, loading, error, importRefreshVersion } = useDashboardData({
     userId,
     isActive,
     shouldLoad,
@@ -100,7 +100,7 @@ export function Dashboard({
     [binanceBalances]
   );
   const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0;
-  const dashboardValuesKnown = dataFresh && (!hasBinanceCredentials || binanceBalancesKnown);
+  const dashboardValuesKnown = !!data && (!hasBinanceCredentials || binanceBalancesKnown);
   const requiresInitialUpload = transactionCount === 0 && !hasBinancePortfolio;
   const shouldShowUploadPanel = showUploadView && !showSettingsView && !showUserSelectView;
   const cardsPortalNode = usePortalNode("dashboard-cards-portal");
@@ -114,6 +114,7 @@ export function Dashboard({
     activeChartPoint,
     activeTab,
     chartConfig,
+    currentDisplayPoint,
     hasRenderableChartData,
     hiddenSeries,
     processedChartData,
@@ -137,6 +138,7 @@ export function Dashboard({
     data,
     hasBinancePortfolio,
     investmentCount,
+    livePrices,
     transactionCount
   });
   const {
@@ -177,8 +179,9 @@ export function Dashboard({
       <DashboardTabs
         visibleTabs={visibleTabs}
         activeTab={activeTab}
-        activePoint={data ? activeChartPoint : null}
+        activePoint={data ? currentDisplayPoint : null}
         data={data}
+        isTooltipActive={!!activeChartPoint}
         valuesKnown={dashboardValuesKnown}
         userId={userId}
         onActiveTabChange={setActiveTab}

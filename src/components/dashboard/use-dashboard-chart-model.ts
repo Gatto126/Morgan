@@ -28,6 +28,7 @@ type UseDashboardChartModelParams = {
   data: DashboardData | null;
   hasBinancePortfolio: boolean;
   investmentCount: number;
+  livePrices: Record<string, number | null>;
   transactionCount: number;
 };
 
@@ -39,6 +40,7 @@ export function useDashboardChartModel({
   data,
   hasBinancePortfolio,
   investmentCount,
+  livePrices,
   transactionCount
 }: UseDashboardChartModelParams) {
   const [activeTab, setActiveTab] = useState<AccountTab>("heritage");
@@ -85,6 +87,7 @@ export function useDashboardChartModel({
   const investmentProducts = useMemo(() => collectInvestmentProducts(data), [data]);
   const cryptoTokens = useMemo(() => collectCryptoTokens(data), [data]);
   const cryptoInstitutions = useMemo(() => collectCryptoInstitutions(data), [data]);
+  const todayKey = useMemo(() => getTodayKey(), []);
 
   const chartData = useMemo(() => buildDashboardChartData({
     activeTab,
@@ -95,6 +98,8 @@ export function useDashboardChartModel({
     data,
     hasBinancePortfolio,
     investmentProducts,
+    livePrices,
+    todayKey,
     timeRange
   }), [
     activeTab,
@@ -105,8 +110,15 @@ export function useDashboardChartModel({
     data,
     hasBinancePortfolio,
     investmentProducts,
+    livePrices,
+    todayKey,
     timeRange
   ]);
+  const todayChartPoint = useMemo(
+    () => chartData.find((point) => point.rawMonth === todayKey) ?? chartData[chartData.length - 1] ?? null,
+    [chartData, todayKey]
+  );
+  const currentDisplayPoint = activeChartPoint ?? todayChartPoint;
 
   const xAxisTicks = useMemo(() => getXAxisTicks(chartData), [chartData]);
 
@@ -154,6 +166,7 @@ export function useDashboardChartModel({
     activeTab,
     chartConfig,
     chartData,
+    currentDisplayPoint,
     hasRenderableChartData,
     hiddenSeries,
     processedChartData,
@@ -170,4 +183,13 @@ export function useDashboardChartModel({
     visibleTabs,
     xAxisTicks
   };
+}
+
+function getTodayKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }

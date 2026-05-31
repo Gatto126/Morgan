@@ -46,7 +46,7 @@ export function PortfolioDashboard({
   userSelectElement,
   onImportRefreshComplete
 }: PortfolioDashboardProps) {
-  const { data, dataFresh, loading, error, importRefreshVersion } = usePortfolioDashboardData({
+  const { data, loading, error, importRefreshVersion } = usePortfolioDashboardData({
     endpoint: config.endpoint,
     fetchErrorMessage: config.fetchErrorMessage,
     userId,
@@ -74,8 +74,8 @@ export function PortfolioDashboard({
     shouldLoad: shouldLoad && !!data
   });
   const [activeChartPoint, setActiveChartPoint] = useState<ChartPoint | null>(null);
-  const activePoint = activeChartPoint;
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
+  const todayKey = useMemo(() => getTodayKey(), []);
 
   useEffect(() => {
     onImportRefreshCompleteRef.current = onImportRefreshComplete;
@@ -94,8 +94,13 @@ export function PortfolioDashboard({
 
   const chartData = useMemo(() => {
     if (!data) return [];
-    return buildPortfolioChartData({ data, activeTab, timeRange, activeProvider });
-  }, [data, activeTab, timeRange, activeProvider]);
+    return buildPortfolioChartData({ data, activeTab, timeRange, activeProvider, livePrices, todayKey });
+  }, [data, activeTab, timeRange, activeProvider, livePrices, todayKey]);
+  const todayChartPoint = useMemo(
+    () => chartData.find((point) => point.rawMonth === todayKey) ?? chartData[chartData.length - 1] ?? null,
+    [chartData, todayKey]
+  );
+  const currentDisplayPoint = activeChartPoint ?? todayChartPoint;
 
   const xAxisTicks = useMemo(() => {
     return getPortfolioXAxisTicks(chartData);
@@ -208,9 +213,10 @@ export function PortfolioDashboard({
       <PortfolioDashboardTabs
         tabs={tabs}
         activeTab={activeTab}
-        activePoint={activePoint}
+        activePoint={currentDisplayPoint}
+        isTooltipActive={!!activeChartPoint}
         rootIcon={config.rootIcon}
-        valuesKnown={dataFresh}
+        valuesKnown={!!data}
         stage={dashboardStage}
         userId={userId}
         onSelectTab={setActiveTab}
@@ -274,4 +280,13 @@ export function PortfolioDashboard({
       />
     </div>
   );
+}
+
+function getTodayKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }

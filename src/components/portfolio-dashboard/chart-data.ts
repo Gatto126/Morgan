@@ -32,13 +32,17 @@ type BuildPortfolioChartDataOptions = {
   activeTab: string;
   timeRange: TimeRange;
   activeProvider: PortfolioProviderSummary | null;
+  livePrices?: Record<string, number | null>;
+  todayKey?: string;
 };
 
 export function buildPortfolioChartData({
   data,
   activeTab,
   timeRange,
-  activeProvider
+  activeProvider,
+  livePrices = {},
+  todayKey
 }: BuildPortfolioChartDataOptions) {
   const firstProductAcquisition = new Map<string, string>();
   const firstProviderAcquisition = new Map<string, string>();
@@ -67,7 +71,7 @@ export function buildPortfolioChartData({
 
   const filtered = filterData({ monthly: data.monthlyData, daily: data.dailyData }, timeRange);
 
-  return filtered.map((bucket) => {
+  const chartPoints = filtered.map((bucket) => {
     const rawKey = bucket.date || bucket.month;
     const bucketDate = bucket.date || bucket.month || "";
     const point: ChartPoint = { month: rawKey, rawMonth: rawKey };
@@ -125,6 +129,16 @@ export function buildPortfolioChartData({
     }
     return point;
   });
+
+  return todayKey
+    ? applyLiveTodayPoint(chartPoints, {
+        activeProvider,
+        activeTab,
+        data,
+        livePrices,
+        todayKey
+      })
+    : chartPoints;
 }
 
 export function getPortfolioXAxisTicks(chartData: ChartPoint[]) {
@@ -140,4 +154,100 @@ export function getPortfolioXAxisTicks(chartData: ChartPoint[]) {
     }
   });
   return ticks;
+}
+
+function applyLiveTodayPoint(
+  chartPoints: ChartPoint[],
+  {
+    activeProvider,
+    activeTab,
+    data,
+    livePrices,
+    todayKey
+  }: {
+    activeProvider: PortfolioProviderSummary | null;
+    activeTab: string;
+    data: PortfolioData;
+    livePrices: Record<string, number | null>;
+    todayKey: string;
+  }
+) {
+  const todayIndex = chartPoints.findIndex((point) => point.rawMonth === todayKey);
+  const basePoint = todayIndex >= 0
+    ? chartPoints[todayIndex]
+    : chartPoints[chartPoints.length - 1] ?? { rawMonth: todayKey };
+  const providerTotals = new Map<string, number>();
+  let allTotal = 0;
+
+  data.providers.forEach((provider) => {
+    const total = getProviderLiveTotal(provider, livePrices);
+    providerTotals.set(provider.sourceInstitution, total);
+    allTotal += total;
+  });
+
+  const todayPoint: ChartPoint = {
+    ...basePoint,
+    date: todayKey,
+    heritage: allTotal,
+    month: todayKey,
+    rawMonth: todayKey
+  };
+
+  providerTotals.forEach((value, providerKey) => {
+    todayPoint[providerKey] = value;
+  });
+
+  if (activeTab !== "ALL") {
+    todayPoint.balance = providerTotals.get(activeTab) ?? 0;
+
+    activeProvider?.products.forEach((product) => {
+      const productValue = getProductLiveValue(product, livePrices);
+      if (productValue !== null) {
+        todayPoint[product.productName] = productValue;
+      }
+    });
+  }
+
+  if (todayIndex >= 0) {
+    const nextPoints = [...chartPoints];
+    nextPoints[todayIndex] = todayPoint;
+    return nextPoints;
+  }
+
+  return [...chartPoints, todayPoint];
+}
+
+function getProviderLiveTotal(
+  provider: PortfolioProviderSummary,
+  livePrices: Record<string, number | null>
+) {
+  let liveTotal = 0;
+  let hasHoldings = false;
+
+  provider.products.forEach((product) => {
+    const productValue = getProductLiveValue(product, livePrices);
+    if (productValue === null) {
+      return;
+    }
+
+    hasHoldings = true;
+    liveTotal += productValue;
+  });
+
+  return hasHoldings ? liveTotal : provider.total;
+}
+
+function getProductLiveValue(
+  product: PortfolioProviderSummary["products"][number],
+  livePrices: Record<string, number | null>
+) {
+  if (Math.abs(product.quantity) <= 0.000001) {
+    return null;
+  }
+
+  const livePrice = product.isin ? livePrices[product.isin] : null;
+
+  return livePrice != null
+    ? Math.round(product.quantity * livePrice * 100)
+    : product.investedValue;
 }

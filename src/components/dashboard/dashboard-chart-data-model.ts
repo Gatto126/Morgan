@@ -1,6 +1,6 @@
 import type { DashboardChartPoint } from "./dashboard-chart-types";
 import { filterData } from "./formatters";
-import type { AccountTab, DashboardData, MonthlyBucket, TimeRange } from "./types";
+import type { AccountTab, DashboardData, MonthlyBucket, ProviderSummary, TimeRange } from "./types";
 
 const NON_ZERO_THRESHOLD = 0.000001;
 
@@ -13,6 +13,8 @@ type BuildDashboardChartDataParams = {
   data: DashboardData | null;
   hasBinancePortfolio: boolean;
   investmentProducts: string[];
+  livePrices?: Record<string, number | null>;
+  todayKey?: string;
   timeRange: TimeRange;
 };
 
@@ -23,11 +25,21 @@ export function collectCheckingProviders(data: DashboardData | null) {
 }
 
 export function collectInvestmentProducts(data: DashboardData | null) {
-  return collectMonthlyKeys(data, "providerProducts");
+  return collectUniqueKeys([
+    ...collectMonthlyKeys(data, "providerProducts"),
+    ...(data?.providerSummaries.flatMap((provider) =>
+      provider.investmentProducts.map((product) => product.productName)
+    ) ?? [])
+  ]);
 }
 
 export function collectCryptoTokens(data: DashboardData | null) {
-  return collectMonthlyKeys(data, "providerCryptoTokens");
+  return collectUniqueKeys([
+    ...collectMonthlyKeys(data, "providerCryptoTokens"),
+    ...(data?.providerSummaries.flatMap((provider) =>
+      provider.cryptoTokens.map((token) => token.tokenName)
+    ) ?? [])
+  ]);
 }
 
 export function collectCryptoInstitutions(data: DashboardData | null) {
@@ -47,6 +59,8 @@ export function buildDashboardChartData({
   data,
   hasBinancePortfolio,
   investmentProducts,
+  livePrices = {},
+  todayKey,
   timeRange
 }: BuildDashboardChartDataParams): DashboardChartPoint[] {
   if (!data) {
@@ -62,7 +76,7 @@ export function buildDashboardChartData({
     ? (data.dailyData.length > 0 ? data.dailyData : data.monthlyData) as DashboardChartBucket[]
     : filterData({ monthly: data.monthlyData, daily: data.dailyData }, timeRange) as DashboardChartBucket[];
 
-  return filtered.map((bucket) => {
+  const chartPoints = filtered.map((bucket) => {
     const rawMonth = bucket.date || bucket.month;
     const bucketDate = bucket.date || bucket.month || "";
     const resolveValue = createValueResolver(firstAcquisitionDates, bucketDate);
@@ -124,6 +138,17 @@ export function buildDashboardChartData({
 
     return entry;
   });
+
+  return todayKey
+    ? applyLiveTodayPoint(chartPoints, {
+        activeTab,
+        binanceTotalCents,
+        data,
+        hasBinancePortfolio,
+        livePrices,
+        todayKey
+      })
+    : chartPoints;
 }
 
 function collectMonthlyKeys(
@@ -140,6 +165,10 @@ function collectMonthlyKeys(
     }
   });
   return Array.from(keys);
+}
+
+function collectUniqueKeys(keys: string[]) {
+  return [...new Set(keys.filter(Boolean))];
 }
 
 function getFirstAcquisitionDates({
@@ -249,4 +278,158 @@ function getHeritageValue({
 
 function isMeaningfulValue(value: number | undefined): value is number {
   return value !== undefined && Math.abs(value) > NON_ZERO_THRESHOLD;
+}
+
+function applyLiveTodayPoint(
+  chartPoints: DashboardChartPoint[],
+  {
+    activeTab,
+    binanceTotalCents,
+    data,
+    hasBinancePortfolio,
+    livePrices,
+    todayKey
+  }: {
+    activeTab: AccountTab;
+    binanceTotalCents: number;
+    data: DashboardData;
+    hasBinancePortfolio: boolean;
+    livePrices: Record<string, number | null>;
+    todayKey: string;
+  }
+) {
+  const todayIndex = chartPoints.findIndex((point) => point.rawMonth === todayKey);
+  const basePoint = todayIndex >= 0 ? chartPoints[todayIndex] : chartPoints[chartPoints.length - 1];
+  const resolvedBasePoint = basePoint ?? { rawMonth: todayKey };
+  const liveValues = buildLiveTodayValues({
+    basePoint: resolvedBasePoint,
+    binanceTotalCents,
+    data,
+    hasBinancePortfolio,
+    livePrices
+  });
+  const todayPoint: DashboardChartPoint = {
+    ...resolvedBasePoint,
+    ...liveValues,
+    date: todayKey,
+    month: todayKey,
+    rawMonth: todayKey,
+    value: getLiveTabValue(activeTab, liveValues)
+  };
+  const nextPoints = [...chartPoints];
+
+  if (todayIndex >= 0) {
+    nextPoints[todayIndex] = todayPoint;
+    return nextPoints;
+  }
+
+  return [...nextPoints, todayPoint];
+}
+
+function buildLiveTodayValues({
+  basePoint,
+  binanceTotalCents,
+  data,
+  hasBinancePortfolio,
+  livePrices
+}: {
+  basePoint: DashboardChartPoint;
+  binanceTotalCents: number;
+  data: DashboardData;
+  hasBinancePortfolio: boolean;
+  livePrices: Record<string, number | null>;
+}) {
+  const checkingVal = typeof basePoint.checking === "number"
+    ? basePoint.checking
+    : data.accountTotals.checking;
+  const investment = getLiveInvestmentValues(data.providerSummaries, livePrices);
+  const crypto = getLiveCryptoValues(data.providerSummaries, livePrices);
+  const cryptoWithBinance = crypto.total + (hasBinancePortfolio ? binanceTotalCents : 0);
+  const liveValues: DashboardChartPoint = {
+    checking: checkingVal,
+    investment: investment.total,
+    crypto: cryptoWithBinance,
+    heritage: checkingVal + investment.total + cryptoWithBinance,
+    binance: hasBinancePortfolio ? binanceTotalCents : null
+  };
+
+  for (const [productName, value] of investment.products) {
+    liveValues[productName] = value;
+  }
+
+  for (const [tokenName, value] of crypto.tokens) {
+    liveValues[tokenName] = value;
+  }
+
+  for (const [institution, value] of crypto.institutions) {
+    liveValues[`crypto_inst_${institution}`] = value;
+  }
+
+  return liveValues;
+}
+
+function getLiveInvestmentValues(
+  providerSummaries: ProviderSummary[],
+  livePrices: Record<string, number | null>
+) {
+  const products = new Map<string, number>();
+  let total = 0;
+
+  providerSummaries.forEach((provider) => {
+    provider.investmentProducts.forEach((product) => {
+      if (Math.abs(product.quantity) <= NON_ZERO_THRESHOLD) {
+        return;
+      }
+
+      const livePrice = product.isin ? livePrices[product.isin] : null;
+      const value = livePrice != null
+        ? Math.round(product.quantity * livePrice * 100)
+        : product.investedValue;
+
+      total += value;
+      products.set(product.productName, (products.get(product.productName) ?? 0) + value);
+    });
+  });
+
+  return { products, total };
+}
+
+function getLiveCryptoValues(
+  providerSummaries: ProviderSummary[],
+  livePrices: Record<string, number | null>
+) {
+  const institutions = new Map<string, number>();
+  const tokens = new Map<string, number>();
+  let total = 0;
+
+  providerSummaries.forEach((provider) => {
+    let providerTotal = 0;
+
+    provider.cryptoTokens.forEach((token) => {
+      if (Math.abs(token.quantity) <= NON_ZERO_THRESHOLD) {
+        return;
+      }
+
+      const livePrice = token.tokenSymbol ? livePrices[token.tokenSymbol] : null;
+      const value = livePrice != null
+        ? Math.round(token.quantity * livePrice * 100)
+        : token.investedValue;
+
+      providerTotal += value;
+      total += value;
+      tokens.set(token.tokenName, (tokens.get(token.tokenName) ?? 0) + value);
+    });
+
+    if (providerTotal > 0) {
+      institutions.set(provider.sourceInstitution, providerTotal);
+    }
+  });
+
+  return { institutions, tokens, total };
+}
+
+function getLiveTabValue(activeTab: AccountTab, liveValues: DashboardChartPoint) {
+  const value = liveValues[activeTab];
+
+  return typeof value === "number" ? value : null;
 }
