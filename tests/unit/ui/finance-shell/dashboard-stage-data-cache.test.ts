@@ -8,6 +8,31 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
   });
 }
 
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+
+  return {
+    get length() {
+      return values.size;
+    },
+    clear() {
+      values.clear();
+    },
+    getItem(key: string) {
+      return values.get(key) ?? null;
+    },
+    key(index: number) {
+      return [...values.keys()][index] ?? null;
+    },
+    removeItem(key: string) {
+      values.delete(key);
+    },
+    setItem(key: string, value: string) {
+      values.set(key, value);
+    }
+  };
+}
+
 async function loadCacheModule() {
   vi.resetModules();
   return import("@/components/finance-shell/dashboard-stage-data-cache");
@@ -79,6 +104,36 @@ describe("dashboard stage data cache", () => {
     );
   });
 
+  it("hydrates stale-but-usable data from private session storage after a reload", async () => {
+    const storage = createMemoryStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const payload = {
+      dailyData: [],
+      monthlyData: [],
+      providers: [{
+        cashback: 0,
+        expenses: 0,
+        income: 0,
+        interest: 0,
+        sourceInstitution: "BBVA",
+        tax: 0,
+        total: 0,
+        transactionCount: 0
+      }]
+    };
+
+    let cache = await loadCacheModule();
+    cache.seedDashboardStageDataCache("checking", "user-1", 4, payload);
+
+    vi.resetModules();
+    nowSpy.mockReturnValue(62_000);
+    cache = await import("@/components/finance-shell/dashboard-stage-data-cache");
+
+    expect(cache.readDashboardStageDataCache("checking", "user-1", 4)).toEqual(payload);
+    expect(cache.isDashboardStageDataCacheFresh("checking", "user-1", 4)).toBe(false);
+  });
+
   it("clears failed requests so the next call can retry", async () => {
     const fetchMock = vi
       .fn()
@@ -91,6 +146,24 @@ describe("dashboard stage data cache", () => {
     await expect(cache.fetchDashboardStageData("crypto", "user-1", { version: 1 })).rejects.toThrow("Database offline.");
     await expect(cache.fetchDashboardStageData("crypto", "user-1", { version: 1 })).resolves.toEqual({ providers: [] });
 
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps existing data visible when a force refresh fails", async () => {
+    const previousPayload = { providers: [{ sourceInstitution: "Cached" }] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(previousPayload))
+      .mockResolvedValueOnce(jsonResponse({ error: "Database offline." }, { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cache = await loadCacheModule();
+
+    await expect(cache.fetchDashboardStageData("checking", "user-1", { version: 3 })).resolves.toEqual(previousPayload);
+    await expect(cache.fetchDashboardStageData("checking", "user-1", { force: true, version: 3 })).rejects.toThrow("Database offline.");
+
+    expect(cache.readDashboardStageDataCache("checking", "user-1", 3)).toEqual(previousPayload);
+    await expect(cache.fetchDashboardStageData("checking", "user-1", { version: 3 })).resolves.toEqual(previousPayload);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

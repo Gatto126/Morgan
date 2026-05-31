@@ -56,12 +56,21 @@ const dashboardApiEndpoints = [
 const navigationMetrics = [];
 const requestSamples = new Map();
 const steps = [];
+const cacheDebug = [];
 let activeNavigationSample = null;
 
 function matchingDashboardEndpoint(url) {
   try {
     const { pathname } = new URL(url);
     return dashboardApiEndpoints.find((endpoint) => pathname === endpoint) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getRequestVersion(url) {
+  try {
+    return new URL(url).searchParams.get("v");
   } catch {
     return null;
   }
@@ -79,7 +88,8 @@ function attachDashboardRequestRecorder(page) {
       failed: false,
       method: request.method(),
       startedAt: Date.now(),
-      status: null
+      status: null,
+      version: getRequestVersion(request.url())
     };
 
     requestSamples.set(request, sample);
@@ -139,35 +149,74 @@ async function measureStageNavigation(page, label, buttonName, waitForReady) {
       endpoint: request.endpoint,
       failed: request.failed,
       method: request.method,
-      status: request.status
+      status: request.status,
+      version: request.version
     }))
   });
 }
 
-async function measurePageReload(page, label, stage, waitForReady) {
+async function measurePageReload(page, label, stage, waitForReady, settleMs = 250) {
   startNavigationSample(label);
   const startedAt = Date.now();
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForReady();
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(settleMs);
   const sample = finishNavigationSample();
+  const durationMs = Date.now() - startedAt;
   const requests = (sample?.requests ?? []).map((request) => ({
     cacheControl: request.cacheControl,
     durationMs: request.durationMs,
     endpoint: request.endpoint,
     failed: request.failed,
     method: request.method,
-    status: request.status
+    status: request.status,
+    version: request.version
   }));
 
   navigationMetrics.push({
     label,
     stage,
-    durationMs: Date.now() - startedAt,
+    durationMs,
     requests
   });
 
-  return requests;
+  return { durationMs, requests };
+}
+
+async function ageDashboardStageSessionCache(page, stage, ageMs) {
+  return page.evaluate(({ ageMs: cacheAgeMs, stage: cacheStage }) => {
+    const storagePrefix = "morgan:dashboard-stage-data:v1:";
+    let agedEntries = 0;
+    const entries = [];
+
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const key = sessionStorage.key(index);
+      if (!key?.startsWith(storagePrefix)) continue;
+
+      const rawEntry = sessionStorage.getItem(key);
+      if (!rawEntry) continue;
+
+      try {
+        const entry = JSON.parse(rawEntry);
+        if (entry?.stage !== cacheStage) continue;
+
+        entry.fetchedAt = Date.now() - cacheAgeMs;
+        sessionStorage.setItem(key, JSON.stringify(entry));
+        agedEntries += 1;
+        entries.push({
+          dataKeys: entry.data && typeof entry.data === "object" ? Object.keys(entry.data) : [],
+          hasData: entry.data !== undefined,
+          providerCount: Array.isArray(entry.data?.providers) ? entry.data.providers.length : null,
+          stage: entry.stage,
+          version: entry.version
+        });
+      } catch {
+        sessionStorage.removeItem(key);
+      }
+    }
+
+    return { agedEntries, entries };
+  }, { ageMs, stage });
 }
 
 async function runSectionNavigationMeasurements(page) {
@@ -197,13 +246,52 @@ async function runSectionNavigationMeasurements(page) {
   await measureStageNavigation(page, "crypto_return_warm", "Crypto", async () => {
     await waitForAny(page.getByText("Bitcoin", { exact: false }), "warm crypto product text");
   });
-  const reloadRequests = await measurePageReload(page, "crypto_reload_server_primed", "Crypto", async () => {
-    await waitForAny(page.getByText("Bitcoin", { exact: false }), "server-primed crypto product text after reload");
+  const agedCryptoCache = await ageDashboardStageSessionCache(page, "crypto", 70_000);
+  cacheDebug.push({ label: "before_crypto_reload", ...agedCryptoCache });
+  assert(agedCryptoCache.agedEntries > 0, "Expected crypto stage data to be persisted in session cache before reload.");
+
+  let delayCryptoSummary = false;
+  let delayedCryptoRefreshStarted = false;
+  let delayedCryptoRefreshReleased = false;
+  let delayedCryptoRefreshDone = Promise.resolve();
+  const cryptoSummaryPattern = /\/api\/transactions\/crypto\?/;
+
+  await page.route(cryptoSummaryPattern, async (route) => {
+    if (!delayCryptoSummary) {
+      await route.continue();
+      return;
+    }
+
+    delayedCryptoRefreshStarted = true;
+    delayedCryptoRefreshDone = (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 4_000));
+      await route.continue();
+      delayedCryptoRefreshReleased = true;
+    })();
+    await delayedCryptoRefreshDone;
   });
+
+  delayCryptoSummary = true;
+  const reloadSample = await measurePageReload(page, "crypto_reload_client_cache", "Crypto", async () => {
+    await waitForAny(page.getByText("BITCOIN", { exact: false }), "cached crypto summary text after reload");
+  }, 1_000);
+
+  if (!delayedCryptoRefreshStarted) {
+    await page.waitForTimeout(1_000);
+  }
+
+  assert(delayedCryptoRefreshStarted, "Expected stale crypto session cache to trigger a background summary refresh.");
   assert(
-    !reloadRequests.some((request) => request.endpoint === "/api/transactions/crypto"),
-    "Expected crypto summary to be server-primed on reload without a client summary fetch."
+    !delayedCryptoRefreshReleased,
+    "Expected cached crypto data to render before the delayed background summary refresh completed."
   );
+  assert(
+    reloadSample.requests.some((request) => request.endpoint === "/api/transactions/crypto"),
+    "Expected reload metrics to include the background crypto summary refresh."
+  );
+
+  await delayedCryptoRefreshDone;
+  await page.unroute(cryptoSummaryPattern);
 }
 
 async function prepareFixtures() {
@@ -562,6 +650,7 @@ try {
     afterSecondProfile,
     binanceResult,
     navigationMetrics,
+    cacheDebug,
     browserErrors,
     screenshots: {
       afterPrimaryImports: path.join(outDir, "after-primary-imports.png"),
@@ -582,6 +671,7 @@ try {
     primaryProfileId,
     steps,
     navigationMetrics,
+    cacheDebug,
     error: error instanceof Error ? error.message : String(error),
     forcedCleanup,
     browserErrors,

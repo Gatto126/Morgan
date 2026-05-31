@@ -18,6 +18,15 @@ type DashboardStageDataEntry<TData> = {
   promise?: Promise<TData>;
 };
 
+type StoredDashboardStageDataEntry = {
+  cacheVersion: 1;
+  data: unknown;
+  fetchedAt: number;
+  stage: DashboardStageKey;
+  userId: string;
+  version: number;
+};
+
 type FetchDashboardStageDataOptions = {
   fallbackErrorMessage?: string;
   force?: boolean;
@@ -34,6 +43,8 @@ const dashboardStageEndpoints = {
 } satisfies Record<DashboardStageKey, string>;
 
 const cacheTtlMs = 60_000;
+const staleCacheTtlMs = 6 * 60 * 60 * 1_000;
+const storageCachePrefix = "morgan:dashboard-stage-data:v1:";
 const dashboardStageDataCache = new Map<string, DashboardStageDataEntry<unknown>>();
 
 function getDashboardStageCacheKey(stage: DashboardStageKey, userId: string, version = 0) {
@@ -42,6 +53,84 @@ function getDashboardStageCacheKey(stage: DashboardStageKey, userId: string, ver
 
 function isFresh(entry: DashboardStageDataEntry<unknown> | undefined) {
   return !!entry?.data && Date.now() - entry.fetchedAt < cacheTtlMs;
+}
+
+function isUsableStaleEntry(entry: DashboardStageDataEntry<unknown> | undefined) {
+  return !!entry?.data && Date.now() - entry.fetchedAt < staleCacheTtlMs;
+}
+
+function getSessionStorage() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredDashboardStageData(cacheKey: string): DashboardStageDataEntry<unknown> | null {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const storageKey = `${storageCachePrefix}${cacheKey}`;
+  const rawEntry = storage.getItem(storageKey);
+  if (!rawEntry) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawEntry) as Partial<StoredDashboardStageDataEntry>;
+    const fetchedAt = parsed.fetchedAt;
+    const isSameEntry = parsed.cacheVersion === 1
+      && typeof fetchedAt === "number"
+      && parsed.data !== undefined;
+
+    if (!isSameEntry || Date.now() - fetchedAt >= staleCacheTtlMs) {
+      storage.removeItem(storageKey);
+      return null;
+    }
+
+    return {
+      data: parsed.data,
+      fetchedAt
+    };
+  } catch {
+    storage.removeItem(storageKey);
+    return null;
+  }
+}
+
+function writeStoredDashboardStageData(
+  cacheKey: string,
+  stage: DashboardStageKey,
+  userId: string,
+  version: number,
+  data: unknown,
+  fetchedAt: number
+) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    const entry: StoredDashboardStageDataEntry = {
+      cacheVersion: 1,
+      data,
+      fetchedAt,
+      stage,
+      userId,
+      version
+    };
+    storage.setItem(`${storageCachePrefix}${cacheKey}`, JSON.stringify(entry));
+  } catch {
+    // Private cache persistence is best-effort; memory cache still covers same-page navigation.
+  }
 }
 
 export function isDashboardStageDataCacheFresh(
@@ -60,13 +149,20 @@ export function readDashboardStageDataCache<TStage extends DashboardStageKey>(
   userId: string,
   version = 0
 ): DashboardStageDataMap[TStage] | null {
-  const entry = dashboardStageDataCache.get(getDashboardStageCacheKey(stage, userId, version));
+  const cacheKey = getDashboardStageCacheKey(stage, userId, version);
+  const entry = dashboardStageDataCache.get(cacheKey);
 
-  if (!entry || !isFresh(entry) || entry.data === undefined) {
-    return null;
+  if (isUsableStaleEntry(entry) && entry?.data !== undefined) {
+    return entry.data as DashboardStageDataMap[TStage];
   }
 
-  return entry.data as DashboardStageDataMap[TStage];
+  const storedEntry = readStoredDashboardStageData(cacheKey);
+  if (storedEntry?.data !== undefined) {
+    dashboardStageDataCache.set(cacheKey, storedEntry);
+    return storedEntry.data as DashboardStageDataMap[TStage];
+  }
+
+  return null;
 }
 
 export function seedDashboardStageDataCache<TStage extends DashboardStageKey>(
@@ -76,10 +172,13 @@ export function seedDashboardStageDataCache<TStage extends DashboardStageKey>(
   data: DashboardStageDataMap[TStage],
   fetchedAt = Date.now()
 ) {
-  dashboardStageDataCache.set(getDashboardStageCacheKey(stage, userId, version), {
+  const cacheKey = getDashboardStageCacheKey(stage, userId, version);
+
+  dashboardStageDataCache.set(cacheKey, {
     data,
     fetchedAt
   });
+  writeStoredDashboardStageData(cacheKey, stage, userId, version, data, fetchedAt);
 }
 
 export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
@@ -122,15 +221,24 @@ export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
         throw new Error(payload.error ?? fallbackErrorMessage);
       }
 
+      const fetchedAt = Date.now();
       dashboardStageDataCache.set(cacheKey, {
         data: payload,
-        fetchedAt: Date.now()
+        fetchedAt
       });
+      writeStoredDashboardStageData(cacheKey, stage, userId, version, payload, fetchedAt);
 
       return payload;
     })
     .catch((error: unknown) => {
-      dashboardStageDataCache.delete(cacheKey);
+      if (existingEntry?.data !== undefined) {
+        dashboardStageDataCache.set(cacheKey, {
+          data: existingEntry.data,
+          fetchedAt: existingEntry.fetchedAt
+        });
+      } else {
+        dashboardStageDataCache.delete(cacheKey);
+      }
       throw error;
     });
 

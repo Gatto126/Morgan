@@ -55,7 +55,7 @@ export function useCheckingDashboardData({
       setError(null);
     } catch (fetchError: unknown) {
       setError(fetchError instanceof Error ? fetchError.message : "Errore nel caricamento.");
-      setData(null);
+      setData((currentData) => currentData ?? null);
     } finally {
       setLoading(false);
       if (pendingImportRefreshRef.current) {
@@ -70,6 +70,28 @@ export function useCheckingDashboardData({
       void fetchDashboard({ force: true });
     }
   }, [fetchDashboard, transactionCount, userId]);
+
+  useEffect(() => {
+    if (!shouldLoad || data) {
+      return;
+    }
+
+    const cachedData = readDashboardStageDataCache("checking", userId, transactionCount);
+    if (!cachedData) {
+      return;
+    }
+
+    knownProviderKeysRef.current = new Set(cachedData.providers.map((provider) => provider.sourceInstitution));
+    hasLoadedRef.current = true;
+    const hydrateTimer = window.setTimeout(() => {
+      setData(cachedData);
+      setLoading(false);
+      setError(null);
+      fetchDashboardIfStale();
+    }, 0);
+
+    return () => window.clearTimeout(hydrateTimer);
+  }, [data, fetchDashboardIfStale, shouldLoad, transactionCount, userId]);
 
   useEffect(() => {
     if (!shouldLoad || hasLoadedRef.current) {
@@ -87,6 +109,7 @@ export function useCheckingDashboardData({
 
     const initialLoad = window.setTimeout(() => {
       if (hasLoadedRef.current) {
+        fetchDashboardIfStale();
         return;
       }
       hasLoadedRef.current = true;

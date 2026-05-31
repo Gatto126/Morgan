@@ -64,7 +64,7 @@ export function usePortfolioDashboardData({
       setError(null);
     } catch (fetchError: unknown) {
       setError(fetchError instanceof Error ? fetchError.message : "Errore nel caricamento.");
-      setData(null);
+      setData((currentData) => currentData ?? null);
     } finally {
       setLoading(false);
       if (pendingImportRefreshRef.current) {
@@ -79,6 +79,28 @@ export function usePortfolioDashboardData({
       void fetchDashboard({ force: true });
     }
   }, [fetchDashboard, stage, transactionCount, userId]);
+
+  useEffect(() => {
+    if (!shouldLoad || data) {
+      return;
+    }
+
+    const cachedData = readDashboardStageDataCache(stage, userId, transactionCount);
+    if (!cachedData) {
+      return;
+    }
+
+    knownProviderKeysRef.current = new Set(cachedData.providers.map((provider) => provider.sourceInstitution));
+    hasLoadedRef.current = true;
+    const hydrateTimer = window.setTimeout(() => {
+      setData(cachedData);
+      setLoading(false);
+      setError(null);
+      fetchDashboardIfStale();
+    }, 0);
+
+    return () => window.clearTimeout(hydrateTimer);
+  }, [data, fetchDashboardIfStale, shouldLoad, stage, transactionCount, userId]);
 
   useEffect(() => {
     if (!shouldLoad || hasLoadedRef.current) {
@@ -97,6 +119,8 @@ export function usePortfolioDashboardData({
     if (!hasLoadedRef.current) {
       hasLoadedRef.current = true;
       void fetchDashboard();
+    } else {
+      fetchDashboardIfStale();
     }
     const interval = window.setInterval(fetchDashboardIfStale, 60_000);
     const handleFocus = () => { fetchDashboardIfStale(); };

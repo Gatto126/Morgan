@@ -16,8 +16,10 @@ const mocks = vi.hoisted(() => {
     authGuardResponse: vi.fn(),
     logError: vi.fn(),
     logInfo: vi.fn(),
+    logPerformance: vi.fn(),
     logRequest: vi.fn(),
     logResponse: vi.fn(),
+    shouldLogPerformance: vi.fn(),
     requireOwnedProfile: vi.fn(),
     getBinanceBalancesStatus: vi.fn(),
     syncBinanceProfile: vi.fn(),
@@ -45,9 +47,11 @@ vi.mock("@/server/logging/logger", () => ({
   apiLogger: () => ({
     error: mocks.logError,
     info: mocks.logInfo,
+    performance: mocks.logPerformance,
     request: mocks.logRequest,
     response: mocks.logResponse
-  })
+  }),
+  shouldLogPerformance: mocks.shouldLogPerformance
 }));
 
 import { GET as balancesGet } from "@/app/api/binance/balances/route";
@@ -95,13 +99,16 @@ describe("binance API routes", () => {
     mocks.authGuardResponse.mockReset();
     mocks.logError.mockReset();
     mocks.logInfo.mockReset();
+    mocks.logPerformance.mockReset();
     mocks.logRequest.mockReset();
     mocks.logResponse.mockReset();
+    mocks.shouldLogPerformance.mockReset();
     mocks.requireOwnedProfile.mockReset();
     mocks.getBinanceBalancesStatus.mockReset();
     mocks.syncBinanceProfile.mockReset();
 
     mocks.authGuardResponse.mockReturnValue(null);
+    mocks.shouldLogPerformance.mockReturnValue(false);
     mocks.syncBinanceProfile.mockResolvedValue({
       balances: [persistedBalance],
       syncedAt
@@ -129,7 +136,12 @@ describe("binance API routes", () => {
 
       expect(response.status).toBe(200);
       expect(mocks.requireOwnedProfile).toHaveBeenCalledWith(request, "user-1");
-      expect(mocks.getBinanceBalancesStatus).toHaveBeenCalledWith("user-1");
+      expect(mocks.getBinanceBalancesStatus).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({
+          trace: expect.objectContaining({ isEnabled: false })
+        })
+      );
       await expect(response.json()).resolves.toMatchObject({
         balances: [{ tokenSymbol: "BTC", eurValue: 30_000 }],
         syncedAt: "2026-01-02T03:04:05.000Z",
@@ -222,7 +234,12 @@ describe("binance API routes", () => {
 
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toEqual({ error: "API key non configurata." });
-        expect(mocks.syncBinanceProfile).toHaveBeenCalledWith("user-1");
+        expect(mocks.syncBinanceProfile).toHaveBeenCalledWith(
+          "user-1",
+          expect.objectContaining({
+            trace: expect.objectContaining({ isEnabled: false })
+          })
+        );
       });
 
       it("uses the shared Binance sync service and returns balances with syncedAt", async () => {
@@ -231,7 +248,12 @@ describe("binance API routes", () => {
 
         expect(response.status).toBe(200);
         expect(mocks.requireOwnedProfile).toHaveBeenCalledWith(request, "user-1");
-        expect(mocks.syncBinanceProfile).toHaveBeenCalledWith("user-1");
+        expect(mocks.syncBinanceProfile).toHaveBeenCalledWith(
+          "user-1",
+          expect.objectContaining({
+            trace: expect.objectContaining({ isEnabled: false })
+          })
+        );
         await expect(response.json()).resolves.toMatchObject({
           success: true,
           balances: [{ tokenSymbol: "BTC", eurValue: 30_000 }],

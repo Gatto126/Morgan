@@ -21,6 +21,36 @@ type UseTransactionImportOptions = {
   onImportedTransactions: (counts: ImportedTransactionCounts) => void;
 };
 
+function getPreviewAccountType(transaction: PreviewTransaction) {
+  return transaction.accountType ?? (transaction.sourceInstitution === "bbva" ? "checking" : undefined);
+}
+
+export function countImportedTransactionsByAccountType(
+  transactions: PreviewTransaction[],
+  insertedFingerprints: Set<string>
+) {
+  let addedChecking = 0;
+  let addedInvestment = 0;
+  let addedCrypto = 0;
+
+  transactions.forEach((transaction) => {
+    if (!insertedFingerprints.has(transaction.fingerprint)) {
+      return;
+    }
+
+    const accountType = getPreviewAccountType(transaction);
+    if (accountType === "checking") addedChecking++;
+    else if (accountType === "investment") addedInvestment++;
+    else if (accountType === "crypto") addedCrypto++;
+  });
+
+  return {
+    addedChecking,
+    addedCrypto,
+    addedInvestment
+  };
+}
+
 export function useTransactionImport({
   activeUserId,
   fileInputRef,
@@ -189,17 +219,11 @@ export function useTransactionImport({
 
       const insertedCount = payload.insertedCount ?? 0;
       if (insertedCount > 0) {
-        let addedChecking = 0;
-        let addedInvestment = 0;
-        let addedCrypto = 0;
-
-        previewTransactions.forEach((transaction) => {
-          if (insertedFingerprintSet.has(transaction.fingerprint)) {
-            if (transaction.accountType === "checking") addedChecking++;
-            else if (transaction.accountType === "investment") addedInvestment++;
-            else if (transaction.accountType === "crypto") addedCrypto++;
-          }
-        });
+        const {
+          addedChecking,
+          addedCrypto,
+          addedInvestment
+        } = countImportedTransactionsByAccountType(previewTransactions, insertedFingerprintSet);
 
         onImportedTransactions({
           insertedCount,

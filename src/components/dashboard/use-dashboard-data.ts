@@ -82,7 +82,7 @@ export function useDashboardData({
         setError(null);
       } catch (fetchError: unknown) {
         setError(fetchError instanceof Error ? fetchError.message : "Errore nel caricamento.");
-        setData(null);
+        setData((currentData) => currentData ?? null);
       } finally {
         setLoading(false);
         if (pendingImportRefreshRef.current) {
@@ -100,6 +100,28 @@ export function useDashboardData({
   }, [fetchDashboard, transactionCount, userId]);
 
   useEffect(() => {
+    if (!shouldLoad || data) {
+      return;
+    }
+
+    const cachedData = readDashboardStageDataCache("dashboard", userId, transactionCount);
+    if (!cachedData) {
+      return;
+    }
+
+    knownProviderKeysRef.current = getProviderKeys(cachedData.providerSummaries);
+    hasLoadedRef.current = true;
+    const hydrateTimer = window.setTimeout(() => {
+      setData(cachedData);
+      setLoading(false);
+      setError(null);
+      fetchDashboardIfStale();
+    }, 0);
+
+    return () => window.clearTimeout(hydrateTimer);
+  }, [data, fetchDashboardIfStale, shouldLoad, transactionCount, userId]);
+
+  useEffect(() => {
     if (!shouldLoad || hasLoadedRef.current) {
       return;
     }
@@ -115,6 +137,7 @@ export function useDashboardData({
 
     const initialLoad = window.setTimeout(() => {
       if (hasLoadedRef.current) {
+        fetchDashboardIfStale();
         return;
       }
       hasLoadedRef.current = true;

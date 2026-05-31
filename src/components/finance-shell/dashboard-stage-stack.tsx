@@ -79,6 +79,22 @@ function resolveActiveDashboardStage(stage: Stage, visibleStageKeys: Set<Dashboa
   return visibleStageKeys.has(candidateStage) ? candidateStage : "dashboard";
 }
 
+function getDashboardStageDataVersion(stageKey: DashboardStageKey, activeUser: UserRecord, binanceRefreshKey: number) {
+  switch (stageKey) {
+    case "binance":
+      return binanceRefreshKey;
+    case "checking":
+      return activeUser.checkingCount;
+    case "crypto":
+      return activeUser.cryptoCount;
+    case "investment":
+      return activeUser.investmentCount;
+    case "dashboard":
+    default:
+      return activeUser.transactionCount;
+  }
+}
+
 function scheduleIdleTask(callback: () => void, delayMs = 0) {
   const currentWindow = window as IdleWindow;
   let cancelIdleTask: (() => void) | null = null;
@@ -176,7 +192,7 @@ export function DashboardStageStack({
           if (cancelled) return;
 
           void dashboardStageModuleWarmers[stageKey]().catch(() => {});
-          const version = stageKey === "binance" ? binanceRefreshKey : activeUser.transactionCount;
+          const version = getDashboardStageDataVersion(stageKey, activeUser, binanceRefreshKey);
           prefetchDashboardStageData(stageKey, activeUserId, { version });
           await new Promise((resolve) => globalThis.setTimeout(resolve, 120));
         }
@@ -221,7 +237,7 @@ export function DashboardStageStack({
           key={`checking-${activeUser.id}`}
           userId={activeUser.id}
           onImportRefreshComplete={stage === "checking" ? onImportRefreshComplete : undefined}
-          transactionCount={activeUser.transactionCount}
+          transactionCount={activeUser.checkingCount}
         />
       ) : null}
       {renderedStageKeys.has("investment") && visibleStageKeys.has("investment") ? (
@@ -231,7 +247,7 @@ export function DashboardStageStack({
           key={`investment-${activeUser.id}`}
           userId={activeUser.id}
           onImportRefreshComplete={stage === "investment" ? onImportRefreshComplete : undefined}
-          transactionCount={activeUser.transactionCount}
+          transactionCount={activeUser.investmentCount}
         />
       ) : null}
       {renderedStageKeys.has("crypto") && visibleStageKeys.has("crypto") ? (
@@ -241,7 +257,7 @@ export function DashboardStageStack({
           key={`crypto-${activeUser.id}`}
           userId={activeUser.id}
           onImportRefreshComplete={stage === "crypto" ? onImportRefreshComplete : undefined}
-          transactionCount={activeUser.transactionCount}
+          transactionCount={activeUser.cryptoCount}
         />
       ) : null}
       {renderedStageKeys.has("binance") && visibleStageKeys.has("binance") ? (
