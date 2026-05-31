@@ -170,14 +170,13 @@ function preferStableTopbarItems(
   cachedItems: DashboardTopbarItem[],
   fallbackItems: DashboardTopbarItem[]
 ) {
-  const stableFallbackItems = cachedItems.length > 0 && hasAnyConcreteTopbarValue(cachedItems)
+  const stableFallbackItems = cachedItems.length > fallbackItems.length
     ? cachedItems
     : fallbackItems;
 
   if (
     entryItems.length >= stableFallbackItems.length
     && entryItems.length > 0
-    && hasAnyConcreteTopbarValue(entryItems)
   ) {
     return entryItems;
   }
@@ -185,7 +184,6 @@ function preferStableTopbarItems(
   if (
     storedItems.length >= stableFallbackItems.length
     && storedItems.length > 0
-    && hasAnyConcreteTopbarValue(storedItems)
   ) {
     return storedItems;
   }
@@ -207,14 +205,6 @@ function getFallbackIcon(activeStage: DashboardStageKey, item: DashboardTopbarIt
   }
 
   return undefined;
-}
-
-function hasConcreteTopbarValue(item: DashboardTopbarItem) {
-  return item.value !== "--" && item.value !== "-";
-}
-
-function hasAnyConcreteTopbarValue(items: DashboardTopbarItem[]) {
-  return items.some(hasConcreteTopbarValue);
 }
 
 export function DashboardTopbarShell({

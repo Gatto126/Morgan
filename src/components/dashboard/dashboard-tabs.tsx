@@ -15,6 +15,7 @@ type DashboardTabsProps = {
   activeTab: AccountTab;
   activePoint: ActivePoint | null;
   data: DashboardData | null;
+  valuesKnown: boolean;
   userId: string;
   onActiveTabChange: (tab: AccountTab) => void;
   getGlobalInvestmentLiveTotal: () => number;
@@ -46,6 +47,7 @@ export function DashboardTabs({
   activeTab,
   activePoint,
   data,
+  valuesKnown,
   userId,
   onActiveTabChange,
   getGlobalInvestmentLiveTotal,
@@ -59,7 +61,7 @@ export function DashboardTabs({
         const Icon = TAB_ICONS[tab.key];
         const isChartInteraction = !!activePoint;
         const isLiveMarketValue = tab.key === "heritage" || tab.key === "investment" || tab.key === "crypto";
-        const value = data
+        const value = data && valuesKnown
           ? formatEuroCents(
               activePoint
                 ? (() => {
@@ -100,6 +102,7 @@ export function DashboardTabs({
       getGlobalCryptoLiveTotal,
       getGlobalInvestmentLiveTotal,
       onActiveTabChange,
+      valuesKnown,
       visibleTabs
     ]
   );
@@ -107,7 +110,7 @@ export function DashboardTabs({
   usePublishDashboardTopbar("dashboard", userId, items);
 
   useEffect(() => {
-    if (!data) {
+    if (!data || !valuesKnown) {
       return;
     }
 
@@ -173,6 +176,7 @@ export function DashboardTabs({
     getGlobalInvestmentLiveTotal,
     getProviderCryptoLiveTotal,
     getProviderInvestmentLiveTotal,
+    valuesKnown,
     userId
   ]);
 

@@ -29,6 +29,7 @@ export function useCheckingDashboardData({
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+  const [freshnessVersion, setFreshnessVersion] = useState(0);
   const [importRefreshVersion, setImportRefreshVersion] = useState(0);
   const [newProviderKeys, setNewProviderKeys] = useState<Set<string>>(new Set());
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
@@ -70,6 +71,7 @@ export function useCheckingDashboardData({
   }, [transactionCount, userId]);
   const fetchDashboardIfStale = useCallback(() => {
     if (!isDashboardStageDataCacheFresh("checking", userId, transactionCount)) {
+      setFreshnessVersion((version) => version + 1);
       void fetchDashboard({ force: true });
     }
   }, [fetchDashboard, transactionCount, userId]);
@@ -143,11 +145,15 @@ export function useCheckingDashboardData({
 
     lastRefreshTransactionCountRef.current = transactionCount;
     pendingImportRefreshRef.current = true;
+    setFreshnessVersion((version) => version + 1);
     void fetchDashboard({ force: true });
   }, [transactionCount, shouldLoad, loading, fetchDashboard]);
 
+  void freshnessVersion;
+
   return {
     data,
+    dataFresh: !!data && isDashboardStageDataCacheFresh("checking", userId, transactionCount),
     loading,
     error,
     dataVersion,

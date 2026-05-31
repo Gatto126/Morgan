@@ -46,7 +46,7 @@ export function PortfolioDashboard({
   userSelectElement,
   onImportRefreshComplete
 }: PortfolioDashboardProps) {
-  const { data, loading, error, importRefreshVersion } = usePortfolioDashboardData({
+  const { data, dataFresh, loading, error, importRefreshVersion } = usePortfolioDashboardData({
     endpoint: config.endpoint,
     fetchErrorMessage: config.fetchErrorMessage,
     userId,
@@ -210,6 +210,7 @@ export function PortfolioDashboard({
         activeTab={activeTab}
         activePoint={activePoint}
         rootIcon={config.rootIcon}
+        valuesKnown={dataFresh}
         stage={dashboardStage}
         userId={userId}
         onSelectTab={setActiveTab}

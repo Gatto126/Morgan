@@ -38,6 +38,7 @@ export function usePortfolioDashboardData({
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+  const [freshnessVersion, setFreshnessVersion] = useState(0);
   const [importRefreshVersion, setImportRefreshVersion] = useState(0);
   const [newProviderKeys, setNewProviderKeys] = useState<Set<string>>(new Set());
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
@@ -79,6 +80,7 @@ export function usePortfolioDashboardData({
   }, [fetchErrorMessage, stage, transactionCount, userId]);
   const fetchDashboardIfStale = useCallback(() => {
     if (!isDashboardStageDataCacheFresh(stage, userId, transactionCount)) {
+      setFreshnessVersion((version) => version + 1);
       void fetchDashboard({ force: true });
     }
   }, [fetchDashboard, stage, transactionCount, userId]);
@@ -141,11 +143,15 @@ export function usePortfolioDashboardData({
 
     lastRefreshTransactionCountRef.current = transactionCount;
     pendingImportRefreshRef.current = true;
+    setFreshnessVersion((version) => version + 1);
     void fetchDashboard({ force: true });
   }, [transactionCount, shouldLoad, loading, fetchDashboard]);
 
+  void freshnessVersion;
+
   return {
     data,
+    dataFresh: !!data && isDashboardStageDataCacheFresh(stage, userId, transactionCount),
     loading,
     error,
     dataVersion,

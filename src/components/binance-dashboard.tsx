@@ -23,6 +23,7 @@ import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import {
   dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
+  isDashboardStageDataCacheFresh,
   readDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
 import { usePublishDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
@@ -156,7 +157,8 @@ export function BinanceDashboard({
   }
 
   const totalEur = useMemo(() => balances.reduce((sum, b) => sum + b.eurValue, 0), [balances]);
-  const topbarValue = balancesLoaded ? formatBinanceEuro(totalEur) : "--";
+  const balancesFresh = balancesLoaded && isDashboardStageDataCacheFresh("binance", userId, binanceRefreshKey);
+  const topbarValue = balancesFresh ? formatBinanceEuro(totalEur) : "--";
 
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;
