@@ -67,7 +67,7 @@ export function PortfolioDashboard({
   const completedImportRefreshVersionRef = useRef(0);
   const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
   const isMobile = useIsMobile();
-  const { livePrices } = usePortfolioLivePrices({
+  const { livePrices, pricesReady } = usePortfolioLivePrices({
     providers: data?.providers,
     priceQueryParam: config.priceQueryParam,
     isActive,
@@ -216,7 +216,7 @@ export function PortfolioDashboard({
         activePoint={currentDisplayPoint}
         isTooltipActive={!!activeChartPoint}
         rootIcon={config.rootIcon}
-        valuesKnown={!!data}
+        valuesKnown={!!data && (!!activeChartPoint || pricesReady)}
         stage={dashboardStage}
         userId={userId}
         onSelectTab={setActiveTab}

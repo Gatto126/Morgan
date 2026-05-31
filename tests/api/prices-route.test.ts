@@ -60,7 +60,7 @@ describe("GET /api/prices", () => {
     expect(mocks.getRetryAfterMs).toHaveBeenCalledWith("user-1");
     expect(mocks.fetchPrices).toHaveBeenCalledWith(
       { isins: [], cryptos: ["BTC"] },
-      { trace: expect.any(Object) }
+      { includeHistoricalFallback: false, trace: expect.any(Object) }
     );
   });
 });

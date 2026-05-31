@@ -40,7 +40,10 @@ export async function GET(request: NextRequest) {
 
     const { isins, cryptos } = parsePriceRequestParams(request.nextUrl.searchParams);
     log.request("GET", endpoint, { isinCount: isins.length, cryptoCount: cryptos.length });
-    const prices = await priceRefreshService.fetchPrices({ isins, cryptos }, { trace });
+    const prices = await priceRefreshService.fetchPrices(
+      { isins, cryptos },
+      { includeHistoricalFallback: false, trace }
+    );
 
     log.response("GET", endpoint, 200, { keyCount: Object.keys(prices).length });
     trace.finish(log, {

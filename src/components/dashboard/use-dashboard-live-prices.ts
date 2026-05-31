@@ -38,6 +38,13 @@ function getPriceRequestKey(summaries: ProviderSummary[] | undefined) {
 }
 
 function getRequiredPriceKeys(summaries: ProviderSummary[] | undefined) {
+  return [
+    ...getRequiredInvestmentPriceKeys(summaries),
+    ...getRequiredCryptoPriceKeys(summaries)
+  ];
+}
+
+function getRequiredInvestmentPriceKeys(summaries: ProviderSummary[] | undefined) {
   if (!summaries) {
     return [];
   }
@@ -50,6 +57,19 @@ function getRequiredPriceKeys(summaries: ProviderSummary[] | undefined) {
         keys.add(product.isin);
       }
     }
+  }
+
+  return [...keys].sort();
+}
+
+function getRequiredCryptoPriceKeys(summaries: ProviderSummary[] | undefined) {
+  if (!summaries) {
+    return [];
+  }
+
+  const keys = new Set<string>();
+
+  for (const provider of summaries) {
     for (const token of provider.cryptoTokens) {
       if (token.tokenSymbol && Math.abs(token.quantity) > 0.000001) {
         keys.add(token.tokenSymbol);
@@ -74,6 +94,8 @@ export function useDashboardLivePrices(
 ) {
   const [livePrices, setLivePrices] = useState<Record<string, number | null>>(globalLivePricesCache);
   const [readyRequestKey, setReadyRequestKey] = useState("");
+  const [investmentPricesReady, setInvestmentPricesReady] = useState(false);
+  const [cryptoPricesReady, setCryptoPricesReady] = useState(false);
   const [pricesReady, setPricesReady] = useState(false);
   const lastPreloadKeyRef = useRef("");
 
@@ -102,17 +124,19 @@ export function useDashboardLivePrices(
       cryptos: [...allCryptos],
       isins: [...allIsins]
     }, { maxAgeMs: livePriceValueMaxAgeMs });
+    const investmentKeys = getRequiredInvestmentPriceKeys(summaries);
+    const cryptoKeys = getRequiredCryptoPriceKeys(summaries);
     const requiredKeys = getRequiredPriceKeys(summaries);
     const requestKey = getPriceRequestKey(summaries);
+    const investmentReady = areLivePricesReady(investmentKeys, prices);
+    const cryptoReady = areLivePricesReady(cryptoKeys, prices);
+    const allReady = areLivePricesReady(requiredKeys, prices);
 
     setLivePrices((previousPrices) => ({ ...previousPrices, ...prices }));
-    if (areLivePricesReady(requiredKeys, prices)) {
-      setReadyRequestKey(requestKey);
-      setPricesReady(true);
-    } else {
-      setReadyRequestKey("");
-      setPricesReady(false);
-    }
+    setReadyRequestKey(requestKey);
+    setInvestmentPricesReady(investmentReady);
+    setCryptoPricesReady(cryptoReady);
+    setPricesReady(allReady);
   }, []);
 
   useEffect(() => {
@@ -153,9 +177,12 @@ export function useDashboardLivePrices(
   }, [providerSummaries, fetchLivePrices, isActive]);
 
   const requestKey = getPriceRequestKey(providerSummaries);
+  const readyForRequest = requestKey === "" || readyRequestKey === requestKey;
 
   return {
+    cryptoPricesReady: requestKey === "" || (readyForRequest && cryptoPricesReady),
+    investmentPricesReady: requestKey === "" || (readyForRequest && investmentPricesReady),
     livePrices,
-    pricesReady: requestKey === "" || (pricesReady && readyRequestKey === requestKey)
+    pricesReady: requestKey === "" || (readyForRequest && pricesReady)
   };
 }

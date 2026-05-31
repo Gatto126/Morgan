@@ -91,7 +91,7 @@ export function Dashboard({
     shouldLoad,
     transactionCount
   });
-  const { livePrices } = useDashboardLivePrices(data?.providerSummaries, {
+  const { cryptoPricesReady, investmentPricesReady, livePrices } = useDashboardLivePrices(data?.providerSummaries, {
     isActive,
     shouldLoad: shouldLoad && !!data
   });
@@ -182,6 +182,8 @@ export function Dashboard({
         activePoint={data ? currentDisplayPoint : null}
         data={data}
         isTooltipActive={!!activeChartPoint}
+        cryptoValuesKnown={cryptoPricesReady}
+        investmentValuesKnown={investmentPricesReady}
         valuesKnown={dashboardValuesKnown}
         userId={userId}
         onActiveTabChange={setActiveTab}

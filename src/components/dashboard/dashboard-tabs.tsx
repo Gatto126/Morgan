@@ -15,6 +15,8 @@ type DashboardTabsProps = {
   activeTab: AccountTab;
   activePoint: ActivePoint | null;
   data: DashboardData | null;
+  cryptoValuesKnown?: boolean;
+  investmentValuesKnown?: boolean;
   isTooltipActive?: boolean;
   valuesKnown: boolean;
   userId: string;
@@ -48,6 +50,8 @@ export function DashboardTabs({
   activeTab,
   activePoint,
   data,
+  cryptoValuesKnown = true,
+  investmentValuesKnown = true,
   isTooltipActive = !!activePoint,
   valuesKnown,
   userId,
@@ -63,7 +67,13 @@ export function DashboardTabs({
         const Icon = TAB_ICONS[tab.key];
         const isChartInteraction = isTooltipActive;
         const isLiveMarketValue = tab.key === "heritage" || tab.key === "investment" || tab.key === "crypto";
-        const value = data && valuesKnown
+        const liveMarketValueKnown = tab.key === "investment"
+          ? investmentValuesKnown
+          : tab.key === "crypto"
+            ? cryptoValuesKnown
+            : investmentValuesKnown && cryptoValuesKnown;
+        const tabValuesKnown = valuesKnown && (isChartInteraction || !isLiveMarketValue || liveMarketValueKnown);
+        const value = data && tabValuesKnown
           ? formatEuroCents(
               activePoint
                 ? (() => {
@@ -100,9 +110,11 @@ export function DashboardTabs({
     [
       activePoint,
       activeTab,
+      cryptoValuesKnown,
       data,
       getGlobalCryptoLiveTotal,
       getGlobalInvestmentLiveTotal,
+      investmentValuesKnown,
       isTooltipActive,
       onActiveTabChange,
       valuesKnown,
@@ -143,14 +155,14 @@ export function DashboardTabs({
         animateChanges: true,
         icon: Wallet,
         id: "investment",
-        value: formatEuroCents(getGlobalInvestmentLiveTotal())
+        value: investmentValuesKnown ? formatEuroCents(getGlobalInvestmentLiveTotal()) : "--"
       },
       ...investmentProviders.map((provider) => ({
         active: false,
         animateChanges: true,
         id: `investment:${provider.sourceInstitution}`,
         label: getProviderTabLabel(provider.sourceInstitution),
-        value: formatEuroCents(getProviderInvestmentLiveTotal(provider))
+        value: investmentValuesKnown ? formatEuroCents(getProviderInvestmentLiveTotal(provider)) : "--"
       }))
     ]);
 
@@ -163,22 +175,24 @@ export function DashboardTabs({
         animateChanges: true,
         icon: Coins,
         id: "crypto",
-        value: formatEuroCents(getGlobalCryptoLiveTotal())
+        value: cryptoValuesKnown ? formatEuroCents(getGlobalCryptoLiveTotal()) : "--"
       },
       ...cryptoProviders.map((provider) => ({
         active: false,
         animateChanges: true,
         id: `crypto:${provider.sourceInstitution}`,
         label: getProviderTabLabel(provider.sourceInstitution),
-        value: formatEuroCents(getProviderCryptoLiveTotal(provider))
+        value: cryptoValuesKnown ? formatEuroCents(getProviderCryptoLiveTotal(provider)) : "--"
       }))
     ]);
   }, [
     data,
+    cryptoValuesKnown,
     getGlobalCryptoLiveTotal,
     getGlobalInvestmentLiveTotal,
     getProviderCryptoLiveTotal,
     getProviderInvestmentLiveTotal,
+    investmentValuesKnown,
     valuesKnown,
     userId
   ]);

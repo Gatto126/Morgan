@@ -145,6 +145,29 @@ describe("price refresh service", () => {
     }
   });
 
+  it("can return only actual live prices without historical fallback", async () => {
+    const repository = {
+      listLatestHistoricalPrices: vi.fn(async () => new Map([
+        ["IE00B4L5Y983", 12345]
+      ]))
+    };
+    const service = createPriceRefreshService({
+      repository,
+      rateLimiter: { getRetryAfterMs: () => null },
+      isinFetcher: vi.fn(async () => null),
+      cryptoFetcher: vi.fn(async () => null),
+      logger: silentLogger
+    });
+
+    await expect(service.fetchPrices(
+      { isins: ["IE00B4L5Y983"], cryptos: [] },
+      { includeHistoricalFallback: false }
+    )).resolves.toEqual({
+      IE00B4L5Y983: null
+    });
+    expect(repository.listLatestHistoricalPrices).not.toHaveBeenCalled();
+  });
+
   it("does not serially wait on every historical key beyond the live concurrency window", async () => {
     vi.useFakeTimers();
     try {

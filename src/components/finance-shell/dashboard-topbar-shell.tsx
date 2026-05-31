@@ -141,7 +141,6 @@ function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: Dashboar
       return [];
     }
 
-    const total = data.providers.reduce((sum, provider) => sum + provider.total, 0);
     const RootIcon = activeStage === "investment" ? Wallet : Coins;
 
     return [
@@ -149,13 +148,13 @@ function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: Dashboar
         active: true,
         icon: RootIcon,
         id: activeStage,
-        value: formatEuroCents(total)
+        value: fallbackValue
       },
       ...data.providers.map((provider) => ({
         active: false,
         id: `${activeStage}:${provider.sourceInstitution}`,
         label: getAbbreviatedLabel(provider.sourceInstitution),
-        value: formatEuroCents(provider.total)
+        value: fallbackValue
       }))
     ];
   }

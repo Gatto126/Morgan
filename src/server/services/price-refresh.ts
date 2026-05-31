@@ -35,6 +35,7 @@ export type PriceRefreshRequest = {
 };
 
 type FetchPricesOptions = {
+  includeHistoricalFallback?: boolean;
   trace?: PerformanceTrace;
 };
 
@@ -340,14 +341,19 @@ export function createPriceRefreshService({
       return rateLimiter.getRetryAfterMs(userId);
     },
 
-    async fetchPrices({ isins, cryptos }: PriceRefreshRequest, { trace }: FetchPricesOptions = {}) {
+    async fetchPrices(
+      { isins, cryptos }: PriceRefreshRequest,
+      { includeHistoricalFallback = true, trace }: FetchPricesOptions = {}
+    ) {
       const requestKeys = [...isins, ...cryptos];
-      const historicalPrices = await measurePerformanceStep(
-        trace,
-        "prices.repository.listLatestHistoricalPrices",
-        () => repository.listLatestHistoricalPrices(requestKeys),
-        (rows) => ({ requestKeys: requestKeys.length, rows: rows.size })
-      );
+      const historicalPrices = includeHistoricalFallback
+        ? await measurePerformanceStep(
+            trace,
+            "prices.repository.listLatestHistoricalPrices",
+            () => repository.listLatestHistoricalPrices(requestKeys),
+            (rows) => ({ requestKeys: requestKeys.length, rows: rows.size })
+          )
+        : new Map<string, number>();
       const [isinResults, cryptoResults] = await measurePerformanceStep(
         trace,
         "prices.external.fetchLivePrices",
@@ -387,7 +393,7 @@ export function createPriceRefreshService({
       for (const result of fetchResults) {
         let finalPrice = result.price;
 
-        if (finalPrice === null) {
+        if (finalPrice === null && includeHistoricalFallback) {
           const historicalPrice = historicalPrices.get(result.key);
           if (historicalPrice !== undefined) {
             finalPrice = historicalPrice;
