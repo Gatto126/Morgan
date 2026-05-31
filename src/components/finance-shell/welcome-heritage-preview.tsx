@@ -48,7 +48,7 @@ type HeritageTooltipProps = {
   setActivePoint: (point: DashboardChartPoint | null) => void;
 };
 
-const FALLBACK_CHART_SIZE = { width: 520, height: 310 };
+const FALLBACK_CHART_SIZE = { width: 520, height: 320 };
 const WELCOME_HERITAGE_BODY = "Your Heritage value across all profiles, cash, ETF, stock and crypto positions.";
 
 function WelcomeHeritageTooltip({ active, payload, setActivePoint }: HeritageTooltipProps) {
@@ -64,7 +64,7 @@ export function WelcomeHeritagePreview({
   users = []
 }: WelcomeHeritagePreviewProps) {
   const [activePoint, setActivePoint] = useState<DashboardChartPoint | null>(null);
-  const { chartContainerRef, renderedChartSize, seriesReady } = useStableChartFrame({
+  const { chartContainerRef, frameReady, renderedChartSize } = useStableChartFrame({
     fallbackSize: FALLBACK_CHART_SIZE
   });
   const shouldLoad = isActive && users.length > 0;
@@ -118,13 +118,14 @@ export function WelcomeHeritagePreview({
       <PortfolioPreviewChart
         ariaLabel="Heritage preview"
         body={WELCOME_HERITAGE_BODY}
+        className="max-w-[520px]"
       />
     );
   }
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[520px] flex-col justify-center">
-      <div className="relative h-[330px] sm:h-[360px] lg:h-[380px]">
+      <div className="relative h-[360px]">
         <div className="hide-scrollbar absolute left-0 top-10 z-20 flex gap-2 overflow-x-auto px-1 pb-1 [&_.dashboard-topbar-currency-icon]:h-3.5 [&_.dashboard-topbar-currency-icon]:w-3.5 [&_.dashboard-topbar-line]:gap-2 [&_.dashboard-topbar-tab]:h-10 [&_.dashboard-topbar-tab]:w-[146px] [&_.dashboard-topbar-tab]:rounded-[14px] [&_.dashboard-topbar-tab]:px-2 sm:top-12 sm:[&_.dashboard-topbar-currency-icon]:h-4 sm:[&_.dashboard-topbar-currency-icon]:w-4 sm:[&_.dashboard-topbar-line]:gap-3 sm:[&_.dashboard-topbar-tab]:h-12 sm:[&_.dashboard-topbar-tab]:w-[178px] sm:[&_.dashboard-topbar-tab]:rounded-[16px] sm:[&_.dashboard-topbar-tab]:px-3">
           <DashboardTopbarTab
             active
@@ -134,7 +135,7 @@ export function WelcomeHeritagePreview({
           />
         </div>
 
-        <div ref={chartContainerRef} className="absolute inset-x-0 top-0 h-[310px] overflow-visible sm:h-[340px] lg:h-[360px]">
+        <div ref={chartContainerRef} className="absolute inset-x-0 top-0 h-[320px] overflow-visible">
           <LineChart
             accessibilityLayer={false}
             data={chartData}
@@ -174,7 +175,7 @@ export function WelcomeHeritagePreview({
               content={<WelcomeHeritageTooltip setActivePoint={setActivePoint} />}
               cursor={{ stroke: "rgba(255,255,255,0.12)", strokeWidth: 1, fill: "transparent" }}
             />
-            {seriesReady ? (
+            {frameReady ? (
               <Line
                 activeDot={(props: HeritageActiveDotProps) => (
                   <SelectableChartDot

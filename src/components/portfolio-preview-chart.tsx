@@ -7,6 +7,7 @@ import { Line, LineChart as RechartsLineChart, ReferenceLine, Tooltip, XAxis, YA
 import { SelectableChartDot } from "@/components/chart-primitives/selectable-chart-dot";
 import { DashboardTopbarTab } from "@/components/finance-shell/dashboard-topbar-tab";
 import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
+import { cn } from "@/shared/utils";
 
 type PortfolioPreviewRawPoint = {
   rawMonth: string;
@@ -32,6 +33,7 @@ type PortfolioPreviewTooltipProps = {
 type PortfolioPreviewChartProps = {
   ariaLabel?: string;
   body?: string;
+  className?: string;
   title?: string;
 };
 
@@ -125,7 +127,7 @@ const portfolioPreviewXAxisLabels = [
 ];
 const portfolioPreviewXAxisTicks = [0, 2, 4, 6, 8, 10, 11.9];
 const portfolioPreviewYGridLines = [500000, 600000, 700000, 800000];
-const portfolioPreviewFallbackChartSize = { width: 460, height: 290 };
+const portfolioPreviewFallbackChartSize = { width: 460, height: 320 };
 const portfolioPreviewEuroFormatter = new Intl.NumberFormat("it-IT", {
   style: "currency",
   currency: "EUR",
@@ -175,18 +177,19 @@ function PortfolioPreviewSilentTooltip({
 export function PortfolioPreviewChart({
   ariaLabel = "Preview Heritage",
   body = portfolioPreviewDefaultBody,
+  className,
   title = "Portfolio"
 }: PortfolioPreviewChartProps) {
   const [activePoint, setActivePoint] = useState<PortfolioPreviewPoint | null>(null);
   const latestPoint = portfolioPreviewData[portfolioPreviewData.length - 1];
   const topbarPoint = activePoint ?? latestPoint;
-  const { chartContainerRef, renderedChartSize, seriesReady } = useStableChartFrame({
+  const { chartContainerRef, frameReady, renderedChartSize } = useStableChartFrame({
     fallbackSize: portfolioPreviewFallbackChartSize
   });
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-[460px] flex-col justify-center">
-      <div className="relative h-[310px] sm:h-[325px] lg:h-[340px]">
+    <div className={cn("mx-auto flex h-full min-h-0 w-full max-w-[460px] flex-col justify-center", className)}>
+      <div className="relative h-[360px]">
         <div className="hide-scrollbar absolute left-0 top-10 z-20 flex gap-2 overflow-x-auto px-1 pb-1 [&_.dashboard-topbar-currency-icon]:h-3.5 [&_.dashboard-topbar-currency-icon]:w-3.5 [&_.dashboard-topbar-line]:gap-2 [&_.dashboard-topbar-tab]:h-10 [&_.dashboard-topbar-tab]:w-[146px] [&_.dashboard-topbar-tab]:rounded-[14px] [&_.dashboard-topbar-tab]:px-2 sm:top-12 sm:[&_.dashboard-topbar-currency-icon]:h-4 sm:[&_.dashboard-topbar-currency-icon]:w-4 sm:[&_.dashboard-topbar-line]:gap-3 sm:[&_.dashboard-topbar-tab]:h-12 sm:[&_.dashboard-topbar-tab]:w-[178px] sm:[&_.dashboard-topbar-tab]:rounded-[16px] sm:[&_.dashboard-topbar-tab]:px-3">
           <DashboardTopbarTab
             active
@@ -196,7 +199,7 @@ export function PortfolioPreviewChart({
           />
         </div>
 
-        <div ref={chartContainerRef} className="absolute inset-x-0 top-0 h-[310px] overflow-visible sm:h-[340px] lg:h-[360px]">
+        <div ref={chartContainerRef} className="absolute inset-x-0 top-0 h-[320px] overflow-visible">
           <RechartsLineChart
             accessibilityLayer={false}
             data={portfolioPreviewData}
@@ -239,7 +242,7 @@ export function PortfolioPreviewChart({
               content={<PortfolioPreviewSilentTooltip setActivePoint={setActivePoint} />}
               cursor={{ stroke: "rgba(255,255,255,0.12)", strokeWidth: 1, fill: "transparent" }}
             />
-            {seriesReady ? (
+            {frameReady ? (
               <Line
                 activeDot={(props: PortfolioPreviewActiveDotProps) => (
                   <SelectableChartDot

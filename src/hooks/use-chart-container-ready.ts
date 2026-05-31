@@ -1,16 +1,34 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 
 export function useChartContainerReady() {
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+  const updateChartSize = useCallback((node: HTMLDivElement) => {
+    const rect = node.getBoundingClientRect();
+    const nextSize = {
+      width: Math.floor(rect.width),
+      height: Math.floor(rect.height)
+    };
+
+    setChartSize((currentSize) => {
+      if (currentSize.width === nextSize.width && currentSize.height === nextSize.height) {
+        return currentSize;
+      }
+
+      return nextSize;
+    });
+  }, []);
   const chartContainerRef = useCallback((node: HTMLDivElement | null) => {
     setElement(node);
     if (!node) {
       setChartSize({ width: 0, height: 0 });
+      return;
     }
-  }, []);
 
-  useEffect(() => {
+    updateChartSize(node);
+  }, [updateChartSize]);
+
+  useLayoutEffect(() => {
     if (!element) {
       return;
     }
@@ -20,11 +38,7 @@ export function useChartContainerReady() {
     const checkSize = () => {
       window.cancelAnimationFrame(frameId);
       frameId = window.requestAnimationFrame(() => {
-        const rect = element.getBoundingClientRect();
-        setChartSize({
-          width: Math.floor(rect.width),
-          height: Math.floor(rect.height)
-        });
+        updateChartSize(element);
       });
     };
 
@@ -37,7 +51,7 @@ export function useChartContainerReady() {
       window.cancelAnimationFrame(frameId);
       observer.disconnect();
     };
-  }, [element]);
+  }, [element, updateChartSize]);
 
   return {
     chartContainerRef,
