@@ -221,7 +221,7 @@ export function FinanceShell({
   }, [applyImportedTransactionCounts]);
   const isDashboardStage = dashboardStages.has(stage);
   const title = isRestoringProfileSelection ? "Morgan" : getStageTitle(stage, hasUsers);
-  const warmupDelayMs = initialDashboardStageData && initialFinanceState.restoredFromServer ? 1_400 : 0;
+  const warmupDelayMs = 0;
   const visibleSettingsSection = getVisibleSettingsSection(activeSettingsSection, showSettingsView);
   const shellContent = useFinanceShellContent({
     accountName,

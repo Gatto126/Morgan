@@ -4,6 +4,11 @@ import type { DashboardData, ProviderSummary } from "@/components/dashboard/type
 import { fetchAndCacheLivePrices, globalLivePricesCache } from "@/shared/live-prices";
 
 import { fetchDashboardStageData } from "./dashboard-stage-data-cache";
+import {
+  getDashboardStageDataVersion,
+  getVisibleDashboardStageKeys,
+  type DashboardStageKey
+} from "./dashboard-stage-items";
 import { ACTIVE_PROFILE_PERSISTENCE_KEY } from "./persistence-state";
 import type { UserRecord } from "./types";
 
@@ -59,8 +64,21 @@ async function fetchProfilesForWarmup() {
 }
 
 export function selectLoginWarmupProfiles(users: UserRecord[], persistedProfileId: string | null) {
+  const primaryUser = selectPrimaryLoginWarmupProfile(users, persistedProfileId);
+
+  if (!primaryUser) {
+    return users;
+  }
+
+  return [
+    primaryUser,
+    ...users.filter((user) => user.id !== primaryUser.id)
+  ];
+}
+
+export function selectPrimaryLoginWarmupProfile(users: UserRecord[], persistedProfileId: string | null) {
   if (users.length === 0) {
-    return [];
+    return null;
   }
 
   const persistedUser = persistedProfileId
@@ -68,14 +86,14 @@ export function selectLoginWarmupProfiles(users: UserRecord[], persistedProfileI
     : null;
 
   if (persistedUser) {
-    return [persistedUser];
+    return persistedUser;
   }
 
   if (users.length === 1) {
-    return [users[0]];
+    return users[0];
   }
 
-  return [];
+  return null;
 }
 
 function addPriceKey(keys: Set<string>, value: string | null | undefined) {
@@ -108,27 +126,64 @@ export function collectDashboardLivePriceKeys(providerSummaries: ProviderSummary
   };
 }
 
-async function warmProfileDashboard(user: UserRecord) {
-  const dashboardData = user.transactionCount > 0
-    ? await fetchDashboardStageData("dashboard", user.id, { version: user.transactionCount }).catch(() => null)
-    : null;
-  const keys = collectDashboardLivePriceKeys((dashboardData as DashboardData | null)?.providerSummaries);
+async function warmLivePricesForDashboardData(dashboardData: DashboardData | null) {
+  const keys = collectDashboardLivePriceKeys(dashboardData?.providerSummaries);
   const priceWarmup = keys.isins.length > 0 || keys.cryptos.length > 0
     ? fetchAndCacheLivePrices(keys, { maxAgeMs: 0 })
     : Promise.resolve(globalLivePricesCache);
+
+  await priceWarmup;
+}
+
+async function warmProfilePreview(user: UserRecord) {
+  const dashboardPromise = user.transactionCount > 0
+    ? fetchDashboardStageData("dashboard", user.id, { version: user.transactionCount }).catch(() => null)
+    : Promise.resolve(null);
   const binanceWarmup = user.hasBinanceCredentials
     ? fetchDashboardStageData("binance", user.id).catch(() => null)
     : Promise.resolve(null);
+  const dashboardData = await dashboardPromise;
 
-  await Promise.allSettled([priceWarmup, binanceWarmup]);
+  await Promise.allSettled([
+    warmLivePricesForDashboardData(dashboardData as DashboardData | null),
+    binanceWarmup
+  ]);
+
+  return dashboardData as DashboardData | null;
+}
+
+function getActiveProfileStageWarmupOrder(user: UserRecord) {
+  const visibleStages = new Set(getVisibleDashboardStageKeys(user));
+  const stageOrder: DashboardStageKey[] = ["checking", "investment", "crypto", "binance"];
+
+  return stageOrder.filter((stage) => visibleStages.has(stage));
+}
+
+async function warmActiveProfileStages(user: UserRecord) {
+  for (const stage of getActiveProfileStageWarmupOrder(user)) {
+    const version = getDashboardStageDataVersion(stage, user);
+    await fetchDashboardStageData(stage, user.id, { version }).catch(() => null);
+  }
 }
 
 async function runFinanceSessionWarmup() {
   const persistedProfileId = getPersistedProfileId();
   const users = await fetchProfilesForWarmup();
+  const primaryProfile = selectPrimaryLoginWarmupProfile(users, persistedProfileId);
   const warmupProfiles = selectLoginWarmupProfiles(users, persistedProfileId);
 
-  await Promise.allSettled(warmupProfiles.map((user) => warmProfileDashboard(user)));
+  if (!primaryProfile) {
+    await Promise.allSettled(warmupProfiles.map((user) => warmProfilePreview(user)));
+    return;
+  }
+
+  await warmProfilePreview(primaryProfile);
+  await Promise.allSettled([
+    warmActiveProfileStages(primaryProfile),
+    ...warmupProfiles
+      .filter((user) => user.id !== primaryProfile.id)
+      .map((user) => warmProfilePreview(user))
+  ]);
 }
 
 export async function warmFinanceSessionAfterLogin({

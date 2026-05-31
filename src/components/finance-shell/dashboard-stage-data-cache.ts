@@ -1,6 +1,7 @@
 import type { BinanceBalanceRow, DashboardData } from "@/components/dashboard/types";
 import type { CheckingData } from "@/components/checking-dashboard/types";
 import type { PortfolioData } from "@/components/portfolio-dashboard/types";
+import { getMillisecondsUntilNextUtcDate, getUtcDateKey } from "@/shared/date-keys";
 
 import type { DashboardStageKey } from "./dashboard-stage-items";
 
@@ -47,18 +48,34 @@ const dashboardStageEndpoints = {
 } satisfies Record<DashboardStageKey, string>;
 
 const cacheTtlMs = 60_000;
+const historicalStageFreshTtlBufferMs = 5 * 60_000;
 const staleCacheTtlMs = 6 * 60 * 60 * 1_000;
 const storageCachePrefix = "morgan:dashboard-stage-data:v1:";
 const dashboardStageDataCache = new Map<string, DashboardStageDataEntry<unknown>>();
 
 export const dashboardStageDataFreshTtlMs = cacheTtlMs;
 
-function getDashboardStageCacheKey(stage: DashboardStageKey, userId: string, version = 0) {
-  return `${userId}:${stage}:${version}`;
+export function getDashboardStageCacheDateKey(stage: DashboardStageKey, date = new Date()) {
+  return stage === "binance" ? "live" : getUtcDateKey(date);
 }
 
-function isFresh(entry: DashboardStageDataEntry<unknown> | undefined) {
-  return !!entry?.data && Date.now() - entry.fetchedAt < cacheTtlMs;
+function getDashboardStageFreshTtlMs(stage: DashboardStageKey) {
+  if (stage === "binance") {
+    return cacheTtlMs;
+  }
+
+  return Math.max(
+    cacheTtlMs,
+    getMillisecondsUntilNextUtcDate() + historicalStageFreshTtlBufferMs
+  );
+}
+
+function getDashboardStageCacheKey(stage: DashboardStageKey, userId: string, version = 0) {
+  return `${userId}:${stage}:${version}:${getDashboardStageCacheDateKey(stage)}`;
+}
+
+function isFresh(entry: DashboardStageDataEntry<unknown> | undefined, stage: DashboardStageKey) {
+  return !!entry?.data && Date.now() - entry.fetchedAt < getDashboardStageFreshTtlMs(stage);
 }
 
 function isUsableEntry(entry: DashboardStageDataEntry<unknown> | undefined, maxAgeMs = staleCacheTtlMs) {
@@ -150,11 +167,11 @@ export function isDashboardStageDataCacheFresh(
   stage: DashboardStageKey,
   userId: string,
   version = 0,
-  maxAgeMs = cacheTtlMs
+  maxAgeMs?: number
 ) {
   const entry = dashboardStageDataCache.get(getDashboardStageCacheKey(stage, userId, version));
 
-  return !!entry?.data && Date.now() - entry.fetchedAt < maxAgeMs;
+  return !!entry?.data && Date.now() - entry.fetchedAt < (maxAgeMs ?? getDashboardStageFreshTtlMs(stage));
 }
 
 export function readDashboardStageDataCache<TStage extends DashboardStageKey>(
@@ -209,7 +226,7 @@ export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
   const existingEntry = dashboardStageDataCache.get(cacheKey);
 
   if (!force) {
-    if (existingEntry && isFresh(existingEntry) && existingEntry.data !== undefined) {
+    if (existingEntry && isFresh(existingEntry, stage) && existingEntry.data !== undefined) {
       return existingEntry.data as DashboardStageDataMap[TStage];
     }
 
@@ -224,6 +241,10 @@ export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
     userId,
     v: String(version)
   });
+  const cacheDateKey = getDashboardStageCacheDateKey(stage);
+  if (cacheDateKey !== "live") {
+    params.set("d", cacheDateKey);
+  }
   const promise = fetch(`${endpoint}?${params.toString()}`, {
     cache: force ? "reload" : "default",
     signal

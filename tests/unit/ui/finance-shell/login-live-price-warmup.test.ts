@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   collectDashboardLivePriceKeys,
-  selectLoginWarmupProfiles
+  selectLoginWarmupProfiles,
+  selectPrimaryLoginWarmupProfile
 } from "@/components/finance-shell/login-live-price-warmup";
 import type { ProviderSummary } from "@/components/dashboard/types";
 import type { UserRecord } from "@/components/finance-shell/types";
@@ -29,10 +30,16 @@ const users: UserRecord[] = [
 ];
 
 describe("login live price warmup", () => {
-  it("warms the persisted profile or the only profile", () => {
-    expect(selectLoginWarmupProfiles(users, "profile-2")).toEqual([users[1]]);
+  it("prioritizes the persisted profile or the only profile", () => {
+    expect(selectPrimaryLoginWarmupProfile(users, "profile-2")).toEqual(users[1]);
+    expect(selectPrimaryLoginWarmupProfile([users[0]], null)).toEqual(users[0]);
+    expect(selectPrimaryLoginWarmupProfile(users, null)).toBeNull();
+  });
+
+  it("warms all profiles while placing the primary profile first", () => {
+    expect(selectLoginWarmupProfiles(users, "profile-2")).toEqual([users[1], users[0]]);
     expect(selectLoginWarmupProfiles([users[0]], null)).toEqual([users[0]]);
-    expect(selectLoginWarmupProfiles(users, null)).toEqual([]);
+    expect(selectLoginWarmupProfiles(users, null)).toEqual(users);
   });
 
   it("collects ETF, stock and crypto live price keys from dashboard providers", () => {

@@ -14,12 +14,6 @@ import type { Stage } from "./use-finance-navigation";
 
 import { cn } from "@/shared/utils";
 
-type IdleCallback = (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void;
-type IdleWindow = Window & typeof globalThis & {
-  cancelIdleCallback?: (handle: number) => void;
-  requestIdleCallback?: (callback: IdleCallback, options?: { timeout?: number }) => number;
-};
-
 const loadDashboard = () => import("../dashboard").then((mod) => mod.Dashboard);
 const loadCheckingDashboard = () => import("../checking-dashboard").then((mod) => mod.CheckingDashboard);
 const loadInvestmentDashboard = () => import("../investment-dashboard").then((mod) => mod.InvestmentDashboard);
@@ -78,28 +72,21 @@ function DashboardStageLoading() {
   return null;
 }
 
-function scheduleIdleTask(callback: () => void, delayMs = 0) {
-  const currentWindow = window as IdleWindow;
-  let cancelIdleTask: (() => void) | null = null;
-
-  const delayId = globalThis.setTimeout(() => {
-    if (
-      typeof currentWindow.requestIdleCallback === "function"
-      && typeof currentWindow.cancelIdleCallback === "function"
-    ) {
-      const idleId = currentWindow.requestIdleCallback(callback, { timeout: 1_800 });
-      cancelIdleTask = () => currentWindow.cancelIdleCallback?.(idleId);
-      return;
-    }
-
-    const timeoutId = globalThis.setTimeout(callback, 650);
-    cancelIdleTask = () => globalThis.clearTimeout(timeoutId);
-  }, delayMs);
+function scheduleDashboardWarmup(callback: () => void, delayMs = 0) {
+  const delayId = globalThis.setTimeout(callback, delayMs);
 
   return () => {
     globalThis.clearTimeout(delayId);
-    cancelIdleTask?.();
   };
+}
+
+function getPrioritizedStageWarmupOrder(activeUser: UserRecord, activeStage: DashboardStageKey) {
+  const visibleStages = getVisibleDashboardStageKeys(activeUser);
+
+  return [
+    activeStage,
+    ...visibleStages.filter((stageKey) => stageKey !== activeStage)
+  ];
 }
 
 export function DashboardStageStack({
@@ -167,9 +154,9 @@ export function DashboardStageStack({
     }
 
     let cancelled = false;
-    const stagesToWarm = getVisibleDashboardStageKeys(activeUser);
+    const stagesToWarm = getPrioritizedStageWarmupOrder(activeUser, activeDashboardStage);
 
-    const cancelIdleTask = scheduleIdleTask(() => {
+    const cancelWarmupTask = scheduleDashboardWarmup(() => {
       void (async () => {
         for (const stageKey of stagesToWarm) {
           if (cancelled) return;
@@ -177,16 +164,16 @@ export function DashboardStageStack({
           void dashboardStageModuleWarmers[stageKey]().catch(() => {});
           const version = getDashboardStageDataVersion(stageKey, activeUser, binanceRefreshKey);
           prefetchDashboardStageData(stageKey, activeUserId, { version });
-          await new Promise((resolve) => globalThis.setTimeout(resolve, 120));
+          await new Promise((resolve) => globalThis.setTimeout(resolve, stageKey === activeDashboardStage ? 0 : 80));
         }
       })();
     }, warmupDelayMs);
 
     return () => {
       cancelled = true;
-      cancelIdleTask();
+      cancelWarmupTask();
     };
-  }, [activeUser, activeUserId, binanceRefreshKey, visibleStageKey, warmupDelayMs]);
+  }, [activeDashboardStage, activeUser, activeUserId, binanceRefreshKey, visibleStageKey, warmupDelayMs]);
 
   if (!activeUser) {
     return null;

@@ -1,3 +1,5 @@
+import { getMillisecondsUntilNextUtcDate, getUtcDateKey } from "@/shared/date-keys";
+
 type CacheEntry<TData> = {
   expiresAt: number;
   promise?: Promise<TData>;
@@ -16,6 +18,7 @@ type ProfileDataCacheOptions = {
 };
 
 const DEFAULT_PROFILE_DATA_CACHE_TTL_MS = 60_000;
+const VERSIONED_PROFILE_DATA_CACHE_TTL_BUFFER_MS = 5 * 60_000;
 const profileDataCache = new Map<string, CacheEntry<unknown>>();
 
 function normalizeCacheOptions(options: number | ProfileDataCacheOptions | undefined): ProfileDataCacheOptions {
@@ -29,7 +32,10 @@ export async function getCachedProfileData<TData>(
   load: () => Promise<TData>,
   options?: number | ProfileDataCacheOptions
 ) {
-  const { onMetric, ttlMs = DEFAULT_PROFILE_DATA_CACHE_TTL_MS } = normalizeCacheOptions(options);
+  const normalizedOptions = normalizeCacheOptions(options);
+  const onMetric = normalizedOptions.onMetric;
+  const ttlMs = normalizedOptions.ttlMs
+    ?? (key ? getVersionedProfileDataCacheTtlMs() : DEFAULT_PROFILE_DATA_CACHE_TTL_MS);
 
   if (!key) {
     onMetric?.({ hasVersionedKey: false, status: "disabled" });
@@ -77,6 +83,18 @@ export async function getCachedProfileData<TData>(
   return promise;
 }
 
-export function makeProfileStageCacheKey(stage: string, userId: string, version: string | null) {
-  return version ? `${stage}:${userId}:${version}` : null;
+export function getVersionedProfileDataCacheTtlMs(date = new Date()) {
+  return Math.max(
+    DEFAULT_PROFILE_DATA_CACHE_TTL_MS,
+    getMillisecondsUntilNextUtcDate(date) + VERSIONED_PROFILE_DATA_CACHE_TTL_BUFFER_MS
+  );
+}
+
+export function makeProfileStageCacheKey(
+  stage: string,
+  userId: string,
+  version: string | null,
+  dateKey = getUtcDateKey()
+) {
+  return version ? `${stage}:${userId}:${version}:${dateKey}` : null;
 }

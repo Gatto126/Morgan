@@ -40,6 +40,7 @@ async function loadCacheModule() {
 
 describe("dashboard stage data cache", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -54,9 +55,10 @@ describe("dashboard stage data cache", () => {
     await expect(cache.fetchDashboardStageData("dashboard", "user-1", { version: 4 })).resolves.toEqual(payload);
     await expect(cache.fetchDashboardStageData("dashboard", "user-1", { version: 4 })).resolves.toEqual(payload);
 
+    const dateKey = cache.getDashboardStageCacheDateKey("dashboard");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/transactions/dashboard?userId=user-1&v=4",
+      `/api/transactions/dashboard?userId=user-1&v=4&d=${dateKey}`,
       expect.objectContaining({ cache: "default" })
     );
     expect(cache.readDashboardStageDataCache("dashboard", "user-1", 4)).toEqual(payload);
@@ -98,13 +100,14 @@ describe("dashboard stage data cache", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    const dateKey = cache.getDashboardStageCacheDateKey("investment");
     expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/transactions/investment?userId=user-1&v=2",
+      `/api/transactions/investment?userId=user-1&v=2&d=${dateKey}`,
       expect.objectContaining({ cache: "reload" })
     );
   });
 
-  it("hydrates stale-but-usable data from private session storage after a reload", async () => {
+  it("hydrates same-day historical data from private session storage after a reload", async () => {
     const storage = createMemoryStorage();
     vi.stubGlobal("window", { sessionStorage: storage });
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
@@ -131,7 +134,38 @@ describe("dashboard stage data cache", () => {
     cache = await import("@/components/finance-shell/dashboard-stage-data-cache");
 
     expect(cache.readDashboardStageDataCache("checking", "user-1", 4)).toEqual(payload);
-    expect(cache.isDashboardStageDataCacheFresh("checking", "user-1", 4)).toBe(false);
+    expect(cache.isDashboardStageDataCacheFresh("checking", "user-1", 4)).toBe(true);
+  });
+
+  it("does not hydrate previous-day historical data for the same transaction version", async () => {
+    vi.useFakeTimers();
+    const storage = createMemoryStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    vi.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+    const payload = {
+      dailyData: [],
+      monthlyData: [],
+      providers: [{
+        cashback: 0,
+        expenses: 0,
+        income: 0,
+        interest: 0,
+        products: [],
+        sourceInstitution: "Cached",
+        tax: 0,
+        total: 0,
+        transactionCount: 0
+      }]
+    };
+
+    let cache = await loadCacheModule();
+    cache.seedDashboardStageDataCache("investment", "user-1", 4, payload);
+
+    vi.resetModules();
+    vi.setSystemTime(new Date("2026-06-02T00:01:00.000Z"));
+    cache = await import("@/components/finance-shell/dashboard-stage-data-cache");
+
+    expect(cache.readDashboardStageDataCache("investment", "user-1", 4)).toBeNull();
   });
 
   it("lets visible UI reject stale persisted data while keeping it available as backup cache", async () => {
