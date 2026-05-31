@@ -12,6 +12,7 @@ import {
 
 import { Input } from "@/components/ui/input";
 import { getAuthLandingResetState, getAuthSubmitButtonClass } from "@/components/auth-shell-helpers";
+import { warmFinanceSessionAfterLogin } from "@/components/finance-shell/login-live-price-warmup";
 import { clearPersistedFinanceProfileSelection } from "@/components/finance-shell/use-finance-profile-persistence";
 import { PortfolioPreviewChart } from "@/components/portfolio-preview-chart";
 import { authClient } from "@/client/auth-client";
@@ -204,11 +205,18 @@ export function AuthShell() {
         throw new Error(authErrorMessage(result.error.message || ""));
       }
 
+      const warmupPromise = view === "signIn"
+        ? warmFinanceSessionAfterLogin()
+        : Promise.resolve();
+
       clearPersistedFinanceProfileSelection();
 
       if (view === "signIn") {
         setSuccessMessage("Login successful.");
-        await new Promise((resolve) => window.setTimeout(resolve, 750));
+        await Promise.all([
+          new Promise((resolve) => window.setTimeout(resolve, 750)),
+          warmupPromise
+        ]);
       }
 
       router.refresh();

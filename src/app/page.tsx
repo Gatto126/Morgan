@@ -93,10 +93,12 @@ export default async function HomePage() {
   const persistedActiveUser = persistedActiveUserId
     ? usersWithCount.find((user) => user.id === persistedActiveUserId) ?? null
     : null;
+  const defaultActiveUser = persistedActiveUser ?? (usersWithCount.length === 1 ? usersWithCount[0] : null);
+  const defaultStage = persistedActiveUser ? persistedStage : defaultActiveUser ? "dashboard" : null;
   const initialSelection: PersistedFinanceSelection | null = persistedActiveUser
     ? { activeUserId: persistedActiveUser.id, stage: persistedStage }
     : null;
-  const initialDashboardStageData = await getInitialDashboardStageData(persistedActiveUser, persistedStage);
+  const initialDashboardStageData = await getInitialDashboardStageData(defaultActiveUser, defaultStage);
 
   return (
     <FinanceShell
