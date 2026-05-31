@@ -49,6 +49,7 @@ type HeritageTooltipProps = {
 };
 
 const FALLBACK_CHART_SIZE = { width: 520, height: 310 };
+const WELCOME_HERITAGE_BODY = "Your Heritage value across all profiles, cash, ETF, stock and crypto positions.";
 
 function WelcomeHeritageTooltip({ active, payload, setActivePoint }: HeritageTooltipProps) {
   useEffect(() => {
@@ -67,7 +68,7 @@ export function WelcomeHeritagePreview({
     fallbackSize: FALLBACK_CHART_SIZE
   });
   const shouldLoad = isActive && users.length > 0;
-  const { error, loading, records } = useAccountPortfolioPreviewData({
+  const { records } = useAccountPortfolioPreviewData({
     isActive: shouldLoad,
     users
   });
@@ -112,20 +113,11 @@ export function WelcomeHeritagePreview({
     [xAxisTicks]
   );
 
-  if (loading && records.length === 0) {
-    return (
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-[520px] flex-col justify-center">
-        <div className="h-[310px] animate-pulse rounded-[18px] border border-[color:var(--line-soft)]/40 bg-[color:var(--surface-panel)]/40 sm:h-[340px]" />
-        <div className="mt-3 h-16 animate-pulse rounded-[12px] bg-[color:var(--surface-panel)]/40" />
-      </div>
-    );
-  }
-
-  if (error || !hasChartData) {
+  if (!hasChartData) {
     return (
       <PortfolioPreviewChart
         ariaLabel="Heritage preview"
-        body="Import transactions to build your Heritage timeline."
+        body={WELCOME_HERITAGE_BODY}
       />
     );
   }
@@ -232,7 +224,7 @@ export function WelcomeHeritagePreview({
           Portfolio
         </h2>
         <p className="max-w-[430px] text-sm font-medium leading-relaxed text-[color:var(--text-dim)]">
-          Your Heritage value across all profiles, cash, ETF, stock and crypto positions.
+          {WELCOME_HERITAGE_BODY}
         </p>
       </div>
     </div>
