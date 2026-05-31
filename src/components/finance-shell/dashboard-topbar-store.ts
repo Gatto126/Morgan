@@ -121,43 +121,6 @@ export function readStoredDashboardTopbarItems(
   }
 }
 
-function hasConcreteTopbarValue(item: DashboardTopbarItem) {
-  return item.value !== "--" && item.value !== "-";
-}
-
-function mergeKnownTopbarValues(
-  stage: DashboardStageKey,
-  userId: string,
-  items: DashboardTopbarItem[]
-) {
-  if (items.length === 0) {
-    return items;
-  }
-
-  const cacheKey = getEntryKey(userId, stage);
-  const previousItems = entries.get(cacheKey)?.items ?? [];
-  const knownItemsById = new Map(
-    previousItems
-      .filter(hasConcreteTopbarValue)
-      .map((item) => [item.id, item])
-  );
-
-  return items.map((item) => {
-    if (hasConcreteTopbarValue(item)) {
-      return item;
-    }
-
-    const knownItem = knownItemsById.get(item.id);
-
-    return knownItem
-      ? {
-          ...item,
-          value: knownItem.value
-        }
-      : item;
-  });
-}
-
 function subscribeTopbar(listener: () => void) {
   listeners.add(listener);
 
@@ -171,13 +134,11 @@ export function publishDashboardTopbar(
   userId: string,
   items: DashboardTopbarItem[]
 ) {
-  const nextItems = mergeKnownTopbarValues(stage, userId, items);
-
   entries.set(getEntryKey(userId, stage), {
-    items: nextItems,
+    items,
     updatedAt: Date.now()
   });
-  writeStoredTopbarItems(getEntryKey(userId, stage), nextItems);
+  writeStoredTopbarItems(getEntryKey(userId, stage), items);
   emitTopbarChange();
 }
 
@@ -191,15 +152,14 @@ export function seedDashboardTopbarLayout(
   }
 
   const cacheKey = getEntryKey(userId, stage);
-  const nextItems = mergeKnownTopbarValues(stage, userId, items);
-  writeStoredTopbarItems(cacheKey, nextItems);
+  writeStoredTopbarItems(cacheKey, items);
 
   if (entries.has(cacheKey)) {
     return;
   }
 
   entries.set(cacheKey, {
-    items: nextItems,
+    items,
     updatedAt: Date.now()
   });
   emitTopbarChange();

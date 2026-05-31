@@ -15,6 +15,7 @@ import {
 import { FrameOverlayPanels } from "./finance-shell/frame-overlay-panels";
 import { FinanceShellMainFrame } from "./finance-shell/main-frame";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
+import { clearDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
 import type { PersistedFinanceSelection } from "./finance-shell/persistence-state";
 import type { SettingsSection } from "./finance-shell/settings-panel";
 import { useFinanceShellContent } from "./finance-shell/use-finance-shell-content";
@@ -108,7 +109,6 @@ export function FinanceShell({
     setActiveUser,
     setUsers
   });
-  const dashboardNavigationRequestRef = useRef(0);
   const appContentRef = useRef<HTMLDivElement | null>(null);
   const dashboardTabsPortalRef = useRef<HTMLDivElement | null>(null);
   const dashboardBackgroundRef = useRef<HTMLDivElement | null>(null);
@@ -343,24 +343,19 @@ export function FinanceShell({
   }
 
   const navigateToStableStage = useCallback((newStage: Parameters<typeof navigateTo>[0]) => {
-    const requestId = ++dashboardNavigationRequestRef.current;
+    navigateTo(newStage);
 
-    void (async () => {
-      if (activeUser && isDashboardStageKey(newStage)) {
-        const stageKey = resolveVisibleDashboardStage(newStage, activeUser);
-        const version = getDashboardStageDataVersion(stageKey, activeUser, binanceRefreshKey);
+    if (!activeUser || !isDashboardStageKey(newStage)) {
+      return;
+    }
 
-        try {
-          await fetchDashboardStageData(stageKey, activeUser.id, { version });
-        } catch {
-          // Navigation still proceeds so the destination dashboard can show its own error state.
-        }
-      }
+    const stageKey = resolveVisibleDashboardStage(newStage, activeUser);
+    const version = getDashboardStageDataVersion(stageKey, activeUser, binanceRefreshKey);
 
-      if (requestId === dashboardNavigationRequestRef.current) {
-        navigateTo(newStage);
-      }
-    })();
+    clearDashboardTopbar(stageKey, activeUser.id);
+    void fetchDashboardStageData(stageKey, activeUser.id, { version }).catch(() => {
+      // The destination dashboard owns the visible error state.
+    });
   }, [activeUser, binanceRefreshKey, navigateTo]);
 
   function closeActiveOverlayPanel() {

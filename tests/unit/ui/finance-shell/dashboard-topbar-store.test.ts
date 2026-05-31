@@ -84,4 +84,30 @@ describe("dashboard topbar store", () => {
       value: "--"
     }]);
   });
+
+  it("does not fill pending topbar values from previous in-memory values", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "123,45 \u20ac"
+    }]);
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "--"
+    }]);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([{
+      active: true,
+      animateChanges: false,
+      ariaLabel: undefined,
+      id: "heritage",
+      label: undefined,
+      suppressInitialChanges: true,
+      value: "--"
+    }]);
+  });
 });
