@@ -17,6 +17,7 @@ type DashboardTopbarTabProps = {
   icon?: LucideIcon;
   label?: string;
   onClick?: () => void;
+  suppressInitialChanges?: boolean;
   value: string;
   valueIdentity?: string;
 };
@@ -28,6 +29,7 @@ export function DashboardTopbarTab({
   icon: Icon,
   label,
   onClick,
+  suppressInitialChanges = true,
   value,
   valueIdentity
 }: DashboardTopbarTabProps) {
@@ -67,7 +69,12 @@ export function DashboardTopbarTab({
         </span>
         <span className={cn("dashboard-topbar-money flex h-5 shrink-0 items-center justify-end gap-1.5", hasTextIdentity ? "w-[94px]" : "w-[104px] sm:w-[108px]")}>
           <span className={valueClassName} title={value}>
-            <SlotValue animateChanges={animateChanges} identityKey={valueIdentity} value={amount} />
+            <SlotValue
+              animateChanges={animateChanges}
+              identityKey={valueIdentity}
+              suppressInitialChanges={suppressInitialChanges}
+              value={amount}
+            />
           </span>
           <span className="dashboard-topbar-currency flex h-5 w-4 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap text-[11px] font-extrabold leading-none text-white" title={currency}>
             {showEuroIcon ? (

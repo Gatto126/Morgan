@@ -163,6 +163,7 @@ export function DashboardTopbarShell({
           key={`topbar-slot-${index}`}
           label={item.label}
           onClick={item.onClick}
+          suppressInitialChanges={item.suppressInitialChanges}
           value={item.value}
           animateChanges={item.animateChanges}
           valueIdentity={item.id}

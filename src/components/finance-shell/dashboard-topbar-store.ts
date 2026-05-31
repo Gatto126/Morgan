@@ -13,6 +13,7 @@ export type DashboardTopbarItem = {
   id: string;
   label?: string;
   onClick?: () => void;
+  suppressInitialChanges?: boolean;
   value: string;
 };
 
@@ -110,6 +111,7 @@ export function readStoredDashboardTopbarItems(
           ariaLabel: item.ariaLabel,
           id: item.id,
           label: item.label,
+          suppressInitialChanges: true,
           value: placeholderValues ? "0,00 €" : storedValue
         };
       });

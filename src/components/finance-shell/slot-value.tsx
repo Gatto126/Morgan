@@ -8,6 +8,7 @@ type SlotValueProps = {
   animateChanges?: boolean;
   className?: string;
   identityKey?: string;
+  suppressInitialChanges?: boolean;
   value: string | number;
 };
 
@@ -39,13 +40,19 @@ function getAnimatedIndexes(previousText: string, nextText: string) {
   return indexes.size > 0 ? indexes : emptyAnimatedIndexes;
 }
 
-export function SlotValue({ animateChanges = false, className, identityKey, value }: SlotValueProps) {
+export function SlotValue({
+  animateChanges = false,
+  className,
+  identityKey,
+  suppressInitialChanges = true,
+  value
+}: SlotValueProps) {
   const text = String(value);
   const [animationState, setAnimationState] = useState<SlotAnimationState>(() => ({
     animatedIndexes: emptyAnimatedIndexes,
     identityKey,
-    readyToAnimate: false,
-    suppressedChangesRemaining: initialSuppressedChanges,
+    readyToAnimate: !suppressInitialChanges,
+    suppressedChangesRemaining: suppressInitialChanges ? initialSuppressedChanges : 0,
     text
   }));
   let currentAnimationState = animationState;
@@ -54,14 +61,17 @@ export function SlotValue({ animateChanges = false, className, identityKey, valu
     currentAnimationState = {
       animatedIndexes: emptyAnimatedIndexes,
       identityKey,
-      readyToAnimate: false,
-      suppressedChangesRemaining: initialSuppressedChanges,
+      readyToAnimate: !suppressInitialChanges,
+      suppressedChangesRemaining: suppressInitialChanges ? initialSuppressedChanges : 0,
       text
     };
     setAnimationState(currentAnimationState);
   } else if (animationState.text !== text) {
-    const canAnimate = animationState.readyToAnimate
-      && animationState.suppressedChangesRemaining === 0;
+    const readyToAnimate = animationState.readyToAnimate || !suppressInitialChanges;
+    const suppressedChangesRemaining = suppressInitialChanges
+      ? animationState.suppressedChangesRemaining
+      : 0;
+    const canAnimate = readyToAnimate && suppressedChangesRemaining === 0;
 
     currentAnimationState = {
       animatedIndexes: canAnimate
@@ -69,7 +79,7 @@ export function SlotValue({ animateChanges = false, className, identityKey, valu
         : emptyAnimatedIndexes,
       identityKey,
       readyToAnimate: true,
-      suppressedChangesRemaining: Math.max(0, animationState.suppressedChangesRemaining - 1),
+      suppressedChangesRemaining: Math.max(0, suppressedChangesRemaining - 1),
       text
     };
     setAnimationState(currentAnimationState);

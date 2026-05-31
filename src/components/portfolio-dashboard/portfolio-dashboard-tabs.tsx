@@ -41,11 +41,12 @@ export function PortfolioDashboardTabs({
 
         return {
           active: isSelected,
-          animateChanges: !activePoint,
+          animateChanges: true,
           icon: tab.key === "ALL" ? RootIcon : undefined,
           id: tab.key === "ALL" ? stage : `${stage}:${tab.key}`,
           label: tab.key === "ALL" ? undefined : getAbbreviatedLabel(tab.label),
           onClick: () => onSelectTab(tab.key),
+          suppressInitialChanges: !activePoint,
           value
         };
       }),

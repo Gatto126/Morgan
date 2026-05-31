@@ -57,6 +57,7 @@ export function DashboardTabs({
     () => visibleTabs.map((tab) => {
         const tabIsActive = activeTab === tab.key;
         const Icon = TAB_ICONS[tab.key];
+        const isChartInteraction = !!activePoint;
         const isLiveMarketValue = tab.key === "heritage" || tab.key === "investment" || tab.key === "crypto";
         const value = data
           ? formatEuroCents(
@@ -83,11 +84,12 @@ export function DashboardTabs({
 
         return {
           active: tabIsActive,
-          animateChanges: isLiveMarketValue && !activePoint,
+          animateChanges: isChartInteraction || isLiveMarketValue,
           ariaLabel: `${tab.label} dashboard tab`,
           icon: Icon,
           id: tab.key,
           onClick: () => onActiveTabChange(tab.key),
+          suppressInitialChanges: !isChartInteraction,
           value
         };
       }),

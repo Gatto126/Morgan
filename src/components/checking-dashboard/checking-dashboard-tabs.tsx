@@ -37,10 +37,12 @@ export function CheckingDashboardTabs({
 
         return {
           active: isSelected,
+          animateChanges: !!activePoint,
           icon: tab.key === "ALL" ? Landmark : undefined,
           id: tab.key === "ALL" ? "checking" : `checking:${tab.key}`,
           label: tab.key === "ALL" ? undefined : getAbbreviatedLabel(tab.label),
           onClick: () => onSelectTab(tab.key),
+          suppressInitialChanges: !activePoint,
           value
         };
       }),
