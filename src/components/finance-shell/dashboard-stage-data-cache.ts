@@ -225,6 +225,10 @@ export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
   const cacheKey = getDashboardStageCacheKey(stage, userId, version);
   const existingEntry = dashboardStageDataCache.get(cacheKey);
 
+  if (force && existingEntry?.promise) {
+    return existingEntry.promise as Promise<DashboardStageDataMap[TStage]>;
+  }
+
   if (!force) {
     if (existingEntry && isFresh(existingEntry, stage) && existingEntry.data !== undefined) {
       return existingEntry.data as DashboardStageDataMap[TStage];

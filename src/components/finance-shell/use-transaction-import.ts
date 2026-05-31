@@ -18,7 +18,7 @@ type UseTransactionImportOptions = {
   fileInputRef: MutableRefObject<HTMLInputElement | null>;
   setError: (message: string | null) => void;
   setNotice: (message: string | null) => void;
-  onImportedTransactions: (counts: ImportedTransactionCounts) => void;
+  onImportedTransactions: (counts: ImportedTransactionCounts) => Promise<void> | void;
 };
 
 function getPreviewAccountType(transaction: PreviewTransaction) {
@@ -66,6 +66,9 @@ export function useTransactionImport({
   const [importOverlayVisible, setImportOverlayVisible] = useState(false);
   const [importOverlayFadingOut, setImportOverlayFadingOut] = useState(false);
   const importOverlayDismissedRef = useRef(false);
+  const importOverlayCloseLockedRef = useRef(false);
+  const importOverlayCloseRequestedRef = useRef(false);
+  const importOverlayCloseRequestResolverRef = useRef<(() => void) | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(previewTransactions.length / PAGE_SIZE));
   const visiblePage = Math.min(currentPage, totalPages);
@@ -93,7 +96,7 @@ export function useTransactionImport({
     fileInputRef.current?.click();
   }
 
-  function handleImportRefreshComplete() {
+  function closeImportOverlay() {
     if (importOverlayDismissedRef.current) return;
     importOverlayDismissedRef.current = true;
     setImportOverlayFadingOut(true);
@@ -102,6 +105,39 @@ export function useTransactionImport({
       setImportOverlayFadingOut(false);
       importOverlayDismissedRef.current = false;
     }, 550);
+  }
+
+  function handleImportRefreshComplete() {
+    if (importOverlayCloseLockedRef.current) {
+      importOverlayCloseRequestedRef.current = true;
+      importOverlayCloseRequestResolverRef.current?.();
+      importOverlayCloseRequestResolverRef.current = null;
+      return;
+    }
+
+    closeImportOverlay();
+  }
+
+  function waitForImportRefreshVisualRequest(maxWaitMs = 250) {
+    if (importOverlayCloseRequestedRef.current) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+      const finish = () => {
+        if (timeoutId) {
+          globalThis.clearTimeout(timeoutId);
+        }
+        if (importOverlayCloseRequestResolverRef.current === finish) {
+          importOverlayCloseRequestResolverRef.current = null;
+        }
+        resolve();
+      };
+
+      importOverlayCloseRequestResolverRef.current = finish;
+      timeoutId = globalThis.setTimeout(finish, maxWaitMs);
+    });
   }
 
   async function handleFileSelection(event: ChangeEvent<HTMLInputElement>) {
@@ -158,6 +194,9 @@ export function useTransactionImport({
     }
 
     importOverlayDismissedRef.current = false;
+    importOverlayCloseLockedRef.current = false;
+    importOverlayCloseRequestedRef.current = false;
+    importOverlayCloseRequestResolverRef.current = null;
     setImportOverlayFadingOut(false);
     setImportOverlayVisible(true);
     setApproving(true);
@@ -225,20 +264,24 @@ export function useTransactionImport({
           addedInvestment
         } = countImportedTransactionsByAccountType(previewTransactions, insertedFingerprintSet);
 
-        onImportedTransactions({
+        importOverlayCloseLockedRef.current = true;
+        importOverlayCloseRequestedRef.current = false;
+        await Promise.resolve(onImportedTransactions({
           insertedCount,
           addedChecking,
           addedInvestment,
           addedCrypto
-        });
+        })).catch(() => undefined);
+        await waitForImportRefreshVisualRequest();
+        importOverlayCloseLockedRef.current = false;
       }
 
       resetPreview();
       onSuccess?.();
-      if (insertedCount === 0) {
-        handleImportRefreshComplete();
-      }
+      handleImportRefreshComplete();
     } catch (approvalError) {
+      importOverlayCloseLockedRef.current = false;
+      importOverlayCloseRequestResolverRef.current = null;
       setError(approvalError instanceof Error ? approvalError.message : "Salvataggio delle transazioni non riuscito.");
       if (!importOverlayDismissedRef.current) {
         handleImportRefreshComplete();

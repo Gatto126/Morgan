@@ -83,6 +83,25 @@ describe("dashboard stage data cache", () => {
     await expect(secondRequest).resolves.toEqual(payload);
   });
 
+  it("shares an in-flight force refresh for the same cache key", async () => {
+    const payload = { providers: [{ sourceInstitution: "Imported" }] };
+    let resolveFetch: (response: Response) => void = () => undefined;
+    const fetchMock = vi.fn().mockReturnValue(new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cache = await loadCacheModule();
+    const firstRequest = cache.fetchDashboardStageData("investment", "user-1", { force: true, version: 8 });
+    const secondRequest = cache.fetchDashboardStageData("investment", "user-1", { force: true, version: 8 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    resolveFetch(jsonResponse(payload));
+
+    await expect(firstRequest).resolves.toEqual(payload);
+    await expect(secondRequest).resolves.toEqual(payload);
+  });
+
   it("force refresh bypasses cached data", async () => {
     const fetchMock = vi
       .fn()

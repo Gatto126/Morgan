@@ -29,6 +29,7 @@ import { useFrameOverlayLifecycle } from "./finance-shell/use-frame-overlay-life
 import { useFinanceNavigation } from "./finance-shell/use-finance-navigation";
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
 import { dashboardStages, getStageTitle } from "./finance-shell/stage-title";
+import { warmImportedProfileData } from "./finance-shell/import-data-warmup";
 
 export type PrimedDashboardStageData = {
   data: unknown;
@@ -116,7 +117,7 @@ export function FinanceShell({
   const welcomeBackgroundRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const createUserInputRef = useRef<HTMLInputElement | null>(null);
-  const importedTransactionCountsRef = useRef<((counts: ImportedTransactionCounts) => void) | null>(null);
+  const importedTransactionsHandlerRef = useRef<((counts: ImportedTransactionCounts) => Promise<void>) | null>(null);
   const {
     parsing,
     approving,
@@ -139,7 +140,7 @@ export function FinanceShell({
     fileInputRef,
     setError,
     setNotice,
-    onImportedTransactions: (counts) => importedTransactionCountsRef.current?.(counts)
+    onImportedTransactions: (counts) => importedTransactionsHandlerRef.current?.(counts)
   });
   const {
     stage,
@@ -214,11 +215,21 @@ export function FinanceShell({
     setUsers
   });
   useEffect(() => {
-    importedTransactionCountsRef.current = applyImportedTransactionCounts;
-    return () => {
-      importedTransactionCountsRef.current = null;
+    importedTransactionsHandlerRef.current = async (counts) => {
+      const userBeforeImport = activeUser;
+
+      applyImportedTransactionCounts(counts);
+      if (!userBeforeImport) {
+        return;
+      }
+
+      await warmImportedProfileData(userBeforeImport, counts, { binanceRefreshKey });
     };
-  }, [applyImportedTransactionCounts]);
+
+    return () => {
+      importedTransactionsHandlerRef.current = null;
+    };
+  }, [activeUser, applyImportedTransactionCounts, binanceRefreshKey]);
   const isDashboardStage = dashboardStages.has(stage);
   const title = isRestoringProfileSelection ? "Morgan" : getStageTitle(stage, hasUsers);
   const warmupDelayMs = 0;
