@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
+  isDashboardStageDataCacheFresh,
   readDashboardStageDataCache
 } from "@/components/finance-shell/dashboard-stage-data-cache";
 
@@ -27,6 +28,9 @@ export function useBinanceBalances({
   const [binanceBalances, setBinanceBalances] = useState<BinanceBalanceRow[]>(
     Array.isArray(initialPayload?.balances) ? initialPayload.balances : []
   );
+  const [hasFreshBinanceBalances, setHasFreshBinanceBalances] = useState(!!initialPayload);
+  const [freshBinanceRefreshKey, setFreshBinanceRefreshKey] = useState(binanceRefreshKey);
+  const [previousShouldLoad, setPreviousShouldLoad] = useState(shouldLoad);
   const [isBinanceNew, setIsBinanceNew] = useState(false);
   const [isBinanceSyncing, setIsBinanceSyncing] = useState(false);
   const [filterSmallBinance, setFilterSmallBinance] = useState(false);
@@ -51,9 +55,16 @@ export function useBinanceBalances({
         setTimeout(() => setIsBinanceNew(false), 600);
       }
     }
+    setHasFreshBinanceBalances(true);
+    setFreshBinanceRefreshKey(binanceRefreshKey);
 
     return payload as { isStale?: boolean; hasApiKey?: boolean };
   }, [binanceRefreshKey, userId]);
+
+  const shouldHideStaleBinanceBalances =
+    shouldLoad
+    && !previousShouldLoad
+    && !isDashboardStageDataCacheFresh("binance", userId, binanceRefreshKey);
 
   const fetchBinanceBalances = useCallback(async (syncIfStale = true) => {
     try {
@@ -88,13 +99,35 @@ export function useBinanceBalances({
     }
 
     const preloadKey = `${userId}:${binanceRefreshKey}`;
-    if (lastPreloadKeyRef.current === preloadKey) {
+    if (lastPreloadKeyRef.current === preloadKey && !shouldHideStaleBinanceBalances) {
       return;
     }
 
     lastPreloadKeyRef.current = preloadKey;
+    let hideTimer: number | null = null;
+    if (shouldHideStaleBinanceBalances) {
+      hideTimer = window.setTimeout(() => setHasFreshBinanceBalances(false), 0);
+    }
     void fetchBinanceBalances(true);
-  }, [fetchBinanceBalances, binanceRefreshKey, shouldLoad, userId]);
+
+    return () => {
+      if (hideTimer !== null) {
+        window.clearTimeout(hideTimer);
+      }
+    };
+  }, [fetchBinanceBalances, binanceRefreshKey, shouldHideStaleBinanceBalances, shouldLoad, userId]);
+
+  useEffect(() => {
+    if (previousShouldLoad === shouldLoad) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setPreviousShouldLoad(shouldLoad);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [previousShouldLoad, shouldLoad]);
 
   useEffect(() => {
     if (!isActive) {
@@ -110,6 +143,10 @@ export function useBinanceBalances({
 
   return {
     binanceBalances,
+    binanceBalancesKnown:
+      hasFreshBinanceBalances
+      && freshBinanceRefreshKey === binanceRefreshKey
+      && !shouldHideStaleBinanceBalances,
     isBinanceNew,
     isBinanceSyncing,
     filterSmallBinance,

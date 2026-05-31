@@ -10,7 +10,6 @@ import { DashboardChart } from "./dashboard/dashboard-chart";
 import { DashboardErrorState, DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "./dashboard/dashboard-status";
 import { DashboardTabs } from "./dashboard/dashboard-tabs";
 import { useBinanceBalances } from "./dashboard/use-binance-balances";
-import { isDashboardStageDataCacheFresh } from "./finance-shell/dashboard-stage-data-cache";
 import { useDashboardChartModel } from "./dashboard/use-dashboard-chart-model";
 import { useDashboardData } from "./dashboard/use-dashboard-data";
 import { useDashboardLivePrices } from "./dashboard/use-dashboard-live-prices";
@@ -75,6 +74,7 @@ export function Dashboard({
 }: DashboardProps) {
   const {
     binanceBalances,
+    binanceBalancesKnown,
     isBinanceSyncing,
     filterSmallBinance,
     setFilterSmallBinance,
@@ -100,8 +100,7 @@ export function Dashboard({
     [binanceBalances]
   );
   const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0;
-  const binanceBalancesFresh = isDashboardStageDataCacheFresh("binance", userId, binanceRefreshKey);
-  const dashboardValuesKnown = dataFresh && (!hasBinanceCredentials || binanceBalancesFresh);
+  const dashboardValuesKnown = dataFresh && (!hasBinanceCredentials || binanceBalancesKnown);
   const requiresInitialUpload = transactionCount === 0 && !hasBinancePortfolio;
   const shouldShowUploadPanel = showUploadView && !showSettingsView && !showUserSelectView;
   const cardsPortalNode = usePortalNode("dashboard-cards-portal");

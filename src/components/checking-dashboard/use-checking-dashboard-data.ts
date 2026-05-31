@@ -29,7 +29,9 @@ export function useCheckingDashboardData({
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
-  const [freshnessVersion, setFreshnessVersion] = useState(0);
+  const [hasFreshData, setHasFreshData] = useState(!!initialData);
+  const [freshDataVersion, setFreshDataVersion] = useState(transactionCount);
+  const [previousShouldLoad, setPreviousShouldLoad] = useState(shouldLoad);
   const [importRefreshVersion, setImportRefreshVersion] = useState(0);
   const [newProviderKeys, setNewProviderKeys] = useState<Set<string>>(new Set());
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
@@ -56,6 +58,8 @@ export function useCheckingDashboardData({
       knownProviderKeysRef.current = currentKeys;
 
       setData(payload);
+      setHasFreshData(true);
+      setFreshDataVersion(transactionCount);
       setError(null);
     } catch (fetchError: unknown) {
       setError(fetchError instanceof Error ? fetchError.message : "Errore nel caricamento.");
@@ -69,9 +73,11 @@ export function useCheckingDashboardData({
       }
     }
   }, [transactionCount, userId]);
-  const fetchDashboardIfStale = useCallback(() => {
+  const fetchDashboardIfStale = useCallback((options: { hideStaleValues?: boolean } = {}) => {
     if (!isDashboardStageDataCacheFresh("checking", userId, transactionCount)) {
-      setFreshnessVersion((version) => version + 1);
+      if (options.hideStaleValues) {
+        setHasFreshData(false);
+      }
       void fetchDashboard({ force: true });
     }
   }, [fetchDashboard, transactionCount, userId]);
@@ -90,9 +96,11 @@ export function useCheckingDashboardData({
     hasLoadedRef.current = true;
     const hydrateTimer = window.setTimeout(() => {
       setData(cachedData);
+      setHasFreshData(true);
+      setFreshDataVersion(transactionCount);
       setLoading(false);
       setError(null);
-      fetchDashboardIfStale();
+      fetchDashboardIfStale({ hideStaleValues: true });
     }, 0);
 
     return () => window.clearTimeout(hydrateTimer);
@@ -114,7 +122,7 @@ export function useCheckingDashboardData({
 
     const initialLoad = window.setTimeout(() => {
       if (hasLoadedRef.current) {
-        fetchDashboardIfStale();
+        fetchDashboardIfStale({ hideStaleValues: true });
         return;
       }
       hasLoadedRef.current = true;
@@ -145,15 +153,31 @@ export function useCheckingDashboardData({
 
     lastRefreshTransactionCountRef.current = transactionCount;
     pendingImportRefreshRef.current = true;
-    setFreshnessVersion((version) => version + 1);
+    setHasFreshData(false);
     void fetchDashboard({ force: true });
   }, [transactionCount, shouldLoad, loading, fetchDashboard]);
 
-  void freshnessVersion;
+  const shouldHideStaleValues =
+    !!data
+    && shouldLoad
+    && !previousShouldLoad
+    && !isDashboardStageDataCacheFresh("checking", userId, transactionCount);
+
+  useEffect(() => {
+    if (previousShouldLoad === shouldLoad) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setPreviousShouldLoad(shouldLoad);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [previousShouldLoad, shouldLoad]);
 
   return {
     data,
-    dataFresh: !!data && isDashboardStageDataCacheFresh("checking", userId, transactionCount),
+    dataFresh: !!data && hasFreshData && freshDataVersion === transactionCount && !shouldHideStaleValues,
     loading,
     error,
     dataVersion,

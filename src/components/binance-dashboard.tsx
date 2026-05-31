@@ -94,6 +94,9 @@ export function BinanceDashboard({
     Array.isArray(initialBinancePayload?.balances) ? initialBinancePayload.balances as BinanceBalance[] : []
   );
   const [balancesLoaded, setBalancesLoaded] = useState(!!initialBinancePayload);
+  const [balancesKnown, setBalancesKnown] = useState(!!initialBinancePayload);
+  const [freshBinanceRefreshKey, setFreshBinanceRefreshKey] = useState(binanceRefreshKey);
+  const [previousShouldLoad, setPreviousShouldLoad] = useState(shouldLoad);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
@@ -111,16 +114,39 @@ export function BinanceDashboard({
       setBalances(data.balances as BinanceBalance[]);
     }
     setBalancesLoaded(true);
+    setBalancesKnown(true);
+    setFreshBinanceRefreshKey(binanceRefreshKey);
   }, [binanceRefreshKey, userId]);
+
+  const shouldHideStaleBalances =
+    balancesLoaded
+    && shouldLoad
+    && !previousShouldLoad
+    && !isDashboardStageDataCacheFresh("binance", userId, binanceRefreshKey);
 
   useEffect(() => {
     if (!shouldLoad) return;
     const timer = window.setTimeout(() => {
+      if (shouldHideStaleBalances) {
+        setBalancesKnown(false);
+      }
       void loadBalances().catch(() => {});
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [loadBalances, shouldLoad]);
+  }, [loadBalances, shouldHideStaleBalances, shouldLoad]);
+
+  useEffect(() => {
+    if (previousShouldLoad === shouldLoad) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setPreviousShouldLoad(shouldLoad);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [previousShouldLoad, shouldLoad]);
 
   async function handleSyncBalances() {
     if (isSyncing) return;
@@ -144,6 +170,8 @@ export function BinanceDashboard({
       if (Array.isArray(data.balances)) {
         setBalances(data.balances);
         setBalancesLoaded(true);
+        setBalancesKnown(true);
+        setFreshBinanceRefreshKey(binanceRefreshKey);
       } else {
         await loadBalances({ force: true });
       }
@@ -157,8 +185,9 @@ export function BinanceDashboard({
   }
 
   const totalEur = useMemo(() => balances.reduce((sum, b) => sum + b.eurValue, 0), [balances]);
-  const balancesFresh = balancesLoaded && isDashboardStageDataCacheFresh("binance", userId, binanceRefreshKey);
-  const topbarValue = balancesFresh ? formatBinanceEuro(totalEur) : "--";
+  const topbarValue = balancesKnown && freshBinanceRefreshKey === binanceRefreshKey && !shouldHideStaleBalances
+    ? formatBinanceEuro(totalEur)
+    : "--";
 
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;
