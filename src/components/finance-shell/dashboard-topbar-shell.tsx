@@ -2,8 +2,11 @@ import { Bitcoin, ChartPie, Coins, Landmark, Wallet } from "lucide-react";
 import { useMemo } from "react";
 
 import { DashboardTopbarTab } from "./dashboard-topbar-tab";
-import { readDashboardStageDataCache } from "./dashboard-stage-data-cache";
-import { getVisibleDashboardStageKeys, type DashboardStageKey } from "./dashboard-stage-items";
+import { dashboardStageDataFreshTtlMs, readDashboardStageDataCache } from "./dashboard-stage-data-cache";
+import {
+  resolveVisibleDashboardStage,
+  type DashboardStageKey
+} from "./dashboard-stage-items";
 import {
   readStoredDashboardTopbarItems,
   useDashboardTopbarEntry,
@@ -25,7 +28,8 @@ const fallbackIcons = {
   dashboard: ChartPie,
   investment: Wallet
 } satisfies Record<DashboardStageKey, typeof ChartPie>;
-const fallbackValue = "0,00 \u20ac";
+const fallbackValue = "--";
+const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
 const euroFormatter = new Intl.NumberFormat("it-IT", {
   currency: "EUR",
   minimumFractionDigits: 2,
@@ -41,15 +45,6 @@ function getAbbreviatedLabel(label: string) {
   const words = upper.split(/\s+/).filter(Boolean);
 
   return words.length > 1 ? words.map((word) => word[0]).join("") : upper;
-}
-
-function resolveActiveDashboardStage(
-  stage: Stage,
-  visibleStageKeys: Set<DashboardStageKey>
-): DashboardStageKey {
-  const candidateStage = stage as DashboardStageKey;
-
-  return visibleStageKeys.has(candidateStage) ? candidateStage : "dashboard";
 }
 
 function getDashboardFallbackItems(activeUser: UserRecord, activeStage: DashboardStageKey): DashboardTopbarItem[] {
@@ -117,7 +112,7 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
 
 function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: DashboardStageKey): DashboardTopbarItem[] {
   if (activeStage === "checking") {
-    const data = readDashboardStageDataCache("checking", activeUser.id, activeUser.checkingCount);
+    const data = readDashboardStageDataCache("checking", activeUser.id, activeUser.checkingCount, freshCacheOptions);
     if (!data) {
       return [];
     }
@@ -142,7 +137,7 @@ function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: Dashboar
 
   if (activeStage === "investment" || activeStage === "crypto") {
     const version = activeStage === "investment" ? activeUser.investmentCount : activeUser.cryptoCount;
-    const data = readDashboardStageDataCache(activeStage, activeUser.id, version);
+    const data = readDashboardStageDataCache(activeStage, activeUser.id, version, freshCacheOptions);
     if (!data) {
       return [];
     }
@@ -204,14 +199,17 @@ function getFallbackIcon(activeStage: DashboardStageKey, item: DashboardTopbarIt
   return undefined;
 }
 
+function hasConcreteTopbarValue(item: DashboardTopbarItem) {
+  return item.value !== "--" && item.value !== "-";
+}
+
 export function DashboardTopbarShell({
   activeUser,
   isDashboardStage,
   stage
 }: DashboardTopbarShellProps) {
-  const visibleStageKeys = useMemo(() => new Set(getVisibleDashboardStageKeys(activeUser)), [activeUser]);
   const activeStage = activeUser && isDashboardStage
-    ? resolveActiveDashboardStage(stage, visibleStageKeys)
+    ? resolveVisibleDashboardStage(stage, activeUser)
     : null;
   const entry = useDashboardTopbarEntry(activeUser?.id ?? null, activeStage);
   const fallbackItems = useMemo(
@@ -224,7 +222,7 @@ export function DashboardTopbarShell({
   );
   const storedItems = useMemo(
     () => activeUser && activeStage
-      ? readStoredDashboardTopbarItems(activeStage, activeUser.id)
+      ? readStoredDashboardTopbarItems(activeStage, activeUser.id, { placeholderValues: true })
       : [],
     [activeStage, activeUser]
   );
@@ -240,13 +238,15 @@ export function DashboardTopbarShell({
     [activeStage, rawItems]
   );
 
-  if (!activeUser || !isDashboardStage || items.length === 0) {
+  const visibleItems = items.filter(hasConcreteTopbarValue);
+
+  if (!activeUser || !isDashboardStage || visibleItems.length === 0) {
     return null;
   }
 
   return (
     <div className="dashboard-topbar-shell flex items-center gap-2">
-      {items.map((item, index) => (
+      {visibleItems.map((item, index) => (
         <DashboardTopbarTab
           active={item.active}
           ariaLabel={item.ariaLabel}

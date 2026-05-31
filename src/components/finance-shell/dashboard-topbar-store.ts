@@ -30,6 +30,7 @@ const emptyEntry: DashboardTopbarEntry = {
   items: [],
   updatedAt: 0
 };
+const pendingTopbarValue = "--";
 const storagePrefix = "morgan:dashboard-topbar:v1:";
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -103,7 +104,7 @@ export function readStoredDashboardTopbarItems(
       .map((item) => {
         const storedValue = item.value && item.value !== "--" && item.value !== "-"
           ? item.value
-          : "0,00 €";
+          : pendingTopbarValue;
 
         return {
           active: !!item.active,
@@ -112,7 +113,7 @@ export function readStoredDashboardTopbarItems(
           id: item.id,
           label: item.label,
           suppressInitialChanges: true,
-          value: placeholderValues ? "0,00 €" : storedValue
+          value: placeholderValues ? pendingTopbarValue : storedValue
         };
       });
   } catch {
@@ -135,9 +136,8 @@ function mergeKnownTopbarValues(
 
   const cacheKey = getEntryKey(userId, stage);
   const previousItems = entries.get(cacheKey)?.items ?? [];
-  const storedItems = readStoredDashboardTopbarItems(stage, userId);
   const knownItemsById = new Map(
-    [...storedItems, ...previousItems]
+    previousItems
       .filter(hasConcreteTopbarValue)
       .map((item) => [item.id, item])
   );
@@ -154,10 +154,7 @@ function mergeKnownTopbarValues(
           ...item,
           value: knownItem.value
         }
-      : {
-          ...item,
-          value: "0,00 €"
-        };
+      : item;
   });
 }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
   isDashboardStageDataCacheFresh,
   readDashboardStageDataCache
@@ -17,6 +18,8 @@ type UsePortfolioDashboardDataOptions = {
   shouldLoad: boolean;
 };
 
+const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
+
 function getPortfolioStageFromEndpoint(endpoint: string) {
   return endpoint.includes("/crypto") ? "crypto" : "investment";
 }
@@ -30,7 +33,7 @@ export function usePortfolioDashboardData({
   shouldLoad
 }: UsePortfolioDashboardDataOptions) {
   const stage = getPortfolioStageFromEndpoint(endpoint);
-  const initialData = readDashboardStageDataCache(stage, userId, transactionCount);
+  const initialData = readDashboardStageDataCache(stage, userId, transactionCount, freshCacheOptions);
   const [data, setData] = useState<PortfolioData | null>(initialData);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +88,7 @@ export function usePortfolioDashboardData({
       return;
     }
 
-    const cachedData = readDashboardStageDataCache(stage, userId, transactionCount);
+    const cachedData = readDashboardStageDataCache(stage, userId, transactionCount, freshCacheOptions);
     if (!cachedData) {
       return;
     }

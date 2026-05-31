@@ -21,6 +21,7 @@ import {
 } from "./binance-dashboard/binance-chart-model";
 import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import {
+  dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
   readDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
@@ -30,6 +31,7 @@ import { cn } from "@/shared/utils";
 import type { ActiveDotProps } from "@/types/chart";
 
 const FALLBACK_CHART_SIZE = { width: 960, height: 460 };
+const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
 
 type BinanceBalance = {
   id: string;
@@ -86,7 +88,7 @@ export function BinanceDashboard({
   const [timeRange, setTimeRange] = useState<BinanceTimeRange>("ALL");
   const [selectedPoint, setSelectedPoint] = useState<{ month: string; seriesKey: string; value: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const initialBinancePayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey);
+  const initialBinancePayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey, freshCacheOptions);
   const [balances, setBalances] = useState<BinanceBalance[]>(
     Array.isArray(initialBinancePayload?.balances) ? initialBinancePayload.balances as BinanceBalance[] : []
   );
@@ -154,7 +156,7 @@ export function BinanceDashboard({
   }
 
   const totalEur = useMemo(() => balances.reduce((sum, b) => sum + b.eurValue, 0), [balances]);
-  const topbarValue = balancesLoaded ? formatBinanceEuro(totalEur) : "0,00 €";
+  const topbarValue = balancesLoaded ? formatBinanceEuro(totalEur) : "--";
 
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;

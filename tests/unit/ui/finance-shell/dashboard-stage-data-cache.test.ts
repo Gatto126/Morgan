@@ -134,6 +134,40 @@ describe("dashboard stage data cache", () => {
     expect(cache.isDashboardStageDataCacheFresh("checking", "user-1", 4)).toBe(false);
   });
 
+  it("lets visible UI reject stale persisted data while keeping it available as backup cache", async () => {
+    const storage = createMemoryStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const payload = {
+      dailyData: [],
+      monthlyData: [],
+      providers: [{
+        cashback: 0,
+        expenses: 0,
+        income: 0,
+        interest: 0,
+        sourceInstitution: "BBVA",
+        tax: 0,
+        total: 1_00,
+        transactionCount: 1
+      }]
+    };
+
+    let cache = await loadCacheModule();
+    cache.seedDashboardStageDataCache("checking", "user-1", 4, payload);
+
+    vi.resetModules();
+    nowSpy.mockReturnValue(62_000);
+    cache = await import("@/components/finance-shell/dashboard-stage-data-cache");
+
+    expect(
+      cache.readDashboardStageDataCache("checking", "user-1", 4, {
+        maxAgeMs: cache.dashboardStageDataFreshTtlMs
+      })
+    ).toBeNull();
+    expect(cache.readDashboardStageDataCache("checking", "user-1", 4)).toEqual(payload);
+  });
+
   it("clears failed requests so the next call can retry", async () => {
     const fetchMock = vi
       .fn()

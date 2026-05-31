@@ -34,6 +34,10 @@ type FetchDashboardStageDataOptions = {
   version?: number;
 };
 
+type ReadDashboardStageDataCacheOptions = {
+  maxAgeMs?: number;
+};
+
 const dashboardStageEndpoints = {
   binance: "/api/binance/balances",
   checking: "/api/transactions/checking",
@@ -47,6 +51,8 @@ const staleCacheTtlMs = 6 * 60 * 60 * 1_000;
 const storageCachePrefix = "morgan:dashboard-stage-data:v1:";
 const dashboardStageDataCache = new Map<string, DashboardStageDataEntry<unknown>>();
 
+export const dashboardStageDataFreshTtlMs = cacheTtlMs;
+
 function getDashboardStageCacheKey(stage: DashboardStageKey, userId: string, version = 0) {
   return `${userId}:${stage}:${version}`;
 }
@@ -55,8 +61,8 @@ function isFresh(entry: DashboardStageDataEntry<unknown> | undefined) {
   return !!entry?.data && Date.now() - entry.fetchedAt < cacheTtlMs;
 }
 
-function isUsableStaleEntry(entry: DashboardStageDataEntry<unknown> | undefined) {
-  return !!entry?.data && Date.now() - entry.fetchedAt < staleCacheTtlMs;
+function isUsableEntry(entry: DashboardStageDataEntry<unknown> | undefined, maxAgeMs = staleCacheTtlMs) {
+  return !!entry?.data && Date.now() - entry.fetchedAt < maxAgeMs;
 }
 
 function getSessionStorage() {
@@ -71,7 +77,10 @@ function getSessionStorage() {
   }
 }
 
-function readStoredDashboardStageData(cacheKey: string): DashboardStageDataEntry<unknown> | null {
+function readStoredDashboardStageData(
+  cacheKey: string,
+  maxAgeMs = staleCacheTtlMs
+): DashboardStageDataEntry<unknown> | null {
   const storage = getSessionStorage();
   if (!storage) {
     return null;
@@ -92,6 +101,10 @@ function readStoredDashboardStageData(cacheKey: string): DashboardStageDataEntry
 
     if (!isSameEntry || Date.now() - fetchedAt >= staleCacheTtlMs) {
       storage.removeItem(storageKey);
+      return null;
+    }
+
+    if (Date.now() - fetchedAt >= maxAgeMs) {
       return null;
     }
 
@@ -147,16 +160,17 @@ export function isDashboardStageDataCacheFresh(
 export function readDashboardStageDataCache<TStage extends DashboardStageKey>(
   stage: TStage,
   userId: string,
-  version = 0
+  version = 0,
+  { maxAgeMs = staleCacheTtlMs }: ReadDashboardStageDataCacheOptions = {}
 ): DashboardStageDataMap[TStage] | null {
   const cacheKey = getDashboardStageCacheKey(stage, userId, version);
   const entry = dashboardStageDataCache.get(cacheKey);
 
-  if (isUsableStaleEntry(entry) && entry?.data !== undefined) {
+  if (isUsableEntry(entry, maxAgeMs) && entry?.data !== undefined) {
     return entry.data as DashboardStageDataMap[TStage];
   }
 
-  const storedEntry = readStoredDashboardStageData(cacheKey);
+  const storedEntry = readStoredDashboardStageData(cacheKey, maxAgeMs);
   if (storedEntry?.data !== undefined) {
     dashboardStageDataCache.set(cacheKey, storedEntry);
     return storedEntry.data as DashboardStageDataMap[TStage];

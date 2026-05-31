@@ -3,7 +3,12 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import { prefetchDashboardStageData } from "./dashboard-stage-data-cache";
-import { getVisibleDashboardStageKeys, type DashboardStageKey } from "./dashboard-stage-items";
+import {
+  getDashboardStageDataVersion,
+  getVisibleDashboardStageKeys,
+  resolveVisibleDashboardStage,
+  type DashboardStageKey
+} from "./dashboard-stage-items";
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
 
@@ -73,28 +78,6 @@ function DashboardStageLoading() {
   return null;
 }
 
-function resolveActiveDashboardStage(stage: Stage, visibleStageKeys: Set<DashboardStageKey>): DashboardStageKey {
-  const candidateStage = stage as DashboardStageKey;
-
-  return visibleStageKeys.has(candidateStage) ? candidateStage : "dashboard";
-}
-
-function getDashboardStageDataVersion(stageKey: DashboardStageKey, activeUser: UserRecord, binanceRefreshKey: number) {
-  switch (stageKey) {
-    case "binance":
-      return binanceRefreshKey;
-    case "checking":
-      return activeUser.checkingCount;
-    case "crypto":
-      return activeUser.cryptoCount;
-    case "investment":
-      return activeUser.investmentCount;
-    case "dashboard":
-    default:
-      return activeUser.transactionCount;
-  }
-}
-
 function scheduleIdleTask(callback: () => void, delayMs = 0) {
   const currentWindow = window as IdleWindow;
   let cancelIdleTask: (() => void) | null = null;
@@ -134,7 +117,7 @@ export function DashboardStageStack({
   });
   const visibleStageKeys = useMemo(() => new Set(getVisibleDashboardStageKeys(activeUser)), [activeUser]);
   const visibleStageKey = useMemo(() => [...visibleStageKeys].join("|"), [visibleStageKeys]);
-  const activeDashboardStage = resolveActiveDashboardStage(stage, visibleStageKeys);
+  const activeDashboardStage = resolveVisibleDashboardStage(stage, activeUser);
   const activeUserId = activeUser?.id ?? null;
   const isActiveDashboardStageVisible = isDashboardStage && activeDashboardStage === "dashboard";
   const isActiveCheckingStageVisible = isDashboardStage && activeDashboardStage === "checking";

@@ -1,9 +1,17 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { AuthShell } from "./auth-shell";
-import { seedDashboardStageDataCache } from "./finance-shell/dashboard-stage-data-cache";
-import type { DashboardStageKey } from "./finance-shell/dashboard-stage-items";
+import {
+  fetchDashboardStageData,
+  seedDashboardStageDataCache
+} from "./finance-shell/dashboard-stage-data-cache";
+import {
+  getDashboardStageDataVersion,
+  isDashboardStageKey,
+  resolveVisibleDashboardStage,
+  type DashboardStageKey
+} from "./finance-shell/dashboard-stage-items";
 import { FrameOverlayPanels } from "./finance-shell/frame-overlay-panels";
 import { FinanceShellMainFrame } from "./finance-shell/main-frame";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
@@ -100,6 +108,7 @@ export function FinanceShell({
     setActiveUser,
     setUsers
   });
+  const dashboardNavigationRequestRef = useRef(0);
   const appContentRef = useRef<HTMLDivElement | null>(null);
   const dashboardTabsPortalRef = useRef<HTMLDivElement | null>(null);
   const dashboardBackgroundRef = useRef<HTMLDivElement | null>(null);
@@ -333,6 +342,27 @@ export function FinanceShell({
     handleSettingsClick();
   }
 
+  const navigateToStableStage = useCallback((newStage: Parameters<typeof navigateTo>[0]) => {
+    const requestId = ++dashboardNavigationRequestRef.current;
+
+    void (async () => {
+      if (activeUser && isDashboardStageKey(newStage)) {
+        const stageKey = resolveVisibleDashboardStage(newStage, activeUser);
+        const version = getDashboardStageDataVersion(stageKey, activeUser, binanceRefreshKey);
+
+        try {
+          await fetchDashboardStageData(stageKey, activeUser.id, { version });
+        } catch {
+          // Navigation still proceeds so the destination dashboard can show its own error state.
+        }
+      }
+
+      if (requestId === dashboardNavigationRequestRef.current) {
+        navigateTo(newStage);
+      }
+    })();
+  }, [activeUser, binanceRefreshKey, navigateTo]);
+
   function closeActiveOverlayPanel() {
     if (showUploadView) {
       handleCloseUpload();
@@ -405,7 +435,7 @@ export function FinanceShell({
         onHeaderUploadClick={handlePlusClick}
         onHomeClick={navigateHome}
         onImportRefreshComplete={handleImportRefreshComplete}
-        onNavigate={navigateTo}
+        onNavigate={navigateToStableStage}
         onProfileClick={handleUserSelectClick}
         onSettingsClick={handleSettingsNavClick}
       />

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
   isDashboardStageDataCacheFresh,
   readDashboardStageDataCache
@@ -21,6 +22,8 @@ type ProviderKeySource = {
   investmentProducts: Array<{ quantity: number }>;
   cryptoTokens: Array<{ quantity: number }>;
 };
+
+const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
 
 function getProviderKeys(providerSummaries: ProviderKeySource[]) {
   const currentKeys = new Set<string>();
@@ -46,7 +49,7 @@ export function useDashboardData({
   shouldLoad,
   transactionCount
 }: UseDashboardDataOptions) {
-  const initialData = readDashboardStageDataCache("dashboard", userId, transactionCount);
+  const initialData = readDashboardStageDataCache("dashboard", userId, transactionCount, freshCacheOptions);
   const [data, setData] = useState<DashboardData | null>(initialData);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +107,7 @@ export function useDashboardData({
       return;
     }
 
-    const cachedData = readDashboardStageDataCache("dashboard", userId, transactionCount);
+    const cachedData = readDashboardStageDataCache("dashboard", userId, transactionCount, freshCacheOptions);
     if (!cachedData) {
       return;
     }

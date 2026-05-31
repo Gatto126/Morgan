@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
   readDashboardStageDataCache
 } from "@/components/finance-shell/dashboard-stage-data-cache";
@@ -14,13 +15,15 @@ type UseBinanceBalancesOptions = {
   binanceRefreshKey: number;
 };
 
+const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
+
 export function useBinanceBalances({
   userId,
   isActive,
   shouldLoad,
   binanceRefreshKey
 }: UseBinanceBalancesOptions) {
-  const initialPayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey);
+  const initialPayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey, freshCacheOptions);
   const [binanceBalances, setBinanceBalances] = useState<BinanceBalanceRow[]>(
     Array.isArray(initialPayload?.balances) ? initialPayload.balances : []
   );

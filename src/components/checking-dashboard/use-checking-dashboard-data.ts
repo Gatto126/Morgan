@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
   isDashboardStageDataCacheFresh,
   readDashboardStageDataCache
@@ -15,13 +16,15 @@ type UseCheckingDashboardDataOptions = {
   shouldLoad: boolean;
 };
 
+const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
+
 export function useCheckingDashboardData({
   userId,
   transactionCount,
   isActive,
   shouldLoad
 }: UseCheckingDashboardDataOptions) {
-  const initialData = readDashboardStageDataCache("checking", userId, transactionCount);
+  const initialData = readDashboardStageDataCache("checking", userId, transactionCount, freshCacheOptions);
   const [data, setData] = useState<CheckingData | null>(initialData);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +79,7 @@ export function useCheckingDashboardData({
       return;
     }
 
-    const cachedData = readDashboardStageDataCache("checking", userId, transactionCount);
+    const cachedData = readDashboardStageDataCache("checking", userId, transactionCount, freshCacheOptions);
     if (!cachedData) {
       return;
     }
