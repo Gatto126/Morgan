@@ -2,6 +2,7 @@ import { Bitcoin, ChartPie, Coins, Landmark, Wallet } from "lucide-react";
 import { useMemo } from "react";
 
 import { DashboardTopbarTab } from "./dashboard-topbar-tab";
+import { readDashboardStageDataCache } from "./dashboard-stage-data-cache";
 import { getVisibleDashboardStageKeys, type DashboardStageKey } from "./dashboard-stage-items";
 import {
   readStoredDashboardTopbarItems,
@@ -24,6 +25,23 @@ const fallbackIcons = {
   dashboard: ChartPie,
   investment: Wallet
 } satisfies Record<DashboardStageKey, typeof ChartPie>;
+const fallbackValue = "0,00 \u20ac";
+const euroFormatter = new Intl.NumberFormat("it-IT", {
+  currency: "EUR",
+  minimumFractionDigits: 2,
+  style: "currency"
+});
+
+function formatEuroCents(cents: number) {
+  return euroFormatter.format(cents / 100);
+}
+
+function getAbbreviatedLabel(label: string) {
+  const upper = label.replace(/_/g, " ").trim().toUpperCase();
+  const words = upper.split(/\s+/).filter(Boolean);
+
+  return words.length > 1 ? words.map((word) => word[0]).join("") : upper;
+}
 
 function resolveActiveDashboardStage(
   stage: Stage,
@@ -42,7 +60,7 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
         ariaLabel: "HERITAGE dashboard tab",
         icon: ChartPie,
         id: "heritage",
-        value: "0,00 €"
+        value: fallbackValue
       }
     ];
 
@@ -52,7 +70,7 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
         ariaLabel: "CHECKING dashboard tab",
         icon: Landmark,
         id: "checking",
-        value: "0,00 €"
+        value: fallbackValue
       });
     }
 
@@ -62,7 +80,7 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
         ariaLabel: "INVESTMENT dashboard tab",
         icon: Wallet,
         id: "investment",
-        value: "0,00 €"
+        value: fallbackValue
       });
     }
 
@@ -72,7 +90,7 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
         ariaLabel: "CRYPTO dashboard tab",
         icon: Coins,
         id: "crypto",
-        value: "0,00 €"
+        value: fallbackValue
       });
     }
 
@@ -85,7 +103,7 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
     icon: Bitcoin,
     id: "binance",
     label: "BINANCE",
-    value: "0,00 €"
+    value: fallbackValue
   }];
   }
 
@@ -93,8 +111,81 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
     active: true,
     icon: fallbackIcons[activeStage],
     id: activeStage,
-    value: "0,00 €"
+    value: fallbackValue
   }];
+}
+
+function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: DashboardStageKey): DashboardTopbarItem[] {
+  if (activeStage === "checking") {
+    const data = readDashboardStageDataCache("checking", activeUser.id, activeUser.checkingCount);
+    if (!data) {
+      return [];
+    }
+
+    const total = data.providers.reduce((sum, provider) => sum + provider.total, 0);
+
+    return [
+      {
+        active: true,
+        icon: Landmark,
+        id: "checking",
+        value: formatEuroCents(total)
+      },
+      ...data.providers.map((provider) => ({
+        active: false,
+        id: `checking:${provider.sourceInstitution}`,
+        label: getAbbreviatedLabel(provider.sourceInstitution),
+        value: formatEuroCents(provider.total)
+      }))
+    ];
+  }
+
+  if (activeStage === "investment" || activeStage === "crypto") {
+    const version = activeStage === "investment" ? activeUser.investmentCount : activeUser.cryptoCount;
+    const data = readDashboardStageDataCache(activeStage, activeUser.id, version);
+    if (!data) {
+      return [];
+    }
+
+    const total = data.providers.reduce((sum, provider) => sum + provider.total, 0);
+    const RootIcon = activeStage === "investment" ? Wallet : Coins;
+
+    return [
+      {
+        active: true,
+        icon: RootIcon,
+        id: activeStage,
+        value: formatEuroCents(total)
+      },
+      ...data.providers.map((provider) => ({
+        active: false,
+        id: `${activeStage}:${provider.sourceInstitution}`,
+        label: getAbbreviatedLabel(provider.sourceInstitution),
+        value: formatEuroCents(provider.total)
+      }))
+    ];
+  }
+
+  return [];
+}
+
+function preferStableTopbarItems(
+  entryItems: DashboardTopbarItem[],
+  storedItems: DashboardTopbarItem[],
+  cachedItems: DashboardTopbarItem[],
+  fallbackItems: DashboardTopbarItem[]
+) {
+  const stableFallbackItems = cachedItems.length > fallbackItems.length ? cachedItems : fallbackItems;
+
+  if (entryItems.length >= stableFallbackItems.length && entryItems.length > 0) {
+    return entryItems;
+  }
+
+  if (storedItems.length >= stableFallbackItems.length && storedItems.length > 0) {
+    return storedItems;
+  }
+
+  return stableFallbackItems;
 }
 
 function getFallbackIcon(activeStage: DashboardStageKey, item: DashboardTopbarItem) {
@@ -127,6 +218,10 @@ export function DashboardTopbarShell({
     () => activeUser && activeStage ? getDashboardFallbackItems(activeUser, activeStage) : [],
     [activeStage, activeUser]
   );
+  const cachedItems = useMemo(
+    () => activeUser && activeStage ? getCachedStageTopbarItems(activeUser, activeStage) : [],
+    [activeStage, activeUser]
+  );
   const storedItems = useMemo(
     () => activeUser && activeStage
       ? readStoredDashboardTopbarItems(activeStage, activeUser.id)
@@ -134,11 +229,7 @@ export function DashboardTopbarShell({
     [activeStage, activeUser]
   );
 
-  const rawItems = entry.items.length > 0
-    ? entry.items
-    : storedItems.length > 0
-      ? storedItems
-      : fallbackItems;
+  const rawItems = preferStableTopbarItems(entry.items, storedItems, cachedItems, fallbackItems);
   const items = useMemo(
     () => activeStage
       ? rawItems.map((item) => ({
@@ -160,7 +251,7 @@ export function DashboardTopbarShell({
           active={item.active}
           ariaLabel={item.ariaLabel}
           icon={item.icon}
-          key={`topbar-slot-${index}`}
+          key={`topbar-slot-${item.id || index}`}
           label={item.label}
           onClick={item.onClick}
           suppressInitialChanges={item.suppressInitialChanges}

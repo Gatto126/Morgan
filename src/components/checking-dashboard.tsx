@@ -170,14 +170,6 @@ export function CheckingDashboard({
         style={getDashboardStageVisibilityStyle(isActive)}
       >
         <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
-        <CheckingDashboardTabs
-          tabs={tabs}
-          activeTab={activeTab}
-          activePoint={null}
-          valuesKnown={false}
-          userId={userId}
-          onSelectTab={setActiveTab}
-        />
       </div>
     );
   }

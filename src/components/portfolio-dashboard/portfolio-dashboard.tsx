@@ -195,16 +195,6 @@ export function PortfolioDashboard({
         style={getDashboardStageVisibilityStyle(isActive)}
       >
         <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
-        <PortfolioDashboardTabs
-          tabs={tabs}
-          activeTab={activeTab}
-          activePoint={null}
-          rootIcon={config.rootIcon}
-          valuesKnown={false}
-          stage={dashboardStage}
-          userId={userId}
-          onSelectTab={setActiveTab}
-        />
       </div>
     );
   }
