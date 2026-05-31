@@ -91,4 +91,45 @@ describe("checking time-series", () => {
       expenses: 2000
     });
   });
+
+  it("uses imported account balances for transferred cash instead of reconstructing BBVA from inflows", () => {
+    const result = buildCheckingTimeSeries({
+      now: new Date("2026-01-03T12:00:00.000Z"),
+      transactions: [
+        transaction({
+          id: "tr-transfer-out",
+          sourceInstitution: TRADE_REPUBLIC_INSTITUTION,
+          bookingDate: new Date("2026-01-03T00:00:00.000Z"),
+          typeLabel: "TRANSFER",
+          description: "Transfer to BBVA",
+          direction: "OUT",
+          amountCents: 300000,
+          balanceCents: 364112
+        }),
+        transaction({
+          id: "bbva-transfer-in",
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-03T00:00:00.000Z"),
+          typeLabel: "Bonifico ricevuto",
+          description: "Transfer from Trade Republic",
+          direction: "IN",
+          amountCents: 300000,
+          balanceCents: 309642
+        })
+      ]
+    });
+
+    expect(result.dailyData[0]).toMatchObject({
+      date: "2026-01-03",
+      total: 673754,
+      providers: {
+        [BBVA_INSTITUTION]: 309642,
+        [TRADE_REPUBLIC_INSTITUTION]: 364112
+      }
+    });
+    expect(result.providers.find((provider) => provider.sourceInstitution === BBVA_INSTITUTION)).toMatchObject({
+      income: 300000,
+      total: 309642
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { BBVA_INSTITUTION } from "@/shared/institutions";
+import { resolveDailyEndingBalanceCents } from "@/domain/finance/checking-balance";
 
 export type CheckingTransaction = {
   id: string;
@@ -134,6 +134,19 @@ function cloneRecord(value: Record<string, number>) {
   return { ...value };
 }
 
+function groupTransactionsByDay(transactions: CheckingTransaction[]) {
+  const transactionsByDay = new Map<string, CheckingTransaction[]>();
+
+  for (const transaction of transactions) {
+    const dayKey = toDayKey(transaction.bookingDate);
+    const dayTransactions = transactionsByDay.get(dayKey) ?? [];
+    dayTransactions.push(transaction);
+    transactionsByDay.set(dayKey, dayTransactions);
+  }
+
+  return transactionsByDay;
+}
+
 export function buildCheckingTimeSeries({
   includeProviderTransactions = true,
   transactions,
@@ -162,9 +175,7 @@ export function buildCheckingTimeSeries({
     const category = classifyCheckingFlow(transaction);
     applyProviderFlow(provider, category, transaction.amountCents);
 
-    if (transaction.sourceInstitution === BBVA_INSTITUTION) {
-      provider.total = provider.income + provider.interest + provider.cashback - provider.expenses - provider.tax;
-    } else if (provider.transactionCount === 1) {
+    if (provider.transactionCount === 1) {
       provider.total = transaction.balanceCents;
     }
   }
@@ -173,7 +184,7 @@ export function buildCheckingTimeSeries({
     (left, right) => left.bookingDate.getTime() - right.bookingDate.getTime()
   );
   const providerBalances = new Map<string, number>();
-  const bbvaAcc = { income: 0, expenses: 0, interest: 0, cashback: 0, tax: 0 };
+  const knownBalanceProviders = new Set<string>();
   const monthlyIncomeTotals = new Map<string, Record<string, number>>();
   const monthlyExpenseTotals = new Map<string, Record<string, number>>();
   const dailyIncomeTotals = new Map<string, Record<string, number>>();
@@ -200,29 +211,39 @@ export function buildCheckingTimeSeries({
     };
   }
 
-  for (const transaction of ascendingTransactions) {
-    const date = new Date(transaction.bookingDate);
-    const monthKey = toMonthKey(date);
-    const dayKey = toDayKey(date);
-    const category = classifyCheckingFlow(transaction);
-    const periodKind = getPeriodKind(category);
+  const transactionsByDay = groupTransactionsByDay(ascendingTransactions);
 
-    if (transaction.sourceInstitution === BBVA_INSTITUTION) {
-      bbvaAcc[category] += transaction.amountCents;
-      providerBalances.set(
-        transaction.sourceInstitution,
-        bbvaAcc.income + bbvaAcc.interest + bbvaAcc.cashback - bbvaAcc.expenses - bbvaAcc.tax
-      );
-    } else {
-      providerBalances.set(transaction.sourceInstitution, transaction.balanceCents);
+  for (const [dayKey, dayTransactions] of transactionsByDay.entries()) {
+    const date = new Date(`${dayKey}T00:00:00.000Z`);
+    const monthKey = toMonthKey(date);
+    const dayTransactionsByProvider = new Map<string, CheckingTransaction[]>();
+
+    for (const transaction of dayTransactions) {
+      const category = classifyCheckingFlow(transaction);
+      const periodKind = getPeriodKind(category);
+      const providerDayTransactions = dayTransactionsByProvider.get(transaction.sourceInstitution) ?? [];
+      providerDayTransactions.push(transaction);
+      dayTransactionsByProvider.set(transaction.sourceInstitution, providerDayTransactions);
+
+      if (periodKind === "income") {
+        addPeriodTotal(monthlyIncomeTotals, monthKey, transaction.sourceInstitution, transaction.amountCents);
+        addPeriodTotal(dailyIncomeTotals, dayKey, transaction.sourceInstitution, transaction.amountCents);
+      } else {
+        addPeriodTotal(monthlyExpenseTotals, monthKey, transaction.sourceInstitution, transaction.amountCents);
+        addPeriodTotal(dailyExpenseTotals, dayKey, transaction.sourceInstitution, transaction.amountCents);
+      }
     }
 
-    if (periodKind === "income") {
-      addPeriodTotal(monthlyIncomeTotals, monthKey, transaction.sourceInstitution, transaction.amountCents);
-      addPeriodTotal(dailyIncomeTotals, dayKey, transaction.sourceInstitution, transaction.amountCents);
-    } else {
-      addPeriodTotal(monthlyExpenseTotals, monthKey, transaction.sourceInstitution, transaction.amountCents);
-      addPeriodTotal(dailyExpenseTotals, dayKey, transaction.sourceInstitution, transaction.amountCents);
+    for (const [sourceInstitution, providerDayTransactions] of dayTransactionsByProvider.entries()) {
+      const previousBalance = knownBalanceProviders.has(sourceInstitution)
+        ? providerBalances.get(sourceInstitution)
+        : undefined;
+
+      providerBalances.set(
+        sourceInstitution,
+        resolveDailyEndingBalanceCents(providerDayTransactions, previousBalance)
+      );
+      knownBalanceProviders.add(sourceInstitution);
     }
 
     const snapshot = getCheckingSnapshot(monthKey, dayKey);
@@ -240,6 +261,10 @@ export function buildCheckingTimeSeries({
       providerIncome: snapshot.dailyIncome,
       providerExpenses: snapshot.dailyExpenses
     });
+  }
+
+  for (const [sourceInstitution, balance] of providerBalances.entries()) {
+    getOrCreateProvider(providerMap, sourceInstitution).total = balance;
   }
 
   const monthlyData: CheckingMonthBucket[] = [];
