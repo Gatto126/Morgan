@@ -21,9 +21,7 @@ import {
 } from "./binance-dashboard/binance-chart-model";
 import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import {
-  dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
-  isDashboardStageDataCacheFresh,
   readDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
 import { usePublishDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
@@ -32,7 +30,6 @@ import { cn } from "@/shared/utils";
 import type { ActiveDotProps } from "@/types/chart";
 
 const FALLBACK_CHART_SIZE = { width: 960, height: 460 };
-const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
 
 type BinanceBalance = {
   id: string;
@@ -89,14 +86,12 @@ export function BinanceDashboard({
   const [timeRange, setTimeRange] = useState<BinanceTimeRange>("ALL");
   const [selectedPoint, setSelectedPoint] = useState<{ month: string; seriesKey: string; value: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const initialBinancePayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey, freshCacheOptions);
+  const initialBinancePayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey);
   const [balances, setBalances] = useState<BinanceBalance[]>(
     Array.isArray(initialBinancePayload?.balances) ? initialBinancePayload.balances as BinanceBalance[] : []
   );
-  const [balancesLoaded, setBalancesLoaded] = useState(!!initialBinancePayload);
   const [balancesKnown, setBalancesKnown] = useState(!!initialBinancePayload);
   const [freshBinanceRefreshKey, setFreshBinanceRefreshKey] = useState(binanceRefreshKey);
-  const [previousShouldLoad, setPreviousShouldLoad] = useState(shouldLoad);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
@@ -113,40 +108,18 @@ export function BinanceDashboard({
     if (Array.isArray(data.balances)) {
       setBalances(data.balances as BinanceBalance[]);
     }
-    setBalancesLoaded(true);
     setBalancesKnown(true);
     setFreshBinanceRefreshKey(binanceRefreshKey);
   }, [binanceRefreshKey, userId]);
 
-  const shouldHideStaleBalances =
-    balancesLoaded
-    && shouldLoad
-    && !previousShouldLoad
-    && !isDashboardStageDataCacheFresh("binance", userId, binanceRefreshKey);
-
   useEffect(() => {
     if (!shouldLoad) return;
     const timer = window.setTimeout(() => {
-      if (shouldHideStaleBalances) {
-        setBalancesKnown(false);
-      }
       void loadBalances().catch(() => {});
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [loadBalances, shouldHideStaleBalances, shouldLoad]);
-
-  useEffect(() => {
-    if (previousShouldLoad === shouldLoad) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setPreviousShouldLoad(shouldLoad);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [previousShouldLoad, shouldLoad]);
+  }, [loadBalances, shouldLoad]);
 
   async function handleSyncBalances() {
     if (isSyncing) return;
@@ -169,7 +142,6 @@ export function BinanceDashboard({
 
       if (Array.isArray(data.balances)) {
         setBalances(data.balances);
-        setBalancesLoaded(true);
         setBalancesKnown(true);
         setFreshBinanceRefreshKey(binanceRefreshKey);
       } else {
@@ -185,7 +157,7 @@ export function BinanceDashboard({
   }
 
   const totalEur = useMemo(() => balances.reduce((sum, b) => sum + b.eurValue, 0), [balances]);
-  const topbarValue = balancesKnown && freshBinanceRefreshKey === binanceRefreshKey && !shouldHideStaleBalances
+  const topbarValue = balancesKnown && freshBinanceRefreshKey === binanceRefreshKey
     ? formatBinanceEuro(totalEur)
     : "--";
 

@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
-  isDashboardStageDataCacheFresh,
   readDashboardStageDataCache
 } from "@/components/finance-shell/dashboard-stage-data-cache";
 
@@ -16,21 +14,18 @@ type UseBinanceBalancesOptions = {
   binanceRefreshKey: number;
 };
 
-const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
-
 export function useBinanceBalances({
   userId,
   isActive,
   shouldLoad,
   binanceRefreshKey
 }: UseBinanceBalancesOptions) {
-  const initialPayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey, freshCacheOptions);
+  const initialPayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey);
   const [binanceBalances, setBinanceBalances] = useState<BinanceBalanceRow[]>(
     Array.isArray(initialPayload?.balances) ? initialPayload.balances : []
   );
   const [hasFreshBinanceBalances, setHasFreshBinanceBalances] = useState(!!initialPayload);
   const [freshBinanceRefreshKey, setFreshBinanceRefreshKey] = useState(binanceRefreshKey);
-  const [previousShouldLoad, setPreviousShouldLoad] = useState(shouldLoad);
   const [isBinanceNew, setIsBinanceNew] = useState(false);
   const [isBinanceSyncing, setIsBinanceSyncing] = useState(false);
   const [filterSmallBinance, setFilterSmallBinance] = useState(false);
@@ -60,11 +55,6 @@ export function useBinanceBalances({
 
     return payload as { isStale?: boolean; hasApiKey?: boolean };
   }, [binanceRefreshKey, userId]);
-
-  const shouldHideStaleBinanceBalances =
-    shouldLoad
-    && !previousShouldLoad
-    && !isDashboardStageDataCacheFresh("binance", userId, binanceRefreshKey);
 
   const fetchBinanceBalances = useCallback(async (syncIfStale = true) => {
     try {
@@ -99,35 +89,13 @@ export function useBinanceBalances({
     }
 
     const preloadKey = `${userId}:${binanceRefreshKey}`;
-    if (lastPreloadKeyRef.current === preloadKey && !shouldHideStaleBinanceBalances) {
+    if (lastPreloadKeyRef.current === preloadKey) {
       return;
     }
 
     lastPreloadKeyRef.current = preloadKey;
-    let hideTimer: number | null = null;
-    if (shouldHideStaleBinanceBalances) {
-      hideTimer = window.setTimeout(() => setHasFreshBinanceBalances(false), 0);
-    }
     void fetchBinanceBalances(true);
-
-    return () => {
-      if (hideTimer !== null) {
-        window.clearTimeout(hideTimer);
-      }
-    };
-  }, [fetchBinanceBalances, binanceRefreshKey, shouldHideStaleBinanceBalances, shouldLoad, userId]);
-
-  useEffect(() => {
-    if (previousShouldLoad === shouldLoad) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setPreviousShouldLoad(shouldLoad);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [previousShouldLoad, shouldLoad]);
+  }, [fetchBinanceBalances, binanceRefreshKey, shouldLoad, userId]);
 
   useEffect(() => {
     if (!isActive) {
@@ -145,8 +113,7 @@ export function useBinanceBalances({
     binanceBalances,
     binanceBalancesKnown:
       hasFreshBinanceBalances
-      && freshBinanceRefreshKey === binanceRefreshKey
-      && !shouldHideStaleBinanceBalances,
+      && freshBinanceRefreshKey === binanceRefreshKey,
     isBinanceNew,
     isBinanceSyncing,
     filterSmallBinance,

@@ -15,7 +15,6 @@ import {
 import { FrameOverlayPanels } from "./finance-shell/frame-overlay-panels";
 import { FinanceShellMainFrame } from "./finance-shell/main-frame";
 import { DeleteAccountDialog } from "./finance-shell/delete-account-dialog";
-import { clearDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
 import type { PersistedFinanceSelection } from "./finance-shell/persistence-state";
 import type { SettingsSection } from "./finance-shell/settings-panel";
 import { useFinanceShellContent } from "./finance-shell/use-finance-shell-content";
@@ -352,7 +351,6 @@ export function FinanceShell({
     const stageKey = resolveVisibleDashboardStage(newStage, activeUser);
     const version = getDashboardStageDataVersion(stageKey, activeUser, binanceRefreshKey);
 
-    clearDashboardTopbar(stageKey, activeUser.id);
     void fetchDashboardStageData(stageKey, activeUser.id, { version }).catch(() => {
       // The destination dashboard owns the visible error state.
     });

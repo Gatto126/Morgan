@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
   isDashboardStageDataCacheFresh,
   readDashboardStageDataCache
@@ -22,8 +21,6 @@ type ProviderKeySource = {
   investmentProducts: Array<{ quantity: number }>;
   cryptoTokens: Array<{ quantity: number }>;
 };
-
-const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
 
 function getProviderKeys(providerSummaries: ProviderKeySource[]) {
   const currentKeys = new Set<string>();
@@ -49,14 +46,13 @@ export function useDashboardData({
   shouldLoad,
   transactionCount
 }: UseDashboardDataOptions) {
-  const initialData = readDashboardStageDataCache("dashboard", userId, transactionCount, freshCacheOptions);
+  const initialData = readDashboardStageDataCache("dashboard", userId, transactionCount);
   const [data, setData] = useState<DashboardData | null>(initialData);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [hasFreshData, setHasFreshData] = useState(!!initialData);
   const [freshDataVersion, setFreshDataVersion] = useState(transactionCount);
-  const [previousShouldLoad, setPreviousShouldLoad] = useState(shouldLoad);
   const [importRefreshVersion, setImportRefreshVersion] = useState(0);
   const [newProviderKeys, setNewProviderKeys] = useState<Set<string>>(new Set());
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
@@ -101,11 +97,8 @@ export function useDashboardData({
     },
     [transactionCount, userId]
   );
-  const fetchDashboardIfStale = useCallback((options: { hideStaleValues?: boolean } = {}) => {
+  const fetchDashboardIfStale = useCallback(() => {
     if (!isDashboardStageDataCacheFresh("dashboard", userId, transactionCount)) {
-      if (options.hideStaleValues) {
-        setHasFreshData(false);
-      }
       void fetchDashboard({ force: true });
     }
   }, [fetchDashboard, transactionCount, userId]);
@@ -115,7 +108,7 @@ export function useDashboardData({
       return;
     }
 
-    const cachedData = readDashboardStageDataCache("dashboard", userId, transactionCount, freshCacheOptions);
+    const cachedData = readDashboardStageDataCache("dashboard", userId, transactionCount);
     if (!cachedData) {
       return;
     }
@@ -128,7 +121,7 @@ export function useDashboardData({
       setFreshDataVersion(transactionCount);
       setLoading(false);
       setError(null);
-      fetchDashboardIfStale({ hideStaleValues: true });
+      fetchDashboardIfStale();
     }, 0);
 
     return () => window.clearTimeout(hydrateTimer);
@@ -150,7 +143,7 @@ export function useDashboardData({
 
     const initialLoad = window.setTimeout(() => {
       if (hasLoadedRef.current) {
-        fetchDashboardIfStale({ hideStaleValues: true });
+        fetchDashboardIfStale();
         return;
       }
       hasLoadedRef.current = true;
@@ -185,28 +178,10 @@ export function useDashboardData({
     void fetchDashboard({ force: true });
   }, [transactionCount, fetchDashboard, shouldLoad, loading]);
 
-  const shouldHideStaleValues =
-    !!data
-    && shouldLoad
-    && !previousShouldLoad
-    && !isDashboardStageDataCacheFresh("dashboard", userId, transactionCount);
-
-  useEffect(() => {
-    if (previousShouldLoad === shouldLoad) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setPreviousShouldLoad(shouldLoad);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [previousShouldLoad, shouldLoad]);
-
   return {
     data,
     dataVersion,
-    dataFresh: !!data && hasFreshData && freshDataVersion === transactionCount && !shouldHideStaleValues,
+    dataFresh: !!data && hasFreshData && freshDataVersion === transactionCount,
     importRefreshVersion,
     loading,
     error,

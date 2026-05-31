@@ -2,7 +2,7 @@ import { Bitcoin, ChartPie, Coins, Landmark, Wallet } from "lucide-react";
 import { useMemo } from "react";
 
 import { DashboardTopbarTab } from "./dashboard-topbar-tab";
-import { dashboardStageDataFreshTtlMs, readDashboardStageDataCache } from "./dashboard-stage-data-cache";
+import { readDashboardStageDataCache } from "./dashboard-stage-data-cache";
 import {
   resolveVisibleDashboardStage,
   type DashboardStageKey
@@ -29,7 +29,6 @@ const fallbackIcons = {
   investment: Wallet
 } satisfies Record<DashboardStageKey, typeof ChartPie>;
 const fallbackValue = "--";
-const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
 const euroFormatter = new Intl.NumberFormat("it-IT", {
   currency: "EUR",
   minimumFractionDigits: 2,
@@ -112,7 +111,7 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
 
 function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: DashboardStageKey): DashboardTopbarItem[] {
   if (activeStage === "checking") {
-    const data = readDashboardStageDataCache("checking", activeUser.id, activeUser.checkingCount, freshCacheOptions);
+    const data = readDashboardStageDataCache("checking", activeUser.id, activeUser.checkingCount);
     if (!data) {
       return [];
     }
@@ -137,7 +136,7 @@ function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: Dashboar
 
   if (activeStage === "investment" || activeStage === "crypto") {
     const version = activeStage === "investment" ? activeUser.investmentCount : activeUser.cryptoCount;
-    const data = readDashboardStageDataCache(activeStage, activeUser.id, version, freshCacheOptions);
+    const data = readDashboardStageDataCache(activeStage, activeUser.id, version);
     if (!data) {
       return [];
     }

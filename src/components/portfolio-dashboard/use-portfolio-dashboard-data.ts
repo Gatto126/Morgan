@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
   isDashboardStageDataCacheFresh,
   readDashboardStageDataCache
@@ -18,8 +17,6 @@ type UsePortfolioDashboardDataOptions = {
   shouldLoad: boolean;
 };
 
-const freshCacheOptions = { maxAgeMs: dashboardStageDataFreshTtlMs };
-
 function getPortfolioStageFromEndpoint(endpoint: string) {
   return endpoint.includes("/crypto") ? "crypto" : "investment";
 }
@@ -33,14 +30,13 @@ export function usePortfolioDashboardData({
   shouldLoad
 }: UsePortfolioDashboardDataOptions) {
   const stage = getPortfolioStageFromEndpoint(endpoint);
-  const initialData = readDashboardStageDataCache(stage, userId, transactionCount, freshCacheOptions);
+  const initialData = readDashboardStageDataCache(stage, userId, transactionCount);
   const [data, setData] = useState<PortfolioData | null>(initialData);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [hasFreshData, setHasFreshData] = useState(!!initialData);
   const [freshDataVersion, setFreshDataVersion] = useState(transactionCount);
-  const [previousShouldLoad, setPreviousShouldLoad] = useState(shouldLoad);
   const [importRefreshVersion, setImportRefreshVersion] = useState(0);
   const [newProviderKeys, setNewProviderKeys] = useState<Set<string>>(new Set());
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
@@ -82,11 +78,8 @@ export function usePortfolioDashboardData({
       }
     }
   }, [fetchErrorMessage, stage, transactionCount, userId]);
-  const fetchDashboardIfStale = useCallback((options: { hideStaleValues?: boolean } = {}) => {
+  const fetchDashboardIfStale = useCallback(() => {
     if (!isDashboardStageDataCacheFresh(stage, userId, transactionCount)) {
-      if (options.hideStaleValues) {
-        setHasFreshData(false);
-      }
       void fetchDashboard({ force: true });
     }
   }, [fetchDashboard, stage, transactionCount, userId]);
@@ -96,7 +89,7 @@ export function usePortfolioDashboardData({
       return;
     }
 
-    const cachedData = readDashboardStageDataCache(stage, userId, transactionCount, freshCacheOptions);
+    const cachedData = readDashboardStageDataCache(stage, userId, transactionCount);
     if (!cachedData) {
       return;
     }
@@ -109,7 +102,7 @@ export function usePortfolioDashboardData({
       setFreshDataVersion(transactionCount);
       setLoading(false);
       setError(null);
-      fetchDashboardIfStale({ hideStaleValues: true });
+      fetchDashboardIfStale();
     }, 0);
 
     return () => window.clearTimeout(hydrateTimer);
@@ -133,7 +126,7 @@ export function usePortfolioDashboardData({
       hasLoadedRef.current = true;
       void fetchDashboard();
     } else {
-      fetchDashboardIfStale({ hideStaleValues: true });
+      fetchDashboardIfStale();
     }
     const interval = window.setInterval(fetchDashboardIfStale, 60_000);
     const handleFocus = () => { fetchDashboardIfStale(); };
@@ -155,27 +148,9 @@ export function usePortfolioDashboardData({
     void fetchDashboard({ force: true });
   }, [transactionCount, shouldLoad, loading, fetchDashboard]);
 
-  const shouldHideStaleValues =
-    !!data
-    && shouldLoad
-    && !previousShouldLoad
-    && !isDashboardStageDataCacheFresh(stage, userId, transactionCount);
-
-  useEffect(() => {
-    if (previousShouldLoad === shouldLoad) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setPreviousShouldLoad(shouldLoad);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [previousShouldLoad, shouldLoad]);
-
   return {
     data,
-    dataFresh: !!data && hasFreshData && freshDataVersion === transactionCount && !shouldHideStaleValues,
+    dataFresh: !!data && hasFreshData && freshDataVersion === transactionCount,
     loading,
     error,
     dataVersion,
