@@ -154,7 +154,7 @@ export function BinanceDashboard({
   }
 
   const totalEur = useMemo(() => balances.reduce((sum, b) => sum + b.eurValue, 0), [balances]);
-  const topbarValue = balancesLoaded ? formatBinanceEuro(totalEur) : "--";
+  const topbarValue = balancesLoaded ? formatBinanceEuro(totalEur) : "0,00 €";
 
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;

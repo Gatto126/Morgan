@@ -37,7 +37,7 @@ export function PortfolioDashboardTabs({
                 ? Number(tab.key === "ALL" ? (activePoint.heritage ?? 0) : (activePoint[tab.key] ?? 0))
                 : tab.total
             )
-          : "--";
+          : "0,00 €";
 
         return {
           active: isSelected,

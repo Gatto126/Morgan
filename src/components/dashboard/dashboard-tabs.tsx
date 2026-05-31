@@ -80,7 +80,7 @@ export function DashboardTabs({
                         ? data.accountTotals.checking + getGlobalInvestmentLiveTotal() + getGlobalCryptoLiveTotal()
                         : data.accountTotals[tab.key])
             )
-          : "--";
+          : "0,00 €";
 
         return {
           active: tabIsActive,
