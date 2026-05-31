@@ -64,7 +64,7 @@ export function DashboardTopbarTab({
               {label}
             </span>
           ) : Icon ? (
-            <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={2.2} />
+            <Icon className="dashboard-topbar-identity-icon h-4 w-4 flex-shrink-0" strokeWidth={2.2} />
           ) : null}
         </span>
         <span className={cn("dashboard-topbar-money flex h-5 shrink-0 items-center justify-end gap-1.5", hasTextIdentity ? "w-[94px]" : "w-[104px] sm:w-[108px]")}>

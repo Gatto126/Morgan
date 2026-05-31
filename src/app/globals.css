@@ -159,16 +159,42 @@ button:disabled:hover svg.lucide {
   color: #4C4C4C !important;
 }
 
+button.dashboard-topbar-tab,
+button.dashboard-topbar-tab:hover {
+  background-color: var(--surface-panel) !important;
+  transition: none !important;
+}
+
+button.dashboard-topbar-tab[data-active="false"],
+button.dashboard-topbar-tab[data-active="false"]:hover {
+  border-color: var(--line-strong) !important;
+  color: var(--text-dim) !important;
+}
+
 button.dashboard-topbar-tab[data-active="true"],
 button.dashboard-topbar-tab[data-active="true"]:hover {
   border-color: #FFFFFF !important;
   color: #FFFFFF !important;
 }
 
+button.dashboard-topbar-tab .dashboard-topbar-identity-icon,
+button.dashboard-topbar-tab:hover .dashboard-topbar-identity-icon {
+  color: #4C4C4C !important;
+  stroke: #4C4C4C !important;
+  transition: none !important;
+}
+
+button.dashboard-topbar-tab[data-active="true"] .dashboard-topbar-identity-icon,
+button.dashboard-topbar-tab[data-active="true"]:hover .dashboard-topbar-identity-icon {
+  color: #FFFFFF !important;
+  stroke: #FFFFFF !important;
+}
+
 button.dashboard-topbar-tab .dashboard-topbar-currency-icon,
 button.dashboard-topbar-tab:hover .dashboard-topbar-currency-icon {
   color: #FFFFFF !important;
   stroke: #FFFFFF !important;
+  transition: none !important;
 }
 
 .slot-value-character {
