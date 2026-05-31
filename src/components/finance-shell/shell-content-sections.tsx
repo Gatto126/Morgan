@@ -15,6 +15,7 @@ import { WelcomeStage } from "./welcome-stage";
 type UserSelectContentProps = {
   activeUserId: string | null;
   createInputRef: RefObject<HTMLInputElement | null>;
+  deletingProfileId: string | null;
   error: string | null;
   isCreateOpen: boolean;
   notice: string | null;
@@ -23,6 +24,7 @@ type UserSelectContentProps = {
   users: UserRecord[];
   onCloseCreate: () => void;
   onCreateUser: (profileName: string) => void;
+  onDeleteProfile: (profile: UserRecord) => void;
   onSelectUser: (user: UserRecord) => void;
   onSignOut: () => void;
   onToggleCreate: () => void;
@@ -131,6 +133,7 @@ export function FinanceShellCreateProfileContent({
 export function FinanceShellUserSelectContent({
   activeUserId,
   createInputRef,
+  deletingProfileId,
   error,
   isCreateOpen,
   notice,
@@ -139,6 +142,7 @@ export function FinanceShellUserSelectContent({
   users,
   onCloseCreate,
   onCreateUser,
+  onDeleteProfile,
   onSelectUser,
   onSignOut,
   onToggleCreate
@@ -147,6 +151,7 @@ export function FinanceShellUserSelectContent({
     <UserSelectPanel
       activeUserId={activeUserId}
       createInputRef={createInputRef}
+      deletingProfileId={deletingProfileId}
       error={error}
       isCreateOpen={isCreateOpen}
       notice={notice}
@@ -155,6 +160,7 @@ export function FinanceShellUserSelectContent({
       users={users}
       onCloseCreate={onCloseCreate}
       onCreateUser={onCreateUser}
+      onDeleteProfile={onDeleteProfile}
       onSelectUser={onSelectUser}
       onSignOut={onSignOut}
       onToggleCreate={onToggleCreate}

@@ -10,6 +10,7 @@ import type { ProfileOption } from "./user-select-panel-types";
 type UserSelectPanelProps<TUser extends ProfileOption> = {
   users: TUser[];
   activeUserId: string | null;
+  deletingProfileId: string | null;
   isCreateOpen: boolean;
   initialProfileName: string;
   saving: boolean;
@@ -20,12 +21,14 @@ type UserSelectPanelProps<TUser extends ProfileOption> = {
   onToggleCreate: () => void;
   onCloseCreate: () => void;
   onCreateUser: (profileName: string) => void;
+  onDeleteProfile: (user: TUser) => void;
   onSignOut: () => void;
 };
 
 export function UserSelectPanel<TUser extends ProfileOption>({
   users,
   activeUserId,
+  deletingProfileId,
   isCreateOpen,
   initialProfileName,
   saving,
@@ -36,6 +39,7 @@ export function UserSelectPanel<TUser extends ProfileOption>({
   onToggleCreate,
   onCloseCreate,
   onCreateUser,
+  onDeleteProfile,
   onSignOut
 }: UserSelectPanelProps<TUser>) {
   const openCreateSection = () => {
@@ -71,7 +75,9 @@ export function UserSelectPanel<TUser extends ProfileOption>({
             ) : (
               <ProfileListSection
                 activeUserId={activeUserId}
+                deletingProfileId={deletingProfileId}
                 users={users}
+                onDeleteProfile={onDeleteProfile}
                 onOpenCreate={openCreateSection}
                 onSelectUser={onSelectUser}
                 onSignOut={onSignOut}

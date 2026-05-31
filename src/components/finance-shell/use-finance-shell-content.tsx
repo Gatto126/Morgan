@@ -22,6 +22,7 @@ type UseFinanceShellContentParams = {
   activeUser: UserRecord | null;
   approving: boolean;
   createInputRef: RefObject<HTMLInputElement | null>;
+  deletingProfileId: string | null;
   currentTransactions: PreviewTransaction[];
   error: string | null;
   isDashboardStage: boolean;
@@ -48,6 +49,7 @@ type UseFinanceShellContentParams = {
   onCreateUser: (profileName: string) => void;
   onDeleteAccount: () => void;
   onDeleteApiKeys: (deleteData: boolean) => void;
+  onDeleteProfile: (profile: UserRecord) => void;
   onNextPage: () => void;
   onOpenFilePicker: () => void;
   onPreviousPage: () => void;
@@ -71,6 +73,7 @@ export function useFinanceShellContent({
   activeUser,
   approving,
   createInputRef,
+  deletingProfileId,
   currentTransactions,
   error,
   isDashboardStage,
@@ -97,6 +100,7 @@ export function useFinanceShellContent({
   onCreateUser,
   onDeleteAccount,
   onDeleteApiKeys,
+  onDeleteProfile,
   onNextPage,
   onOpenFilePicker,
   onPreviousPage,
@@ -155,6 +159,7 @@ export function useFinanceShellContent({
     <FinanceShellUserSelectContent
       activeUserId={activeUser?.id ?? null}
       createInputRef={createInputRef}
+      deletingProfileId={deletingProfileId}
       error={error}
       isCreateOpen={showCreateUserSubmenu}
       notice={notice}
@@ -163,6 +168,7 @@ export function useFinanceShellContent({
       users={users}
       onCloseCreate={onCloseCreate}
       onCreateUser={onCreateUser}
+      onDeleteProfile={onDeleteProfile}
       onSelectUser={onSelectUser}
       onSignOut={onSignOut}
       onToggleCreate={onToggleCreate}

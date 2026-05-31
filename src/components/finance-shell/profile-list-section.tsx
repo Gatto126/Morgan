@@ -1,3 +1,5 @@
+import { LoaderCircle, Trash2 } from "lucide-react";
+
 import { ProfileNavButton } from "./profile-nav-button";
 import type { ProfileOption } from "./user-select-panel-types";
 
@@ -5,7 +7,9 @@ import { cn } from "@/shared/utils";
 
 type ProfileListSectionProps<TUser extends ProfileOption> = {
   activeUserId: string | null;
+  deletingProfileId: string | null;
   users: TUser[];
+  onDeleteProfile: (user: TUser) => void;
   onOpenCreate: () => void;
   onSelectUser: (user: TUser) => void;
   onSignOut: () => void;
@@ -13,7 +17,9 @@ type ProfileListSectionProps<TUser extends ProfileOption> = {
 
 export function ProfileListSection<TUser extends ProfileOption>({
   activeUserId,
+  deletingProfileId,
   users,
+  onDeleteProfile,
   onOpenCreate,
   onSelectUser,
   onSignOut
@@ -31,36 +37,58 @@ export function ProfileListSection<TUser extends ProfileOption>({
         <div className="flex max-h-[230px] flex-col gap-2 overflow-y-auto pr-1 hide-scrollbar md:max-h-[270px] md:gap-3">
           {users.map((user) => {
             const isCurrentProfile = activeUserId === user.id;
+            const isDeletingProfile = deletingProfileId === user.id;
 
             return (
-              <button
+              <div
                 key={user.id}
-                aria-disabled={isCurrentProfile ? "true" : undefined}
-                aria-current={isCurrentProfile ? "true" : undefined}
-                className={cn(
-                  "flex w-full select-none items-center justify-between gap-3 rounded-[16px] border bg-[color:var(--surface-panel)] px-4 py-3 text-left text-sm font-semibold text-white transition-colors md:text-base",
-                  isCurrentProfile
-                    ? "cursor-default border-white bg-[color:var(--surface-elevated)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]"
-                    : "cursor-pointer border-[color:var(--line-strong)] hover:bg-[color:var(--surface-elevated)]"
-                )}
-                onClick={() => {
-                  if (!isCurrentProfile) {
-                    onSelectUser(user);
-                  }
-                }}
-                type="button"
+                className="flex w-full items-center gap-2"
               >
-                <span className="min-w-0 truncate">{user.name}</span>
-                {isCurrentProfile ? (
-                  <span className="flex shrink-0 items-center justify-center" title="Active profile">
-                    <span
-                      aria-hidden="true"
-                      className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.55)]"
-                    />
-                    <span className="sr-only">Active profile</span>
-                  </span>
-                ) : null}
-              </button>
+                <button
+                  aria-disabled={isCurrentProfile ? "true" : undefined}
+                  aria-current={isCurrentProfile ? "true" : undefined}
+                  className={cn(
+                    "flex min-w-0 flex-1 select-none items-center justify-between gap-3 rounded-[16px] border bg-[color:var(--surface-panel)] px-4 py-3 text-left text-sm font-semibold text-white transition-colors md:text-base",
+                    isCurrentProfile
+                      ? "cursor-default border-white bg-[color:var(--surface-elevated)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]"
+                      : "cursor-pointer border-[color:var(--line-strong)] hover:bg-[color:var(--surface-elevated)]",
+                    isDeletingProfile ? "opacity-50" : ""
+                  )}
+                  disabled={isDeletingProfile}
+                  onClick={() => {
+                    if (!isCurrentProfile) {
+                      onSelectUser(user);
+                    }
+                  }}
+                  type="button"
+                >
+                  <span className="min-w-0 truncate">{user.name}</span>
+                  {isCurrentProfile ? (
+                    <span className="flex shrink-0 items-center justify-center" title="Active profile">
+                      <span
+                        aria-hidden="true"
+                        className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.55)]"
+                      />
+                      <span className="sr-only">Active profile</span>
+                    </span>
+                  ) : null}
+                </button>
+
+                <button
+                  aria-label={`Delete profile ${user.name}`}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-transparent text-[color:var(--text-dim)] transition-colors hover:border-[color:var(--danger)] hover:text-[color:var(--danger)] disabled:pointer-events-none disabled:opacity-50"
+                  disabled={!!deletingProfileId}
+                  onClick={() => onDeleteProfile(user)}
+                  title="Delete profile"
+                  type="button"
+                >
+                  {isDeletingProfile ? (
+                    <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" strokeWidth={2.2} />
+                  ) : (
+                    <Trash2 aria-hidden="true" className="h-4 w-4" strokeWidth={2.2} />
+                  )}
+                </button>
+              </div>
             );
           })}
         </div>

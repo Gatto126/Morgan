@@ -178,8 +178,10 @@ export function FinanceShell({
   });
   const {
     applyImportedTransactionCounts,
+    deletingProfileId,
     goBackToSelection,
     handleCreateUser,
+    handleDeleteProfile,
     handleToggleCreateUser,
     handleUserSelect,
     hasUsers,
@@ -227,6 +229,7 @@ export function FinanceShell({
     activeUser,
     approving,
     createInputRef: createUserInputRef,
+    deletingProfileId,
     currentTransactions,
     error,
     isDashboardStage,
@@ -253,6 +256,7 @@ export function FinanceShell({
     onCreateUser: (profileName) => void handleCreateUser(profileName),
     onDeleteAccount: openDeleteAccountConfirm,
     onDeleteApiKeys: (deleteData) => void handleDeleteApiKeys(deleteData),
+    onDeleteProfile: (profile) => void handleDeleteProfile(profile),
     onNextPage: goToNextPage,
     onOpenFilePicker: openFilePicker,
     onPreviousPage: goToPreviousPage,

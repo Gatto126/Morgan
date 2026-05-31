@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { SettingsSection } from "./settings-panel-types";
 import type { UserRecord } from "./types";
 import { useFinanceProfileCreation } from "./use-finance-profile-creation";
+import { useFinanceProfileDeletion } from "./use-finance-profile-deletion";
 import { useFinanceProfilePersistence } from "./use-finance-profile-persistence";
 import { useFinanceProfileSelection } from "./use-finance-profile-selection";
 import { useFinanceProfileTransactionCounts } from "./use-finance-profile-transaction-counts";
@@ -125,11 +126,33 @@ export function useFinanceProfiles({
     setShowUserSelectView,
     setStage
   });
+  const {
+    deletingProfileId,
+    handleDeleteProfile
+  } = useFinanceProfileDeletion({
+    activeUser,
+    users,
+    clearApiKeyDraft,
+    clearPanelFeedback,
+    resetPreview,
+    setActiveSettingsSection,
+    setActiveUser,
+    setError,
+    setNotice,
+    setShowCreateUserSubmenu,
+    setShowSettingsView,
+    setShowUploadView,
+    setShowUserSelectView,
+    setStage,
+    setUsers
+  });
 
   return {
     applyImportedTransactionCounts,
+    deletingProfileId,
     goBackToSelection,
     handleCreateUser,
+    handleDeleteProfile,
     handleToggleCreateUser,
     handleUserSelect,
     hasUsers,
