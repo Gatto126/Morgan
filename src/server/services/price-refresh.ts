@@ -236,6 +236,7 @@ function fetchLivePrice(isin: string, timeoutMs = 6_000, logger: PriceLogger = l
 
 async function fetchBinanceTickerPrice(binanceSymbol: string, timeoutMs: number) {
   const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${binanceSymbol}`, {
+    cache: "no-store",
     signal: AbortSignal.timeout(timeoutMs)
   });
 

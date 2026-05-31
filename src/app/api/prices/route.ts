@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authGuardResponse, requireAuth } from "@/server/auth/auth-guard";
-import { privateJson } from "@/server/api/cache-control";
+import { privateNoStoreJson } from "@/server/api/cache-control";
 import { internalServerErrorResponse } from "@/server/api/error-response";
 import { apiLogger } from "@/server/logging/logger";
 import {
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       payloadBytes: getJsonSizeBytesIfTracing(trace, prices),
       status: 200
     });
-    return privateJson(prices, { maxAgeSeconds: 60, staleWhileRevalidateSeconds: 300 });
+    return privateNoStoreJson(prices);
   } catch (error) {
     if (error instanceof PriceRequestValidationError) {
       log.response("GET", endpoint, error.status, { error: error.message });

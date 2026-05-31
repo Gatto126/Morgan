@@ -33,3 +33,17 @@ export function privateJson<TBody>(
     headers
   });
 }
+
+export function privateNoStoreJson<TBody>(
+  body: TBody,
+  init?: ResponseInit
+) {
+  const headers = new Headers(init?.headers);
+  headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+  headers.set("Vary", "Cookie");
+
+  return NextResponse.json(body, {
+    ...init,
+    headers
+  });
+}

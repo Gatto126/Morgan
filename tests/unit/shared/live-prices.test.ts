@@ -17,6 +17,14 @@ function clearLivePriceCache() {
   }
 }
 
+const livePriceFetchOptions = {
+  cache: "no-store",
+  headers: {
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache"
+  }
+};
+
 describe("live price client cache", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -50,7 +58,10 @@ describe("live price client cache", () => {
     });
 
     expect(globalLivePricesCache.BTC).toBe(62000);
-    expect(fetchMock).toHaveBeenCalledWith("/api/prices?isins=IE00B4L5Y983&cryptos=BTC");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/prices?isins=IE00B4L5Y983&cryptos=BTC",
+      livePriceFetchOptions
+    );
   });
 
   it("reuses fresh cached prices without another request", async () => {
@@ -86,7 +97,7 @@ describe("live price client cache", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(fetchMock).toHaveBeenCalledWith("/api/prices?cryptos=ETH");
+    expect(fetchMock).toHaveBeenCalledWith("/api/prices?cryptos=ETH", livePriceFetchOptions);
     vi.useRealTimers();
   });
 
@@ -132,7 +143,10 @@ describe("live price client cache", () => {
 
     await Promise.resolve();
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(fetchMock).toHaveBeenCalledWith("/api/prices?isins=IE00B4L5Y983&cryptos=BTC%2CETH");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/prices?isins=IE00B4L5Y983&cryptos=BTC%2CETH",
+      livePriceFetchOptions
+    );
 
     resolveJson({
       BTC: 62000,

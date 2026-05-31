@@ -14,7 +14,8 @@ type UsePortfolioLivePricesOptions = {
   shouldLoad: boolean;
 };
 
-const livePriceValueMaxAgeMs = 15_000;
+const livePriceValueMaxAgeMs = 10_000;
+const livePriceRefreshIntervalMs = 15_000;
 
 function getRequiredPriceKeys(providers: PortfolioProviderSummary[] | undefined) {
   if (!providers) {
@@ -111,7 +112,7 @@ export function usePortfolioLivePrices({
 
     const interval = window.setInterval(() => {
       void fetchLivePrices(providers);
-    }, 60_000);
+    }, livePriceRefreshIntervalMs);
 
     const handleFocus = () => {
       void fetchLivePrices(providers);

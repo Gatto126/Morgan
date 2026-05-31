@@ -10,7 +10,8 @@ type UseDashboardLivePricesOptions = {
   shouldLoad: boolean;
 };
 
-const livePriceValueMaxAgeMs = 15_000;
+const livePriceValueMaxAgeMs = 10_000;
+const livePriceRefreshIntervalMs = 15_000;
 
 function getPriceRequestKey(summaries: ProviderSummary[] | undefined) {
   if (!summaries) {
@@ -138,7 +139,7 @@ export function useDashboardLivePrices(
     }, 0);
     const interval = window.setInterval(() => {
       void fetchLivePrices(providerSummaries);
-    }, 60_000);
+    }, livePriceRefreshIntervalMs);
     const handleFocus = () => {
       void fetchLivePrices(providerSummaries);
     };

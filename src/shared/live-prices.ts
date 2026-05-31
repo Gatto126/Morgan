@@ -5,6 +5,13 @@ export const globalLivePricesCacheUpdatedAt: Record<string, number> = {};
 
 const inFlightPriceKeyRequests = new Map<string, Promise<Record<string, number | null>>>();
 const DEFAULT_LIVE_PRICE_CACHE_MAX_AGE_MS = 60_000;
+const livePriceFetchOptions: RequestInit = {
+  cache: "no-store",
+  headers: {
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache"
+  }
+};
 
 export function saveLivePricesToCache(prices: Record<string, number | null>) {
   const now = Date.now();
@@ -152,7 +159,7 @@ export async function fetchAndCacheLivePrices(
       params.set("cryptos", missingCryptos.join(","));
     }
 
-    const requestPromise = fetch(`/api/prices?${params.toString()}`)
+    const requestPromise = fetch(`/api/prices?${params.toString()}`, livePriceFetchOptions)
       .then(async (response) => {
         if (!response.ok) {
           return {};
