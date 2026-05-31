@@ -51,13 +51,20 @@ export function DashboardTopbarTab({
         : current
     ));
   };
-  const { amount, currency } = getDashboardTopbarValueParts(value);
+  const valuePending = value === "--" || value === "-";
+  const displayValue = valuePending ? "0,00 \u20ac" : value;
+  const { amount, currency } = getDashboardTopbarValueParts(displayValue);
   const showEuroIcon = currency === "EUR" || currency === "\u20ac";
   const hasTextIdentity = !!label;
   const valueClassName = cn(
     "dashboard-topbar-value flex h-5 shrink-0 items-center justify-end overflow-hidden whitespace-nowrap text-right font-extrabold leading-none text-white tabular-nums",
     hasTextIdentity ? "w-[72px]" : "w-[82px] sm:w-[86px]",
-    getDashboardTopbarValueTextClass(value)
+    valuePending && "opacity-0",
+    getDashboardTopbarValueTextClass(displayValue)
+  );
+  const currencyClassName = cn(
+    "dashboard-topbar-currency flex h-5 w-4 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap text-[11px] font-extrabold leading-none text-white",
+    valuePending && "opacity-0"
   );
 
   return (
@@ -89,7 +96,7 @@ export function DashboardTopbarTab({
           ) : null}
         </span>
         <span className={cn("dashboard-topbar-money flex h-5 shrink-0 items-center justify-end gap-1.5", hasTextIdentity ? "w-[94px]" : "w-[104px] sm:w-[108px]")}>
-          <span className={valueClassName} title={value}>
+          <span aria-hidden={valuePending ? "true" : undefined} className={valueClassName} title={valuePending ? undefined : value}>
             <SlotValue
               animateChanges={animateChanges}
               identityKey={valueIdentity}
@@ -97,7 +104,7 @@ export function DashboardTopbarTab({
               value={amount}
             />
           </span>
-          <span className="dashboard-topbar-currency flex h-5 w-4 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap text-[11px] font-extrabold leading-none text-white" title={currency}>
+          <span aria-hidden={valuePending ? "true" : undefined} className={currencyClassName} title={valuePending ? undefined : currency}>
             {showEuroIcon ? (
               <Euro aria-hidden="true" className="dashboard-topbar-currency-icon block h-4 w-4 -translate-y-px text-white" stroke="white" strokeWidth={2.4} />
             ) : currency}

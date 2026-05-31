@@ -170,13 +170,23 @@ function preferStableTopbarItems(
   cachedItems: DashboardTopbarItem[],
   fallbackItems: DashboardTopbarItem[]
 ) {
-  const stableFallbackItems = cachedItems.length > fallbackItems.length ? cachedItems : fallbackItems;
+  const stableFallbackItems = cachedItems.length > 0 && hasAnyConcreteTopbarValue(cachedItems)
+    ? cachedItems
+    : fallbackItems;
 
-  if (entryItems.length >= stableFallbackItems.length && entryItems.length > 0) {
+  if (
+    entryItems.length >= stableFallbackItems.length
+    && entryItems.length > 0
+    && hasAnyConcreteTopbarValue(entryItems)
+  ) {
     return entryItems;
   }
 
-  if (storedItems.length >= stableFallbackItems.length && storedItems.length > 0) {
+  if (
+    storedItems.length >= stableFallbackItems.length
+    && storedItems.length > 0
+    && hasAnyConcreteTopbarValue(storedItems)
+  ) {
     return storedItems;
   }
 
@@ -201,6 +211,10 @@ function getFallbackIcon(activeStage: DashboardStageKey, item: DashboardTopbarIt
 
 function hasConcreteTopbarValue(item: DashboardTopbarItem) {
   return item.value !== "--" && item.value !== "-";
+}
+
+function hasAnyConcreteTopbarValue(items: DashboardTopbarItem[]) {
+  return items.some(hasConcreteTopbarValue);
 }
 
 export function DashboardTopbarShell({
@@ -238,15 +252,13 @@ export function DashboardTopbarShell({
     [activeStage, rawItems]
   );
 
-  const visibleItems = items.filter(hasConcreteTopbarValue);
-
-  if (!activeUser || !isDashboardStage || visibleItems.length === 0) {
+  if (!activeUser || !isDashboardStage || items.length === 0) {
     return null;
   }
 
   return (
     <div className="dashboard-topbar-shell flex items-center gap-2">
-      {visibleItems.map((item, index) => (
+      {items.map((item, index) => (
         <DashboardTopbarTab
           active={item.active}
           ariaLabel={item.ariaLabel}
