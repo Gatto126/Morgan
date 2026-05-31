@@ -67,14 +67,32 @@ function serializeItems(items: DashboardTopbarItem[]): StoredDashboardTopbarItem
 
 function writeStoredTopbarItems(cacheKey: string, items: DashboardTopbarItem[]) {
   const storage = getSessionStorage();
-  if (!storage || items.length === 0) {
+  if (!storage) {
     return;
   }
 
   try {
+    if (items.length === 0) {
+      storage.removeItem(`${storagePrefix}${cacheKey}`);
+      return;
+    }
+
     storage.setItem(`${storagePrefix}${cacheKey}`, JSON.stringify(serializeItems(items)));
   } catch {
     // Persistent layout is best-effort; the in-memory store still covers same-page navigation.
+  }
+}
+
+function removeStoredTopbarItems(cacheKey: string) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.removeItem(`${storagePrefix}${cacheKey}`);
+  } catch {
+    // Clearing persisted layout is best-effort.
   }
 }
 
@@ -166,7 +184,9 @@ export function seedDashboardTopbarLayout(
 }
 
 export function clearDashboardTopbar(stage: DashboardStageKey, userId: string) {
-  entries.delete(getEntryKey(userId, stage));
+  const cacheKey = getEntryKey(userId, stage);
+  entries.delete(cacheKey);
+  removeStoredTopbarItems(cacheKey);
   emitTopbarChange();
 }
 

@@ -12,6 +12,7 @@ import {
   useDashboardTopbarEntry,
   type DashboardTopbarItem
 } from "./dashboard-topbar-store";
+import { hasDashboardStageTopbarData } from "./dashboard-topbar-visibility";
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
 
@@ -48,6 +49,10 @@ function getAbbreviatedLabel(label: string) {
 
 function getDashboardFallbackItems(activeUser: UserRecord, activeStage: DashboardStageKey): DashboardTopbarItem[] {
   if (activeStage === "dashboard") {
+    if (!hasDashboardStageTopbarData(activeUser, activeStage)) {
+      return [];
+    }
+
     const items: DashboardTopbarItem[] = [
       {
         active: true,
@@ -94,11 +99,11 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
   if (activeStage === "binance") {
     return [{
       active: true,
-    icon: Bitcoin,
-    id: "binance",
-    label: "BINANCE",
-    value: fallbackValue
-  }];
+      icon: Bitcoin,
+      id: "binance",
+      label: "BINANCE",
+      value: fallbackValue
+    }];
   }
 
   return [{
@@ -213,20 +218,23 @@ export function DashboardTopbarShell({
   const activeStage = activeUser && isDashboardStage
     ? resolveVisibleDashboardStage(stage, activeUser)
     : null;
-  const entry = useDashboardTopbarEntry(activeUser?.id ?? null, activeStage);
+  const hasTopbarData = activeUser && activeStage
+    ? hasDashboardStageTopbarData(activeUser, activeStage)
+    : false;
+  const entry = useDashboardTopbarEntry(hasTopbarData ? activeUser?.id ?? null : null, hasTopbarData ? activeStage : null);
   const fallbackItems = useMemo(
-    () => activeUser && activeStage ? getDashboardFallbackItems(activeUser, activeStage) : [],
-    [activeStage, activeUser]
+    () => activeUser && activeStage && hasTopbarData ? getDashboardFallbackItems(activeUser, activeStage) : [],
+    [activeStage, activeUser, hasTopbarData]
   );
   const cachedItems = useMemo(
-    () => activeUser && activeStage ? getCachedStageTopbarItems(activeUser, activeStage) : [],
-    [activeStage, activeUser]
+    () => activeUser && activeStage && hasTopbarData ? getCachedStageTopbarItems(activeUser, activeStage) : [],
+    [activeStage, activeUser, hasTopbarData]
   );
   const storedItems = useMemo(
-    () => activeUser && activeStage
+    () => activeUser && activeStage && hasTopbarData
       ? readStoredDashboardTopbarItems(activeStage, activeUser.id, { placeholderValues: true })
       : [],
-    [activeStage, activeUser]
+    [activeStage, activeUser, hasTopbarData]
   );
 
   const rawItems = preferStableTopbarItems(entry.items, storedItems, cachedItems, fallbackItems);
@@ -240,7 +248,7 @@ export function DashboardTopbarShell({
     [activeStage, rawItems]
   );
 
-  if (!activeUser || !isDashboardStage || items.length === 0) {
+  if (!activeUser || !isDashboardStage || !hasTopbarData || items.length === 0) {
     return null;
   }
 

@@ -373,6 +373,14 @@ describe("dashboard chart display model", () => {
     expect(getVisibleDashboardTabs({
       checkingCount: 0,
       cryptoCount: 0,
+      hasBinancePortfolio: false,
+      investmentCount: 0,
+      transactionCount: 0
+    }).map((tab) => tab.key)).toEqual([]);
+
+    expect(getVisibleDashboardTabs({
+      checkingCount: 0,
+      cryptoCount: 0,
       hasBinancePortfolio: true,
       investmentCount: 0,
       transactionCount: 0

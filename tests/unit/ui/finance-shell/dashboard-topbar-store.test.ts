@@ -110,4 +110,18 @@ describe("dashboard topbar store", () => {
       value: "--"
     }]);
   });
+
+  it("clears persisted topbar layout when publishing an empty topbar", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "123,45 \u20ac"
+    }]);
+    store.publishDashboardTopbar("dashboard", "user-1", []);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+  });
 });
