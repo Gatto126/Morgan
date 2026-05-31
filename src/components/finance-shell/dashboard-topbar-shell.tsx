@@ -251,7 +251,7 @@ export function DashboardTopbarShell({
           active={item.active}
           ariaLabel={item.ariaLabel}
           icon={item.icon}
-          key={`topbar-slot-${item.id || index}`}
+          key={`topbar-slot-${index}`}
           label={item.label}
           onClick={item.onClick}
           suppressInitialChanges={item.suppressInitialChanges}

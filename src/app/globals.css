@@ -171,6 +171,11 @@ button.dashboard-topbar-tab[data-active="false"]:hover {
   color: var(--text-dim) !important;
 }
 
+button.dashboard-topbar-tab[data-active="false"][data-hovered="true"]:hover {
+  border-color: #D9D9D9 !important;
+  color: #D9D9D9 !important;
+}
+
 button.dashboard-topbar-tab[data-active="true"],
 button.dashboard-topbar-tab[data-active="true"]:hover {
   border-color: #FFFFFF !important;
@@ -182,6 +187,11 @@ button.dashboard-topbar-tab:hover .dashboard-topbar-identity-icon {
   color: #4C4C4C !important;
   stroke: #4C4C4C !important;
   transition: none !important;
+}
+
+button.dashboard-topbar-tab[data-active="false"][data-hovered="true"]:hover .dashboard-topbar-identity-icon {
+  color: #D9D9D9 !important;
+  stroke: #D9D9D9 !important;
 }
 
 button.dashboard-topbar-tab[data-active="true"] .dashboard-topbar-identity-icon,

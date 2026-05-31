@@ -1,5 +1,6 @@
 import { Euro } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useState } from "react";
 
 import { cn } from "@/shared/utils";
 
@@ -33,6 +34,23 @@ export function DashboardTopbarTab({
   value,
   valueIdentity
 }: DashboardTopbarTabProps) {
+  const hoverIdentity = `${active ? "active" : "idle"}:${label ?? ""}:${valueIdentity ?? ""}`;
+  const [pointerHoverState, setPointerHoverState] = useState({ hovered: false, identity: hoverIdentity });
+  const isPointerHovering = pointerHoverState.hovered && pointerHoverState.identity === hoverIdentity;
+  const markPointerHover = () => {
+    setPointerHoverState((current) => (
+      current.hovered && current.identity === hoverIdentity
+        ? current
+        : { hovered: true, identity: hoverIdentity }
+    ));
+  };
+  const clearPointerHover = () => {
+    setPointerHoverState((current) => (
+      current.hovered
+        ? { hovered: false, identity: hoverIdentity }
+        : current
+    ));
+  };
   const { amount, currency } = getDashboardTopbarValueParts(value);
   const showEuroIcon = currency === "EUR" || currency === "\u20ac";
   const hasTextIdentity = !!label;
@@ -54,7 +72,10 @@ export function DashboardTopbarTab({
           : "border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--text-dim)]"
       )}
       data-active={active ? "true" : "false"}
+      data-hovered={isPointerHovering ? "true" : "false"}
       onClick={active ? undefined : onClick}
+      onPointerLeave={clearPointerHover}
+      onPointerMove={markPointerHover}
       type="button"
     >
       <span className="dashboard-topbar-line flex h-5 w-full min-w-0 items-center justify-center gap-3">
