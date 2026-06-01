@@ -41,7 +41,7 @@ not required for the first deployment.
 The repository already includes:
 
 - `vercel.json` with `pnpm run vercel-build`;
-- production Prisma migration command in `vercel-build`;
+- a separate `pnpm run db:migrate` command for applying committed Prisma migrations;
 - production runtime config validation;
 - release gate: `pnpm run release:check`.
 
@@ -128,8 +128,12 @@ After Vercel deploys:
 5. Import one small BBVA or Trade Republic sample locally only if you are
    comfortable storing that test data in Neon.
 6. Delete the test account from Settings.
-7. Check Vercel logs for startup or migration errors.
+7. Check Vercel logs for startup errors.
 8. Check Neon usage and confirm storage/compute remain low.
+
+Run `pnpm run db:migrate` against the target Neon database only when a release
+contains new Prisma migrations. Keeping migrations out of `vercel-build`
+prevents transient database connectivity from failing code-only deploys.
 
 ## What Not To Enable Yet
 

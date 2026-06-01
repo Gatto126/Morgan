@@ -92,9 +92,10 @@ anyone who should no longer be able to create accounts.
 pnpm run vercel-build
 ```
 
-That script generates the Prisma client, applies committed migrations with
-`prisma migrate deploy --schema=prisma/schema.prisma`, and then runs
-`next build`.
+That script generates the Prisma client and runs `next build`. Apply committed
+database migrations separately with `pnpm run db:migrate` before or after the
+deploy when a release includes Prisma migration files. This keeps Vercel builds
+from failing on transient database connectivity during code-only releases.
 
 Useful local Vercel checks:
 
