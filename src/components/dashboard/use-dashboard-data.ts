@@ -59,6 +59,16 @@ export function useDashboardData({
   const pendingImportRefreshRef = useRef(false);
   const lastRefreshTransactionCountRef = useRef(transactionCount);
   const hasLoadedRef = useRef(!!initialData);
+  const cachedDataForCurrentVersion = freshDataVersion === transactionCount
+    ? null
+    : readDashboardStageDataCache("dashboard", userId, transactionCount);
+  const effectiveData = cachedDataForCurrentVersion ?? data;
+  const effectiveDataFresh =
+    !!effectiveData
+    && (
+      !!cachedDataForCurrentVersion
+      || (hasFreshData && freshDataVersion === transactionCount)
+    );
 
   const applyDashboardPayload = useCallback((payload: DashboardData) => {
     const currentKeys = getProviderKeys(payload.providerSummaries);
@@ -209,11 +219,11 @@ export function useDashboardData({
   ]);
 
   return {
-    data,
+    data: effectiveData,
     dataVersion,
-    dataFresh: !!data && hasFreshData && freshDataVersion === transactionCount,
+    dataFresh: effectiveDataFresh,
     importRefreshVersion,
-    loading,
+    loading: cachedDataForCurrentVersion ? false : loading,
     error,
     newProviderKeys
   };

@@ -43,7 +43,7 @@ export function CheckingDashboard({
   userSelectElement,
   onImportRefreshComplete
 }: CheckingDashboardProps) {
-  const { data, loading, error, importRefreshVersion } = useCheckingDashboardData({
+  const { data, dataFresh, loading, error, importRefreshVersion } = useCheckingDashboardData({
     userId,
     transactionCount,
     isActive,
@@ -191,7 +191,7 @@ export function CheckingDashboard({
         activeTab={activeTab}
         activePoint={currentDisplayPoint}
         isTooltipActive={!!activeChartPoint}
-        valuesKnown={!!data}
+        valuesKnown={!!data && dataFresh}
         userId={userId}
         onSelectTab={setActiveTab}
       />
@@ -243,7 +243,7 @@ export function CheckingDashboard({
         portalNode={cardsPortalNode}
         providers={data.providers}
         currentPoint={todayChartPoint}
-        valuesKnown={!!data}
+        valuesKnown={!!data && dataFresh}
         userId={userId}
         isActive={isActive}
       />

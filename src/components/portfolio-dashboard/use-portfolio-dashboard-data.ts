@@ -43,6 +43,16 @@ export function usePortfolioDashboardData({
   const pendingImportRefreshRef = useRef(false);
   const lastRefreshTransactionCountRef = useRef(transactionCount);
   const hasLoadedRef = useRef(!!initialData);
+  const cachedDataForCurrentVersion = freshDataVersion === transactionCount
+    ? null
+    : readDashboardStageDataCache(stage, userId, transactionCount);
+  const effectiveData = cachedDataForCurrentVersion ?? data;
+  const effectiveDataFresh =
+    !!effectiveData
+    && (
+      !!cachedDataForCurrentVersion
+      || (hasFreshData && freshDataVersion === transactionCount)
+    );
 
   const applyPortfolioPayload = useCallback((payload: PortfolioData) => {
     const currentKeys = new Set(payload.providers.map((provider) => provider.sourceInstitution));
@@ -61,7 +71,16 @@ export function usePortfolioDashboardData({
     setDataVersion(version => version + 1);
     setError(null);
     setLoading(false);
-  }, [transactionCount]);
+  }, [
+    setData,
+    setDataVersion,
+    setError,
+    setFreshDataVersion,
+    setHasFreshData,
+    setLoading,
+    setNewProviderKeys,
+    transactionCount
+  ]);
 
   const fetchDashboard = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     try {
@@ -82,7 +101,17 @@ export function usePortfolioDashboardData({
         setImportRefreshVersion(version => version + 1);
       }
     }
-  }, [applyPortfolioPayload, fetchErrorMessage, stage, transactionCount, userId]);
+  }, [
+    applyPortfolioPayload,
+    fetchErrorMessage,
+    setData,
+    setError,
+    setImportRefreshVersion,
+    setLoading,
+    stage,
+    transactionCount,
+    userId
+  ]);
   const fetchDashboardIfStale = useCallback(() => {
     if (!isDashboardStageDataCacheFresh(stage, userId, transactionCount)) {
       void fetchDashboard({ force: true });
@@ -180,9 +209,9 @@ export function usePortfolioDashboardData({
   ]);
 
   return {
-    data,
-    dataFresh: !!data && hasFreshData && freshDataVersion === transactionCount,
-    loading,
+    data: effectiveData,
+    dataFresh: effectiveDataFresh,
+    loading: cachedDataForCurrentVersion ? false : loading,
     error,
     dataVersion,
     importRefreshVersion,

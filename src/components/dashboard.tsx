@@ -88,7 +88,7 @@ export function Dashboard({
     shouldLoad,
     binanceRefreshKey
   });
-  const { data, loading, error, importRefreshVersion } = useDashboardData({
+  const { data, dataFresh, loading, error, importRefreshVersion } = useDashboardData({
     userId,
     isActive,
     shouldLoad,
@@ -112,7 +112,7 @@ export function Dashboard({
     [liveBinanceBalances]
   );
   const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0;
-  const dashboardValuesKnown = !!data && (!hasBinanceCredentials || binanceBalancesKnown);
+  const dashboardValuesKnown = !!data && dataFresh && (!hasBinanceCredentials || binanceBalancesKnown);
   const requiresInitialUpload = transactionCount === 0 && !hasBinancePortfolio;
   const shouldShowUploadPanel = showUploadView && !showSettingsView && !showUserSelectView;
   const cardsPortalNode = usePortalNode("dashboard-cards-portal");

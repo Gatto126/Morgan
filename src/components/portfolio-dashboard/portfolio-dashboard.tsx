@@ -51,7 +51,7 @@ export function PortfolioDashboard({
   binanceRefreshKey = 0,
   hasBinanceCredentials = false
 }: PortfolioDashboardProps) {
-  const { data, loading, error, importRefreshVersion } = usePortfolioDashboardData({
+  const { data, dataFresh, loading, error, importRefreshVersion } = usePortfolioDashboardData({
     endpoint: config.endpoint,
     fetchErrorMessage: config.fetchErrorMessage,
     userId,
@@ -242,7 +242,7 @@ export function PortfolioDashboard({
         activePoint={currentDisplayPoint}
         isTooltipActive={!!activeChartPoint}
         rootIcon={config.rootIcon}
-        valuesKnown={!!dataForDisplay && (!!activeChartPoint || (isCryptoDashboard ? cryptoValuesKnown : pricesReady))}
+        valuesKnown={!!dataForDisplay && dataFresh && (!!activeChartPoint || (isCryptoDashboard ? cryptoValuesKnown : pricesReady))}
         stage={dashboardStage}
         userId={userId}
         onSelectTab={setActiveTab}
@@ -299,7 +299,7 @@ export function PortfolioDashboard({
         providers={data?.providers ?? []}
         config={config}
         currentPoint={todayChartPoint}
-        valuesKnown={isCryptoDashboard ? cryptoValuesKnown : pricesReady}
+        valuesKnown={dataFresh && (isCryptoDashboard ? cryptoValuesKnown : pricesReady)}
         livePrices={livePrices}
         isActive={isActive}
         transactionRowsEndpoint={`${config.endpoint}/rows`}
