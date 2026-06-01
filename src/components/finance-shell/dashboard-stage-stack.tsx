@@ -226,6 +226,8 @@ export function DashboardStageStack({
           shouldLoad={isActiveCryptoStageVisible}
           key={`crypto-${activeUser.id}`}
           userId={activeUser.id}
+          binanceRefreshKey={binanceRefreshKey}
+          hasBinanceCredentials={activeUser.hasBinanceCredentials}
           onImportRefreshComplete={stage === "crypto" ? onImportRefreshComplete : undefined}
           transactionCount={activeUser.cryptoCount}
         />

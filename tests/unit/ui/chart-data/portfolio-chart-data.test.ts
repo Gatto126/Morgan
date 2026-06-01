@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { mergePortfolioDataWithBinance } from "@/components/portfolio-dashboard/binance-portfolio-provider";
 import { buildPortfolioChartData, getPortfolioXAxisTicks } from "@/components/portfolio-dashboard/chart-data";
 import type { PortfolioData, PortfolioProviderSummary } from "@/components/portfolio-dashboard/types";
 
@@ -103,6 +104,38 @@ describe("portfolio chart data", () => {
       "iShares Core MSCI World UCITS ETF USD (Acc)": 42000,
       balance: 42000,
       heritage: 42000,
+      trade_republic: 42000
+    });
+  });
+
+  it("adds Binance balances to the crypto current point and provider series", () => {
+    const dataWithBinance = mergePortfolioDataWithBinance(portfolioData, [{
+      eurValue: 250.25,
+      freeAmount: 0.003,
+      lockedAmount: 0.001,
+      tokenName: "Bitcoin",
+      tokenSymbol: "BTC"
+    }]);
+    const binanceProvider = dataWithBinance.providers.find((item) => item.sourceInstitution === "BINANCE");
+    const points = buildPortfolioChartData({
+      activeProvider: binanceProvider ?? null,
+      activeTab: "BINANCE",
+      data: dataWithBinance,
+      livePrices: {
+        BTC: 70000,
+        IE00B4L5Y983: 120
+      },
+      timeRange: "ALL",
+      todayKey: "2026-03-15"
+    });
+    const todayPoint = points.find((point) => point.rawMonth === "2026-03-15");
+
+    expect(binanceProvider?.total).toBe(25025);
+    expect(todayPoint).toMatchObject({
+      "Bitcoin (BTC)": 28000,
+      balance: 28000,
+      BINANCE: 28000,
+      heritage: 70000,
       trade_republic: 42000
     });
   });

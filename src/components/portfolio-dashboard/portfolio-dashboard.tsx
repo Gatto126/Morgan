@@ -5,8 +5,11 @@ import { cn } from "@/shared/utils";
 import type { ChartPoint } from "@/types/chart";
 import { DashboardPanelHost } from "@/components/dashboard-panel-host";
 import { DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "@/components/dashboard/dashboard-status";
+import { applyLiveBinanceBalanceValues } from "@/components/dashboard/binance-live-values";
+import { useBinanceBalances } from "@/components/dashboard/use-binance-balances";
 import { buildPortfolioChartData, getPortfolioXAxisTicks } from "./chart-data";
 import { formatProviderLabel } from "./formatters";
+import { mergePortfolioDataWithBinance } from "./binance-portfolio-provider";
 import { PortfolioChart } from "./portfolio-chart";
 import { getPortfolioPointValue } from "./portfolio-current-point";
 import { PortfolioDashboardTabs } from "./portfolio-dashboard-tabs";
@@ -44,7 +47,9 @@ export function PortfolioDashboard({
   isClosingUserSelect = false,
   onCloseUserSelect,
   userSelectElement,
-  onImportRefreshComplete
+  onImportRefreshComplete,
+  binanceRefreshKey = 0,
+  hasBinanceCredentials = false
 }: PortfolioDashboardProps) {
   const { data, loading, error, importRefreshVersion } = usePortfolioDashboardData({
     endpoint: config.endpoint,
@@ -67,15 +72,44 @@ export function PortfolioDashboard({
   const completedImportRefreshVersionRef = useRef(0);
   const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
   const isMobile = useIsMobile();
+  const isCryptoDashboard = config.priceQueryParam === "cryptos";
+  const {
+    binanceBalances,
+    binanceBalancesKnown,
+    isBinanceSyncing,
+    filterSmallBinance,
+    setFilterSmallBinance,
+    binanceListRef
+  } = useBinanceBalances({
+    binanceRefreshKey,
+    isActive: isActive && isCryptoDashboard,
+    shouldLoad: shouldLoad && isCryptoDashboard,
+    userId
+  });
+  const dataForPriceKeys = useMemo(
+    () => data && isCryptoDashboard ? mergePortfolioDataWithBinance(data, binanceBalances) : data,
+    [binanceBalances, data, isCryptoDashboard]
+  );
   const { livePrices, pricesReady } = usePortfolioLivePrices({
-    providers: data?.providers,
+    binanceBalances: isCryptoDashboard ? binanceBalances : undefined,
+    providers: dataForPriceKeys?.providers,
     priceQueryParam: config.priceQueryParam,
     isActive,
     shouldLoad: shouldLoad && !!data
   });
+  const liveBinanceBalances = useMemo(
+    () => isCryptoDashboard ? applyLiveBinanceBalanceValues(binanceBalances, livePrices) : [],
+    [binanceBalances, isCryptoDashboard, livePrices]
+  );
+  const dataForDisplay = useMemo(
+    () => data && isCryptoDashboard ? mergePortfolioDataWithBinance(data, liveBinanceBalances) : data,
+    [data, isCryptoDashboard, liveBinanceBalances]
+  );
   const [activeChartPoint, setActiveChartPoint] = useState<ChartPoint | null>(null);
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
   const todayKey = useMemo(() => getTodayKey(), []);
+  const hasBinancePortfolio = isCryptoDashboard && (hasBinanceCredentials || liveBinanceBalances.length > 0);
+  const cryptoValuesKnown = pricesReady && (!hasBinancePortfolio || binanceBalancesKnown);
 
   useEffect(() => {
     onImportRefreshCompleteRef.current = onImportRefreshComplete;
@@ -89,21 +123,21 @@ export function PortfolioDashboard({
   const dashboardStage = config.endpoint.includes("/crypto") ? "crypto" : "investment";
 
   const activeProvider = useMemo(() => {
-    return data?.providers.find(p => p.sourceInstitution === activeTab) || null;
-  }, [data, activeTab]);
+    return dataForDisplay?.providers.find(p => p.sourceInstitution === activeTab) || null;
+  }, [dataForDisplay, activeTab]);
 
   const chartData = useMemo(() => {
-    if (!data) return [];
+    if (!dataForDisplay) return [];
     return buildPortfolioChartData({
       activeProvider,
       activeTab,
-      applyLiveToday: pricesReady,
-      data,
+      applyLiveToday: isCryptoDashboard ? cryptoValuesKnown : pricesReady,
+      data: dataForDisplay,
       livePrices,
       timeRange,
       todayKey
     });
-  }, [data, activeTab, timeRange, activeProvider, livePrices, pricesReady, todayKey]);
+  }, [activeProvider, activeTab, cryptoValuesKnown, dataForDisplay, isCryptoDashboard, livePrices, pricesReady, timeRange, todayKey]);
   const todayChartPoint = useMemo(
     () => chartData.find((point) => point.rawMonth === todayKey) ?? chartData[chartData.length - 1] ?? null,
     [chartData, todayKey]
@@ -115,12 +149,12 @@ export function PortfolioDashboard({
   }, [chartData]);
 
   const hasRenderableChartData = useMemo(() => {
-    if (!data) {
+    if (!dataForDisplay) {
       return false;
     }
 
     const seriesKeys = activeTab === "ALL"
-      ? ["heritage", ...data.providers.map((provider) => provider.sourceInstitution)]
+      ? ["heritage", ...dataForDisplay.providers.map((provider) => provider.sourceInstitution)]
       : ["balance", ...(activeProvider?.products.map((product) => product.productName) ?? [])];
 
     return chartData.some((point) =>
@@ -129,13 +163,13 @@ export function PortfolioDashboard({
         return typeof value === "number" && Number.isFinite(value);
       })
     );
-  }, [activeProvider, activeTab, chartData, data]);
+  }, [activeProvider, activeTab, chartData, dataForDisplay]);
 
   const allTotal = getPortfolioPointValue(todayChartPoint, "ALL") ?? 0;
-  const tabs: PortfolioDashboardTab[] = data
+  const tabs: PortfolioDashboardTab[] = dataForDisplay
     ? [
         { key: "ALL", label: config.rootLabel, total: allTotal },
-        ...data.providers.map(p => ({
+        ...dataForDisplay.providers.map(p => ({
           key: p.sourceInstitution,
           label: formatProviderLabel(p.sourceInstitution),
           total: getPortfolioPointValue(todayChartPoint, p.sourceInstitution) ?? 0
@@ -145,9 +179,9 @@ export function PortfolioDashboard({
 
   const effectiveChartReady = !isPanelOpen && chartReady;
   const initialVisualReady =
-    !!data && !loading && (isPanelOpen || (effectiveChartReady && hasRenderableChartData));
+    !!dataForDisplay && !loading && (isPanelOpen || (effectiveChartReady && hasRenderableChartData));
   const importRefreshSettled =
-    !loading && (error !== null || (!!data && effectiveChartReady && hasRenderableChartData));
+    !loading && (error !== null || (!!dataForDisplay && effectiveChartReady && hasRenderableChartData));
 
   useEffect(() => {
     if (!initialVisualReady || firstLoadCompletedRef.current) {
@@ -185,7 +219,7 @@ export function PortfolioDashboard({
       {error}
     </div>
   );
-  if (!data) {
+  if (!dataForDisplay) {
     return (
       <div
         className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
@@ -208,7 +242,7 @@ export function PortfolioDashboard({
         activePoint={currentDisplayPoint}
         isTooltipActive={!!activeChartPoint}
         rootIcon={config.rootIcon}
-        valuesKnown={!!data && (!!activeChartPoint || pricesReady)}
+        valuesKnown={!!dataForDisplay && (!!activeChartPoint || (isCryptoDashboard ? cryptoValuesKnown : pricesReady))}
         stage={dashboardStage}
         userId={userId}
         onSelectTab={setActiveTab}
@@ -239,7 +273,7 @@ export function PortfolioDashboard({
           userSelectElement={userSelectElement}
         >
           <PortfolioChart
-            data={data}
+            data={dataForDisplay}
             activeProvider={activeProvider}
             activeTab={activeTab}
             chartData={chartData}
@@ -262,14 +296,19 @@ export function PortfolioDashboard({
 
       <PortfolioProviderCards
         portalNode={cardsPortalNode}
-        providers={data.providers}
+        providers={data?.providers ?? []}
         config={config}
         currentPoint={todayChartPoint}
-        valuesKnown={pricesReady}
+        valuesKnown={isCryptoDashboard ? cryptoValuesKnown : pricesReady}
         livePrices={livePrices}
         isActive={isActive}
         transactionRowsEndpoint={`${config.endpoint}/rows`}
         userId={userId}
+        binanceBalances={liveBinanceBalances}
+        isBinanceSyncing={isBinanceSyncing}
+        filterSmallBinance={filterSmallBinance}
+        setFilterSmallBinance={setFilterSmallBinance}
+        binanceListRef={binanceListRef}
       />
     </div>
   );

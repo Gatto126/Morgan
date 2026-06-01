@@ -8,11 +8,14 @@ import {
 } from "@/shared/live-prices";
 import { areLivePriceKeysValued } from "@/shared/live-price-readiness";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
+import { getBinanceLivePriceKeys } from "@/components/dashboard/binance-live-values";
+import type { BinanceBalanceRow } from "@/components/dashboard/types";
 
 import type { PortfolioDashboardConfig, PortfolioProviderSummary } from "./types";
 
 type UsePortfolioLivePricesOptions = {
   providers: PortfolioProviderSummary[] | undefined;
+  binanceBalances?: BinanceBalanceRow[];
   priceQueryParam: PortfolioDashboardConfig["priceQueryParam"];
   isActive: boolean;
   shouldLoad: boolean;
@@ -30,39 +33,40 @@ function normalizePriceKey(
 
 function getRequiredPriceKeys(
   providers: PortfolioProviderSummary[] | undefined,
-  priceQueryParam: PortfolioDashboardConfig["priceQueryParam"]
+  priceQueryParam: PortfolioDashboardConfig["priceQueryParam"],
+  binanceBalances: BinanceBalanceRow[] | undefined
 ) {
-  if (!providers) {
-    return [];
+  const keys = new Set<string>();
+
+  for (const provider of providers ?? []) {
+    for (const product of provider.products) {
+      const key = normalizePriceKey(product.isin, priceQueryParam);
+      if (key && product.quantity > 0.000001) keys.add(key);
+    }
   }
 
-  return [
-    ...new Set(
-      providers
-        .flatMap((provider) => provider.products)
-        .map((product) => ({
-          key: normalizePriceKey(product.isin, priceQueryParam),
-          quantity: product.quantity
-        }))
-        .filter((product): product is { key: string; quantity: number } =>
-          !!product.key && product.quantity > 0.000001
-        )
-        .map((product) => product.key)
-    )
-  ].sort();
+  if (priceQueryParam === "cryptos") {
+    for (const key of getBinanceLivePriceKeys(binanceBalances)) {
+      keys.add(key);
+    }
+  }
+
+  return [...keys].sort();
 }
 
 function getPriceRequestKey(
   providers: PortfolioProviderSummary[] | undefined,
-  priceQueryParam: PortfolioDashboardConfig["priceQueryParam"]
+  priceQueryParam: PortfolioDashboardConfig["priceQueryParam"],
+  binanceBalances: BinanceBalanceRow[] | undefined
 ) {
-  const keys = getRequiredPriceKeys(providers, priceQueryParam);
+  const keys = getRequiredPriceKeys(providers, priceQueryParam, binanceBalances);
 
   return keys.length > 0 ? `${priceQueryParam}:${keys.join(",")}` : "";
 }
 
 export function usePortfolioLivePrices({
   providers,
+  binanceBalances,
   priceQueryParam,
   isActive,
   shouldLoad
@@ -73,25 +77,21 @@ export function usePortfolioLivePrices({
   const [pricesReady, setPricesReady] = useState(false);
   const lastPreloadKeyRef = useRef("");
 
-  const fetchLivePrices = useCallback(async (currentProviders: PortfolioProviderSummary[]) => {
-    const priceKeys = new Set<string>();
-    for (const provider of currentProviders) {
-      for (const product of provider.products) {
-        const priceKey = normalizePriceKey(product.isin, priceQueryParam);
-        if (priceKey && product.quantity > 0.000001) priceKeys.add(priceKey);
-      }
-    }
-    if (priceKeys.size === 0) return;
+  const fetchLivePrices = useCallback(async (
+    currentProviders: PortfolioProviderSummary[],
+    currentBinanceBalances: BinanceBalanceRow[] | undefined
+  ) => {
+    const priceKeys = getRequiredPriceKeys(currentProviders, priceQueryParam, currentBinanceBalances);
+    if (priceKeys.length === 0) return;
 
     const prices = await fetchAndCacheLivePrices({
-      [priceQueryParam]: [...priceKeys]
+      [priceQueryParam]: priceKeys
     }, { maxAgeMs: livePriceValueMaxAgeMs });
-    const requiredKeys = getRequiredPriceKeys(currentProviders, priceQueryParam);
-    const requestKey = getPriceRequestKey(currentProviders, priceQueryParam);
+    const requestKey = getPriceRequestKey(currentProviders, priceQueryParam, currentBinanceBalances);
 
     setLivePrices(prev => ({ ...prev, ...prices }));
     setLiveQuotes({ ...globalLiveQuotesCache });
-    if (areLivePriceKeysValued(requiredKeys, prices)) {
+    if (areLivePriceKeysValued(priceKeys, prices)) {
       setReadyRequestKey(requestKey);
       setPricesReady(true);
     } else {
@@ -103,38 +103,29 @@ export function usePortfolioLivePrices({
   useEffect(() => {
     if (!shouldLoad || !providers) return;
 
-    const requestKey = providers
-      .flatMap((provider) => provider.products)
-      .map((product) => ({
-        key: normalizePriceKey(product.isin, priceQueryParam),
-        quantity: product.quantity
-      }))
-      .filter((product) => product.key && product.quantity > 0.000001)
-      .map((product) => product.key)
-      .sort()
-      .join(",");
+    const requestKey = getPriceRequestKey(providers, priceQueryParam, binanceBalances);
 
     if (!requestKey || lastPreloadKeyRef.current === requestKey) {
       return;
     }
 
     lastPreloadKeyRef.current = requestKey;
-    void fetchLivePrices(providers);
-  }, [providers, fetchLivePrices, priceQueryParam, shouldLoad]);
+    void fetchLivePrices(providers, binanceBalances);
+  }, [binanceBalances, providers, fetchLivePrices, priceQueryParam, shouldLoad]);
 
   useEffect(() => {
     if (!isActive || !providers) return;
 
     const initialLoad = window.setTimeout(() => {
-      void fetchLivePrices(providers);
+      void fetchLivePrices(providers, binanceBalances);
     }, 0);
 
     const interval = window.setInterval(() => {
-      void fetchLivePrices(providers);
+      void fetchLivePrices(providers, binanceBalances);
     }, livePriceRefreshIntervalMs);
 
     const handleFocus = () => {
-      void fetchLivePrices(providers);
+      void fetchLivePrices(providers, binanceBalances);
     };
     window.addEventListener("focus", handleFocus);
 
@@ -143,10 +134,10 @@ export function usePortfolioLivePrices({
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [providers, fetchLivePrices, isActive]);
+  }, [binanceBalances, providers, fetchLivePrices, isActive]);
 
-  const requestKey = getPriceRequestKey(providers, priceQueryParam);
-  const requiredKeys = getRequiredPriceKeys(providers, priceQueryParam);
+  const requestKey = getPriceRequestKey(providers, priceQueryParam, binanceBalances);
+  const requiredKeys = getRequiredPriceKeys(providers, priceQueryParam, binanceBalances);
   const cachedPricesReady = areLivePriceKeysValued(requiredKeys, livePrices);
 
   return {

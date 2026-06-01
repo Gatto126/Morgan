@@ -96,4 +96,6 @@ export interface PortfolioDashboardProps {
   onCloseUserSelect?: () => void;
   userSelectElement?: React.ReactNode;
   onImportRefreshComplete?: () => void;
+  binanceRefreshKey?: number;
+  hasBinanceCredentials?: boolean;
 }

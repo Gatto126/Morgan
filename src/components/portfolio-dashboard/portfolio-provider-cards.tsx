@@ -1,9 +1,11 @@
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo } from "react";
-import type { UIEvent } from "react";
+import type { Dispatch, RefObject, SetStateAction, UIEvent } from "react";
 
 import { SlotValue } from "@/components/finance-shell/slot-value";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
+import { DashboardBinanceCard } from "@/components/dashboard/dashboard-binance-card";
+import type { BinanceBalanceRow } from "@/components/dashboard/types";
 import { scheduleIdleTask, useDeferredTransactionRows } from "@/hooks/use-deferred-transaction-rows";
 import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transaction-rows";
 import { cn } from "@/shared/utils";
@@ -23,6 +25,11 @@ type PortfolioProviderCardsProps = {
   isActive: boolean;
   transactionRowsEndpoint: string;
   userId: string;
+  binanceBalances?: BinanceBalanceRow[];
+  isBinanceSyncing?: boolean;
+  filterSmallBinance?: boolean;
+  setFilterSmallBinance?: Dispatch<SetStateAction<boolean>>;
+  binanceListRef?: RefObject<HTMLDivElement | null>;
 };
 
 const INITIAL_TRANSACTION_ROWS = 20;
@@ -49,7 +56,12 @@ export function PortfolioProviderCards({
   livePrices,
   isActive,
   transactionRowsEndpoint,
-  userId
+  userId,
+  binanceBalances = [],
+  isBinanceSyncing = false,
+  filterSmallBinance = true,
+  setFilterSmallBinance,
+  binanceListRef
 }: PortfolioProviderCardsProps) {
   useEffect(() => {
     if (!isActive || providers.length === 0) {
@@ -196,6 +208,18 @@ export function PortfolioProviderCards({
           </div>
         );
       })}
+
+      {config.priceQueryParam === "cryptos" && binanceBalances.length > 0 && setFilterSmallBinance && binanceListRef ? (
+        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
+          <DashboardBinanceCard
+            balances={binanceBalances}
+            filterSmallBalances={filterSmallBinance}
+            isSyncing={isBinanceSyncing}
+            listRef={binanceListRef}
+            setFilterSmallBalances={setFilterSmallBinance}
+          />
+        </div>
+      ) : null}
     </div>,
     portalNode
   );
