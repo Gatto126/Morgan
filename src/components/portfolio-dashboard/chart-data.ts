@@ -3,6 +3,8 @@ import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 
 import type { MonthBucket, PortfolioBucket, PortfolioData, PortfolioProviderSummary, TimeRange } from "./types";
 
+const OPEN_HOLDING_THRESHOLD = 0.000001;
+
 export function filterData(data: { monthly: MonthBucket[], daily: PortfolioBucket[] }, range: TimeRange): PortfolioBucket[] {
   if (range === "ALL") {
     return data.daily.length > 0 ? data.daily : data.monthly;
@@ -188,13 +190,17 @@ function applyLiveTodayPoint(
   const basePoint = todayIndex >= 0
     ? chartPoints[todayIndex]
     : chartPoints[chartPoints.length - 1] ?? { rawMonth: todayKey };
-  const providerTotals = new Map<string, number>();
-  let allTotal = 0;
+  const providerTotals = new Map<string, number | null>();
+  let allTotal: number | null = 0;
 
   data.providers.forEach((provider) => {
     const total = getProviderLiveTotal(provider, livePrices);
     providerTotals.set(provider.sourceInstitution, total);
-    allTotal += total;
+    if (total === null) {
+      allTotal = null;
+    } else if (allTotal !== null) {
+      allTotal += total;
+    }
   });
 
   const todayPoint: ChartPoint = {
@@ -210,11 +216,11 @@ function applyLiveTodayPoint(
   });
 
   if (activeTab !== "ALL") {
-    todayPoint.balance = providerTotals.get(activeTab) ?? 0;
+    todayPoint.balance = providerTotals.get(activeTab) ?? null;
 
     activeProvider?.products.forEach((product) => {
       const productValue = getProductLiveValue(product, livePrices);
-      if (productValue !== null) {
+      if (Math.abs(product.quantity) > OPEN_HOLDING_THRESHOLD) {
         todayPoint[product.productName] = productValue;
       }
     });
@@ -278,7 +284,7 @@ function applyPendingTodayPoint(
 }
 
 function hasOpenProviderHoldings(provider: PortfolioProviderSummary) {
-  return provider.products.some((product) => Math.abs(product.quantity) > 0.000001);
+  return provider.products.some((product) => Math.abs(product.quantity) > OPEN_HOLDING_THRESHOLD);
 }
 
 function getProviderLiveTotal(
@@ -287,10 +293,17 @@ function getProviderLiveTotal(
 ) {
   let liveTotal = 0;
   let hasHoldings = false;
+  let hasPendingPrice = false;
 
   provider.products.forEach((product) => {
+    if (Math.abs(product.quantity) <= OPEN_HOLDING_THRESHOLD) {
+      return;
+    }
+
     const productValue = getProductLiveValue(product, livePrices);
     if (productValue === null) {
+      hasHoldings = true;
+      hasPendingPrice = true;
       return;
     }
 
@@ -298,21 +311,25 @@ function getProviderLiveTotal(
     liveTotal += productValue;
   });
 
-  return hasHoldings ? liveTotal : provider.total;
+  if (hasPendingPrice) {
+    return null;
+  }
+
+  return hasHoldings ? liveTotal : 0;
 }
 
 function getProductLiveValue(
   product: PortfolioProviderSummary["products"][number],
   livePrices: Record<string, number | null>
 ) {
-  if (Math.abs(product.quantity) <= 0.000001) {
+  if (Math.abs(product.quantity) <= OPEN_HOLDING_THRESHOLD) {
     return null;
   }
 
   const priceKey = normalizeCryptoSymbol(product.isin);
   const livePrice = priceKey ? livePrices[priceKey] : null;
 
-  return livePrice != null
+  return typeof livePrice === "number" && Number.isFinite(livePrice) && livePrice > 0
     ? Math.round(product.quantity * livePrice * 100)
-    : product.investedValue;
+    : null;
 }

@@ -477,7 +477,9 @@ function buildLiveTodayValues({
     : getPendingCryptoValues(data.providerSummaries);
   const investmentTotal = livePriceReadiness.investment ? investment.total : null;
   const cryptoWithBinance = livePriceReadiness.crypto
-    ? crypto.total + (hasBinancePortfolio ? binanceTotalCents : 0)
+    ? crypto.total !== null
+      ? crypto.total + (hasBinancePortfolio ? binanceTotalCents : 0)
+      : null
     : null;
   const heritage = investmentTotal !== null && cryptoWithBinance !== null
     ? checkingVal + investmentTotal + cryptoWithBinance
@@ -515,28 +517,40 @@ function getLiveInvestmentValues(
 ) {
   const institutions = new Map<string, number | null>();
   const products = new Map<string, number | null>();
-  let total = 0;
+  let total: number | null = 0;
 
   providerSummaries.forEach((provider) => {
     let providerTotal = 0;
+    let hasOpenHoldings = false;
+    let providerPending = false;
 
     provider.investmentProducts.forEach((product) => {
       if (Math.abs(product.quantity) <= NON_ZERO_THRESHOLD) {
         return;
       }
 
+      hasOpenHoldings = true;
       const livePrice = product.isin ? livePrices[product.isin] : null;
-      const value = livePrice != null
+      const value = isUsableLivePrice(livePrice)
         ? Math.round(product.quantity * livePrice * 100)
-        : product.investedValue;
+        : null;
+
+      if (value === null) {
+        providerPending = true;
+        total = null;
+        addNullableAmount(products, product.productName, null);
+        return;
+      }
 
       providerTotal += value;
-      total += value;
-      products.set(product.productName, (products.get(product.productName) ?? 0) + value);
+      if (total !== null) {
+        total += value;
+      }
+      addNullableAmount(products, product.productName, value);
     });
 
     if (provider.investmentProducts.length > 0) {
-      institutions.set(provider.sourceInstitution, providerTotal);
+      institutions.set(provider.sourceInstitution, providerPending ? null : hasOpenHoldings ? providerTotal : 0);
     }
   });
 
@@ -570,33 +584,59 @@ function getLiveCryptoValues(
 ) {
   const institutions = new Map<string, number | null>();
   const tokens = new Map<string, number | null>();
-  let total = 0;
+  let total: number | null = 0;
 
   providerSummaries.forEach((provider) => {
     let providerTotal = 0;
+    let hasOpenHoldings = false;
+    let providerPending = false;
 
     provider.cryptoTokens.forEach((token) => {
       if (Math.abs(token.quantity) <= NON_ZERO_THRESHOLD) {
         return;
       }
 
+      hasOpenHoldings = true;
       const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
       const livePrice = tokenSymbol ? livePrices[tokenSymbol] : null;
-      const value = livePrice != null
+      const value = isUsableLivePrice(livePrice)
         ? Math.round(token.quantity * livePrice * 100)
-        : token.investedValue;
+        : null;
+
+      if (value === null) {
+        providerPending = true;
+        total = null;
+        addNullableAmount(tokens, token.tokenName, null);
+        return;
+      }
 
       providerTotal += value;
-      total += value;
-      tokens.set(token.tokenName, (tokens.get(token.tokenName) ?? 0) + value);
+      if (total !== null) {
+        total += value;
+      }
+      addNullableAmount(tokens, token.tokenName, value);
     });
 
     if (provider.cryptoTokens.length > 0) {
-      institutions.set(provider.sourceInstitution, providerTotal);
+      institutions.set(provider.sourceInstitution, providerPending ? null : hasOpenHoldings ? providerTotal : 0);
     }
   });
 
   return { institutions, tokens, total };
+}
+
+function isUsableLivePrice(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function addNullableAmount(map: Map<string, number | null>, key: string, value: number | null) {
+  const currentValue = map.get(key);
+  if (currentValue === null || value === null) {
+    map.set(key, null);
+    return;
+  }
+
+  map.set(key, (currentValue ?? 0) + value);
 }
 
 function getPendingCryptoValues(providerSummaries: ProviderSummary[]) {

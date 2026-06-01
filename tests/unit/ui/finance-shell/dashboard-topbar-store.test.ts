@@ -180,6 +180,27 @@ describe("dashboard topbar store", () => {
     ]);
   });
 
+  it("drops bootstrap zeroes even when the raw value has no decimals yet", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("crypto", "user-1", [
+      {
+        active: true,
+        id: "crypto",
+        value: "0"
+      },
+      {
+        active: false,
+        id: "crypto:BINANCE",
+        value: "BINANCE 0"
+      }
+    ]);
+
+    expect(store.readStoredDashboardTopbarItems("crypto", "user-1")).toEqual([]);
+  });
+
   it("keeps an initial all-zero topbar hidden until a real value arrives", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });

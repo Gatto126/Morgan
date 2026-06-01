@@ -98,11 +98,19 @@ function removeStoredTopbarItems(cacheKey: string) {
 }
 
 function getNumericAmounts(value: string) {
-  return value.match(/\d[\d.]*,\d{2}/g) ?? [];
+  const normalizedValue = value
+    .replace(/\u00a0/g, " ")
+    .replace(/[^\d.,+-]+/g, " ");
+
+  return normalizedValue.match(/[+-]?\d+(?:\.\d{3})*(?:,\d+)?|[+-]?\d+(?:\.\d+)?/g) ?? [];
 }
 
 function parseTopbarAmount(amount: string) {
-  return Number(amount.replace(/\./g, "").replace(",", "."));
+  if (amount.includes(",")) {
+    return Number(amount.replace(/\./g, "").replace(",", "."));
+  }
+
+  return Number(amount);
 }
 
 function hasNonZeroTopbarValue(value: string) {

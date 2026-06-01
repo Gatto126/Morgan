@@ -29,4 +29,10 @@ describe("live price readiness", () => {
       HOME: null
     })).toBe(true);
   });
+
+  it("does not treat zero as a usable live market price", () => {
+    expect(areLivePriceKeysValued(["BTC"], {
+      BTC: 0
+    })).toBe(false);
+  });
 });

@@ -101,12 +101,12 @@ export function usePortfolioLivePrices({
     const prices = await fetchAndCacheLivePrices({
       [priceQueryParam]: priceKeys
     }, { maxAgeMs: livePriceValueMaxAgeMs });
-    const requiredKeys = getRequiredPriceKeys(currentProviders, priceQueryParam);
+    const requestedKeys = getRequestedPriceKeys(currentProviders, priceQueryParam, currentBinanceBalances);
     const requestKey = getPriceRequestKey(currentProviders, priceQueryParam, currentBinanceBalances);
 
     setLivePrices(prev => ({ ...prev, ...prices }));
     setLiveQuotes({ ...globalLiveQuotesCache });
-    if (areLivePriceKeysValued(requiredKeys, prices)) {
+    if (areLivePriceKeysValued(requestedKeys, prices)) {
       setReadyRequestKey(requestKey);
       setPricesReady(true);
     } else {
@@ -152,8 +152,8 @@ export function usePortfolioLivePrices({
   }, [binanceBalances, providers, fetchLivePrices, isActive]);
 
   const requestKey = getPriceRequestKey(providers, priceQueryParam, binanceBalances);
-  const requiredKeys = getRequiredPriceKeys(providers, priceQueryParam);
-  const cachedPricesReady = areLivePriceKeysValued(requiredKeys, livePrices);
+  const requestedKeys = getRequestedPriceKeys(providers, priceQueryParam, binanceBalances);
+  const cachedPricesReady = areLivePriceKeysValued(requestedKeys, livePrices);
 
   return {
     liveQuotes,

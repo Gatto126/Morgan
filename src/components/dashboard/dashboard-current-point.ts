@@ -6,7 +6,7 @@ export function getDashboardPointValue(point: DashboardChartPoint | null, tabKey
     return null;
   }
 
-  const binancePoint = typeof point.binance === "number" ? point.binance : 0;
+  const binancePoint = typeof point.binance === "number" && point.binance > 0 ? point.binance : null;
 
   if (tabKey === "crypto") {
     return typeof point.crypto === "number" ? point.crypto : binancePoint;

@@ -17,5 +17,8 @@ export function areLivePriceKeysValued(
     return true;
   }
 
-  return keys.every((key) => typeof livePrices[key] === "number" && Number.isFinite(livePrices[key]));
+  return keys.every((key) => {
+    const price = livePrices[key];
+    return typeof price === "number" && Number.isFinite(price) && price > 0;
+  });
 }

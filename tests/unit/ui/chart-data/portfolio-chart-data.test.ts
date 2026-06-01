@@ -162,6 +162,27 @@ describe("portfolio chart data", () => {
     });
   });
 
+  it("keeps the current provider point pending when a live price is zero or missing", () => {
+    const points = buildPortfolioChartData({
+      data: portfolioData,
+      activeTab: "trade_republic",
+      timeRange: "ALL",
+      activeProvider: provider,
+      livePrices: {
+        IE00B4L5Y983: 0
+      },
+      todayKey: "2026-03-15"
+    });
+    const todayPoint = points.find((point) => point.rawMonth === "2026-03-15");
+
+    expect(todayPoint).toMatchObject({
+      "iShares Core MSCI World UCITS ETF USD (Acc)": null,
+      balance: null,
+      heritage: null,
+      trade_republic: null
+    });
+  });
+
   it("uses daily buckets for ALL ranges even when monthly buckets are available", () => {
     const points = buildPortfolioChartData({
       data: {

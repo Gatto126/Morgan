@@ -339,6 +339,36 @@ describe("dashboard chart data model", () => {
     });
   });
 
+  it("keeps the current chart point pending when a live market price is zero", () => {
+    const points = buildDashboardChartData({
+      activeTab: "heritage",
+      binanceTotalCents: 2000,
+      checkingProviders: collectCheckingProviders(dashboardData),
+      cryptoInstitutions: collectCryptoInstitutions(dashboardData),
+      cryptoTokens: collectCryptoTokens(dashboardData),
+      data: dashboardData,
+      hasBinancePortfolio: true,
+      investmentProducts: collectInvestmentProducts(dashboardData),
+      livePrices: {
+        BTC: 0,
+        IE00B4L5Y983: 120
+      },
+      todayKey: "2026-01-03",
+      timeRange: "ALL"
+    });
+    const todayPoint = points.find((point) => point.rawMonth === "2026-01-03");
+
+    expect(todayPoint).toMatchObject({
+      Bitcoin: null,
+      crypto: null,
+      crypto_inst_trade_republic: null,
+      heritage: null,
+      investment: 48000,
+      investment_inst_trade_republic: 48000,
+      value: null
+    });
+  });
+
   it("keeps Binance out of checking and investment tab values", () => {
     const checkingPoints = buildChartDataFor("checking");
     const investmentPoints = buildChartDataFor("investment");
