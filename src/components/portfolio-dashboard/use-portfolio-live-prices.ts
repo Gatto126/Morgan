@@ -33,8 +33,7 @@ function normalizePriceKey(
 
 function getRequiredPriceKeys(
   providers: PortfolioProviderSummary[] | undefined,
-  priceQueryParam: PortfolioDashboardConfig["priceQueryParam"],
-  binanceBalances: BinanceBalanceRow[] | undefined
+  priceQueryParam: PortfolioDashboardConfig["priceQueryParam"]
 ) {
   const keys = new Set<string>();
 
@@ -44,6 +43,16 @@ function getRequiredPriceKeys(
       if (key && product.quantity > 0.000001) keys.add(key);
     }
   }
+
+  return [...keys].sort();
+}
+
+function getRequestedPriceKeys(
+  providers: PortfolioProviderSummary[] | undefined,
+  priceQueryParam: PortfolioDashboardConfig["priceQueryParam"],
+  binanceBalances: BinanceBalanceRow[] | undefined
+) {
+  const keys = new Set(getRequiredPriceKeys(providers, priceQueryParam));
 
   if (priceQueryParam === "cryptos") {
     for (const key of getBinanceLivePriceKeys(binanceBalances)) {
@@ -59,7 +68,7 @@ function getPriceRequestKey(
   priceQueryParam: PortfolioDashboardConfig["priceQueryParam"],
   binanceBalances: BinanceBalanceRow[] | undefined
 ) {
-  const keys = getRequiredPriceKeys(providers, priceQueryParam, binanceBalances);
+  const keys = getRequestedPriceKeys(providers, priceQueryParam, binanceBalances);
 
   return keys.length > 0 ? `${priceQueryParam}:${keys.join(",")}` : "";
 }
@@ -81,17 +90,18 @@ export function usePortfolioLivePrices({
     currentProviders: PortfolioProviderSummary[],
     currentBinanceBalances: BinanceBalanceRow[] | undefined
   ) => {
-    const priceKeys = getRequiredPriceKeys(currentProviders, priceQueryParam, currentBinanceBalances);
+    const priceKeys = getRequestedPriceKeys(currentProviders, priceQueryParam, currentBinanceBalances);
     if (priceKeys.length === 0) return;
 
     const prices = await fetchAndCacheLivePrices({
       [priceQueryParam]: priceKeys
     }, { maxAgeMs: livePriceValueMaxAgeMs });
+    const requiredKeys = getRequiredPriceKeys(currentProviders, priceQueryParam);
     const requestKey = getPriceRequestKey(currentProviders, priceQueryParam, currentBinanceBalances);
 
     setLivePrices(prev => ({ ...prev, ...prices }));
     setLiveQuotes({ ...globalLiveQuotesCache });
-    if (areLivePriceKeysValued(priceKeys, prices)) {
+    if (areLivePriceKeysValued(requiredKeys, prices)) {
       setReadyRequestKey(requestKey);
       setPricesReady(true);
     } else {
@@ -137,7 +147,7 @@ export function usePortfolioLivePrices({
   }, [binanceBalances, providers, fetchLivePrices, isActive]);
 
   const requestKey = getPriceRequestKey(providers, priceQueryParam, binanceBalances);
-  const requiredKeys = getRequiredPriceKeys(providers, priceQueryParam, binanceBalances);
+  const requiredKeys = getRequiredPriceKeys(providers, priceQueryParam);
   const cachedPricesReady = areLivePriceKeysValued(requiredKeys, livePrices);
 
   return {
