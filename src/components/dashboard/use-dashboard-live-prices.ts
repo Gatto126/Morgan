@@ -192,12 +192,18 @@ export function useDashboardLivePrices(
   }, [binanceBalances, providerSummaries, fetchLivePrices, isActive]);
 
   const requestKey = getPriceRequestKey(providerSummaries, binanceBalances);
+  const investmentKeys = getRequiredInvestmentPriceKeys(providerSummaries);
+  const cryptoKeys = getRequiredCryptoPriceKeys(providerSummaries, binanceBalances);
+  const requiredKeys = getRequiredPriceKeys(providerSummaries, binanceBalances);
   const readyForRequest = requestKey === "" || readyRequestKey === requestKey;
+  const cachedInvestmentReady = areLivePriceKeysSettled(investmentKeys, livePrices);
+  const cachedCryptoReady = areLivePriceKeysSettled(cryptoKeys, livePrices);
+  const cachedPricesReady = areLivePriceKeysSettled(requiredKeys, livePrices);
 
   return {
-    cryptoPricesReady: requestKey === "" || (readyForRequest && cryptoPricesReady),
-    investmentPricesReady: requestKey === "" || (readyForRequest && investmentPricesReady),
+    cryptoPricesReady: requestKey === "" || cachedCryptoReady || (readyForRequest && cryptoPricesReady),
+    investmentPricesReady: requestKey === "" || cachedInvestmentReady || (readyForRequest && investmentPricesReady),
     livePrices,
-    pricesReady: requestKey === "" || (readyForRequest && pricesReady)
+    pricesReady: requestKey === "" || cachedPricesReady || (readyForRequest && pricesReady)
   };
 }

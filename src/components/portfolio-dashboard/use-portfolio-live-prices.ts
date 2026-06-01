@@ -142,9 +142,11 @@ export function usePortfolioLivePrices({
   }, [providers, fetchLivePrices, isActive]);
 
   const requestKey = getPriceRequestKey(providers, priceQueryParam);
+  const requiredKeys = getRequiredPriceKeys(providers, priceQueryParam);
+  const cachedPricesReady = areLivePriceKeysSettled(requiredKeys, livePrices);
 
   return {
     livePrices,
-    pricesReady: requestKey === "" || (pricesReady && readyRequestKey === requestKey)
+    pricesReady: requestKey === "" || cachedPricesReady || (pricesReady && readyRequestKey === requestKey)
   };
 }

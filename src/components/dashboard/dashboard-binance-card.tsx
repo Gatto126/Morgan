@@ -18,6 +18,8 @@ type DashboardBinanceCardProps = {
   listRef: RefObject<HTMLDivElement | null>;
 };
 
+const BINANCE_VISIBLE_VALUE_THRESHOLD_EUR = 0.49;
+
 export function DashboardBinanceCard({
   balances,
   isSyncing,
@@ -30,7 +32,7 @@ export function DashboardBinanceCard({
   }
 
   const visibleBalances = filterSmallBalances
-    ? balances.filter((balance) => balance.eurValue >= 0.95)
+    ? balances.filter((balance) => balance.eurValue > BINANCE_VISIBLE_VALUE_THRESHOLD_EUR)
     : balances;
   const totalValue = balances.reduce((sum, balance) => sum + balance.eurValue, 0);
 
@@ -54,7 +56,7 @@ export function DashboardBinanceCard({
           <div
             role="button"
             tabIndex={0}
-            title={filterSmallBalances ? "Mostra tutti i token" : "Nascondi token sotto 0,95 EUR"}
+            title={filterSmallBalances ? "Mostra tutti i token" : "Nascondi token fino a 0,49 EUR"}
             onClick={() => setFilterSmallBalances((value) => !value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") {

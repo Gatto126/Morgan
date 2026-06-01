@@ -28,7 +28,7 @@ export function useBinanceBalances({
   const [freshBinanceRefreshKey, setFreshBinanceRefreshKey] = useState(binanceRefreshKey);
   const [isBinanceNew, setIsBinanceNew] = useState(false);
   const [isBinanceSyncing, setIsBinanceSyncing] = useState(false);
-  const [filterSmallBinance, setFilterSmallBinance] = useState(false);
+  const [filterSmallBinance, setFilterSmallBinance] = useState(true);
   const prevBinanceCountRef = useRef(0);
   const binanceListRef = useRef<HTMLDivElement>(null);
   const lastPreloadKeyRef = useRef("");
