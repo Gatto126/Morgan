@@ -43,16 +43,6 @@ export function usePortfolioDashboardData({
   const pendingImportRefreshRef = useRef(false);
   const lastRefreshTransactionCountRef = useRef(transactionCount);
   const hasLoadedRef = useRef(!!initialData);
-  const cachedDataForCurrentVersion = freshDataVersion === transactionCount
-    ? null
-    : readDashboardStageDataCache(stage, userId, transactionCount);
-  const effectiveData = cachedDataForCurrentVersion ?? data;
-  const effectiveDataFresh =
-    !!effectiveData
-    && (
-      !!cachedDataForCurrentVersion
-      || (hasFreshData && freshDataVersion === transactionCount)
-    );
 
   const applyPortfolioPayload = useCallback((payload: PortfolioData) => {
     const currentKeys = new Set(payload.providers.map((provider) => provider.sourceInstitution));
@@ -209,9 +199,9 @@ export function usePortfolioDashboardData({
   ]);
 
   return {
-    data: effectiveData,
-    dataFresh: effectiveDataFresh,
-    loading: cachedDataForCurrentVersion ? false : loading,
+    data,
+    dataFresh: !!data && hasFreshData && freshDataVersion === transactionCount,
+    loading,
     error,
     dataVersion,
     importRefreshVersion,

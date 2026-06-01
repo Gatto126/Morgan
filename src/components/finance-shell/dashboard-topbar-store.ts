@@ -26,6 +26,7 @@ type StoredDashboardTopbarItem = Pick<DashboardTopbarItem, "active" | "animateCh
 
 const listeners = new Set<() => void>();
 const entries = new Map<string, DashboardTopbarEntry>();
+const delayedTopbarPublishes = new Map<string, ReturnType<typeof globalThis.setTimeout>>();
 const emptyEntry: DashboardTopbarEntry = {
   items: [],
   updatedAt: 0
@@ -96,6 +97,73 @@ function removeStoredTopbarItems(cacheKey: string) {
   }
 }
 
+function getNumericAmounts(value: string) {
+  return value.match(/\d[\d.]*,\d{2}/g) ?? [];
+}
+
+function parseTopbarAmount(amount: string) {
+  return Number(amount.replace(/\./g, "").replace(",", "."));
+}
+
+function hasNonZeroTopbarValue(value: string) {
+  return getNumericAmounts(value).some((amount) => parseTopbarAmount(amount) !== 0);
+}
+
+function isPendingTopbarValue(value: string) {
+  const trimmedValue = value.trim();
+
+  return trimmedValue === "" || trimmedValue === pendingTopbarValue || trimmedValue.includes(pendingTopbarValue);
+}
+
+function isZeroOnlyTopbarValue(value: string) {
+  const amounts = getNumericAmounts(value);
+
+  return amounts.length > 0 && amounts.every((amount) => parseTopbarAmount(amount) === 0);
+}
+
+function hasSameTopbarIdentity(previousItems: DashboardTopbarItem[], nextItems: DashboardTopbarItem[]) {
+  return previousItems.length === nextItems.length
+    && previousItems.every((item, index) => item.id === nextItems[index]?.id);
+}
+
+function shouldDelayUnreadyTopbarPublish(
+  previousItems: DashboardTopbarItem[],
+  nextItems: DashboardTopbarItem[]
+) {
+  if (
+    previousItems.length === 0
+    || nextItems.length === 0
+    || !hasSameTopbarIdentity(previousItems, nextItems)
+    || !previousItems.some((item) => hasNonZeroTopbarValue(item.value))
+  ) {
+    return false;
+  }
+
+  return nextItems.some((nextItem, index) => {
+    const previousItem = previousItems[index];
+
+    return hasNonZeroTopbarValue(previousItem.value)
+      && (isPendingTopbarValue(nextItem.value) || isZeroOnlyTopbarValue(nextItem.value));
+  });
+}
+
+function clearDelayedTopbarPublish(cacheKey: string) {
+  const delayedPublish = delayedTopbarPublishes.get(cacheKey);
+  if (delayedPublish) {
+    globalThis.clearTimeout(delayedPublish);
+    delayedTopbarPublishes.delete(cacheKey);
+  }
+}
+
+function commitDashboardTopbar(cacheKey: string, items: DashboardTopbarItem[]) {
+  entries.set(cacheKey, {
+    items,
+    updatedAt: Date.now()
+  });
+  writeStoredTopbarItems(cacheKey, items);
+  emitTopbarChange();
+}
+
 export function readStoredDashboardTopbarItems(
   stage: DashboardStageKey,
   userId: string,
@@ -152,12 +220,26 @@ export function publishDashboardTopbar(
   userId: string,
   items: DashboardTopbarItem[]
 ) {
-  entries.set(getEntryKey(userId, stage), {
-    items,
-    updatedAt: Date.now()
-  });
-  writeStoredTopbarItems(getEntryKey(userId, stage), items);
-  emitTopbarChange();
+  const cacheKey = getEntryKey(userId, stage);
+
+  if (items.length === 0) {
+    clearDelayedTopbarPublish(cacheKey);
+    commitDashboardTopbar(cacheKey, items);
+    return;
+  }
+
+  const previousItems = entries.get(cacheKey)?.items ?? readStoredDashboardTopbarItems(stage, userId);
+  if (shouldDelayUnreadyTopbarPublish(previousItems, items)) {
+    clearDelayedTopbarPublish(cacheKey);
+    delayedTopbarPublishes.set(cacheKey, globalThis.setTimeout(() => {
+      delayedTopbarPublishes.delete(cacheKey);
+      commitDashboardTopbar(cacheKey, items);
+    }, 3_000));
+    return;
+  }
+
+  clearDelayedTopbarPublish(cacheKey);
+  commitDashboardTopbar(cacheKey, items);
 }
 
 export function seedDashboardTopbarLayout(
@@ -185,6 +267,7 @@ export function seedDashboardTopbarLayout(
 
 export function clearDashboardTopbar(stage: DashboardStageKey, userId: string) {
   const cacheKey = getEntryKey(userId, stage);
+  clearDelayedTopbarPublish(cacheKey);
   entries.delete(cacheKey);
   removeStoredTopbarItems(cacheKey);
   emitTopbarChange();

@@ -32,6 +32,7 @@ async function loadTopbarStoreModule() {
 
 describe("dashboard topbar store", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -57,7 +58,8 @@ describe("dashboard topbar store", () => {
     }]);
   });
 
-  it("does not fill pending topbar values from persisted values after a reload", async () => {
+  it("keeps persisted live values visible while a reload publishes pending values", async () => {
+    vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     let store = await loadTopbarStoreModule();
 
@@ -81,11 +83,12 @@ describe("dashboard topbar store", () => {
       id: "heritage",
       label: undefined,
       suppressInitialChanges: true,
-      value: "--"
+      value: "123,45 \u20ac"
     }]);
   });
 
-  it("does not fill pending topbar values from previous in-memory values", async () => {
+  it("keeps previous in-memory values visible while a refresh publishes pending values", async () => {
+    vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     const store = await loadTopbarStoreModule();
 
@@ -107,8 +110,31 @@ describe("dashboard topbar store", () => {
       id: "heritage",
       label: undefined,
       suppressInitialChanges: true,
-      value: "--"
+      value: "123,45 \u20ac"
     }]);
+  });
+
+  it("delays a zero downgrade so a transient refresh cannot overwrite live values", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "123,45 \u20ac"
+    }]);
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "0,00"
+    }]);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+
+    vi.advanceTimersByTime(3_000);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
   });
 
   it("clears persisted topbar layout when publishing an empty topbar", async () => {
