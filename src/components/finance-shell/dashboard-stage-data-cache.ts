@@ -4,6 +4,7 @@ import type { PortfolioData } from "@/components/portfolio-dashboard/types";
 import { getMillisecondsUntilNextUtcDate, getUtcDateKey } from "@/shared/date-keys";
 
 import type { DashboardStageKey } from "./dashboard-stage-items";
+import { normalizeDashboardStageData } from "./dashboard-stage-data-normalizers";
 
 type DashboardStageDataMap = {
   binance: { balances?: BinanceBalanceRow[]; hasApiKey?: boolean; isStale?: boolean; syncedAt?: string | null };
@@ -185,13 +186,22 @@ export function readDashboardStageDataCache<TStage extends DashboardStageKey>(
   const entry = dashboardStageDataCache.get(cacheKey);
 
   if (isUsableEntry(entry, maxAgeMs) && entry?.data !== undefined) {
-    return entry.data as DashboardStageDataMap[TStage];
+    const normalizedData = normalizeDashboardStageData(stage, entry.data) as DashboardStageDataMap[TStage];
+    dashboardStageDataCache.set(cacheKey, {
+      ...entry,
+      data: normalizedData
+    });
+    return normalizedData;
   }
 
   const storedEntry = readStoredDashboardStageData(cacheKey, maxAgeMs);
   if (storedEntry?.data !== undefined) {
-    dashboardStageDataCache.set(cacheKey, storedEntry);
-    return storedEntry.data as DashboardStageDataMap[TStage];
+    const normalizedData = normalizeDashboardStageData(stage, storedEntry.data) as DashboardStageDataMap[TStage];
+    dashboardStageDataCache.set(cacheKey, {
+      ...storedEntry,
+      data: normalizedData
+    });
+    return normalizedData;
   }
 
   return null;
@@ -205,12 +215,13 @@ export function seedDashboardStageDataCache<TStage extends DashboardStageKey>(
   fetchedAt = Date.now()
 ) {
   const cacheKey = getDashboardStageCacheKey(stage, userId, version);
+  const normalizedData = normalizeDashboardStageData(stage, data) as DashboardStageDataMap[TStage];
 
   dashboardStageDataCache.set(cacheKey, {
-    data,
+    data: normalizedData,
     fetchedAt
   });
-  writeStoredDashboardStageData(cacheKey, stage, userId, version, data, fetchedAt);
+  writeStoredDashboardStageData(cacheKey, stage, userId, version, normalizedData, fetchedAt);
 }
 
 export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
@@ -261,16 +272,17 @@ export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
         throw new Error(payload.error ?? fallbackErrorMessage);
       }
 
+      const normalizedPayload = normalizeDashboardStageData(stage, payload) as DashboardStageDataMap[TStage];
       const fetchedAt = Date.now();
       if (dashboardStageDataCache.get(cacheKey)?.promise === promise) {
         dashboardStageDataCache.set(cacheKey, {
-          data: payload,
+          data: normalizedPayload,
           fetchedAt
         });
-        writeStoredDashboardStageData(cacheKey, stage, userId, version, payload, fetchedAt);
+        writeStoredDashboardStageData(cacheKey, stage, userId, version, normalizedPayload, fetchedAt);
       }
 
-      return payload;
+      return normalizedPayload;
     })
     .catch((error: unknown) => {
       if (dashboardStageDataCache.get(cacheKey)?.promise === promise) {

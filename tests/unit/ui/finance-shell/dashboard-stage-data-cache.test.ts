@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { normalizeDashboardStageData } from "@/components/finance-shell/dashboard-stage-data-normalizers";
+
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
@@ -51,9 +53,10 @@ describe("dashboard stage data cache", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const cache = await loadCacheModule();
+    const normalizedPayload = normalizeDashboardStageData("dashboard", payload);
 
-    await expect(cache.fetchDashboardStageData("dashboard", "user-1", { version: 4 })).resolves.toEqual(payload);
-    await expect(cache.fetchDashboardStageData("dashboard", "user-1", { version: 4 })).resolves.toEqual(payload);
+    await expect(cache.fetchDashboardStageData("dashboard", "user-1", { version: 4 })).resolves.toEqual(normalizedPayload);
+    await expect(cache.fetchDashboardStageData("dashboard", "user-1", { version: 4 })).resolves.toEqual(normalizedPayload);
 
     const dateKey = cache.getDashboardStageCacheDateKey("dashboard");
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -61,7 +64,7 @@ describe("dashboard stage data cache", () => {
       `/api/transactions/dashboard?userId=user-1&v=4&d=${dateKey}`,
       expect.objectContaining({ cache: "default" })
     );
-    expect(cache.readDashboardStageDataCache("dashboard", "user-1", 4)).toEqual(payload);
+    expect(cache.readDashboardStageDataCache("dashboard", "user-1", 4)).toEqual(normalizedPayload);
   });
 
   it("shares an in-flight request between callers", async () => {
@@ -75,12 +78,13 @@ describe("dashboard stage data cache", () => {
     const cache = await loadCacheModule();
     const firstRequest = cache.fetchDashboardStageData("checking", "user-1", { version: 7 });
     const secondRequest = cache.fetchDashboardStageData("checking", "user-1", { version: 7 });
+    const normalizedPayload = normalizeDashboardStageData("checking", payload);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     resolveFetch(jsonResponse(payload));
 
-    await expect(firstRequest).resolves.toEqual(payload);
-    await expect(secondRequest).resolves.toEqual(payload);
+    await expect(firstRequest).resolves.toEqual(normalizedPayload);
+    await expect(secondRequest).resolves.toEqual(normalizedPayload);
   });
 
   it("shares an in-flight force refresh for the same cache key", async () => {
@@ -94,12 +98,13 @@ describe("dashboard stage data cache", () => {
     const cache = await loadCacheModule();
     const firstRequest = cache.fetchDashboardStageData("investment", "user-1", { force: true, version: 8 });
     const secondRequest = cache.fetchDashboardStageData("investment", "user-1", { force: true, version: 8 });
+    const normalizedPayload = normalizeDashboardStageData("investment", payload);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     resolveFetch(jsonResponse(payload));
 
-    await expect(firstRequest).resolves.toEqual(payload);
-    await expect(secondRequest).resolves.toEqual(payload);
+    await expect(firstRequest).resolves.toEqual(normalizedPayload);
+    await expect(secondRequest).resolves.toEqual(normalizedPayload);
   });
 
   it("does not reuse a normal in-flight request for a force refresh", async () => {
@@ -120,14 +125,16 @@ describe("dashboard stage data cache", () => {
     const cache = await loadCacheModule();
     const normalRequest = cache.fetchDashboardStageData("binance", "user-1", { version: 3 });
     const forceRequest = cache.fetchDashboardStageData("binance", "user-1", { force: true, version: 3 });
+    const normalizedNormalPayload = normalizeDashboardStageData("binance", normalPayload);
+    const normalizedForcePayload = normalizeDashboardStageData("binance", forcePayload);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     resolveForceFetch(jsonResponse(forcePayload));
     resolveNormalFetch(jsonResponse(normalPayload));
 
-    await expect(forceRequest).resolves.toEqual(forcePayload);
-    await expect(normalRequest).resolves.toEqual(normalPayload);
-    expect(cache.readDashboardStageDataCache("binance", "user-1", 3)).toEqual(forcePayload);
+    await expect(forceRequest).resolves.toEqual(normalizedForcePayload);
+    await expect(normalRequest).resolves.toEqual(normalizedNormalPayload);
+    expect(cache.readDashboardStageDataCache("binance", "user-1", 3)).toEqual(normalizedForcePayload);
   });
 
   it("force refresh bypasses cached data", async () => {
@@ -139,12 +146,12 @@ describe("dashboard stage data cache", () => {
 
     const cache = await loadCacheModule();
 
-    await expect(cache.fetchDashboardStageData("investment", "user-1", { version: 2 })).resolves.toEqual({
+    await expect(cache.fetchDashboardStageData("investment", "user-1", { version: 2 })).resolves.toEqual(normalizeDashboardStageData("investment", {
       providers: [{ sourceInstitution: "A" }]
-    });
-    await expect(cache.fetchDashboardStageData("investment", "user-1", { force: true, version: 2 })).resolves.toEqual({
+    }));
+    await expect(cache.fetchDashboardStageData("investment", "user-1", { force: true, version: 2 })).resolves.toEqual(normalizeDashboardStageData("investment", {
       providers: [{ sourceInstitution: "B" }]
-    });
+    }));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const dateKey = cache.getDashboardStageCacheDateKey("investment");
@@ -259,7 +266,9 @@ describe("dashboard stage data cache", () => {
     const cache = await loadCacheModule();
 
     await expect(cache.fetchDashboardStageData("crypto", "user-1", { version: 1 })).rejects.toThrow("Database offline.");
-    await expect(cache.fetchDashboardStageData("crypto", "user-1", { version: 1 })).resolves.toEqual({ providers: [] });
+    await expect(cache.fetchDashboardStageData("crypto", "user-1", { version: 1 })).resolves.toEqual(
+      normalizeDashboardStageData("crypto", { providers: [] })
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -273,12 +282,13 @@ describe("dashboard stage data cache", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const cache = await loadCacheModule();
+    const normalizedPreviousPayload = normalizeDashboardStageData("checking", previousPayload);
 
-    await expect(cache.fetchDashboardStageData("checking", "user-1", { version: 3 })).resolves.toEqual(previousPayload);
+    await expect(cache.fetchDashboardStageData("checking", "user-1", { version: 3 })).resolves.toEqual(normalizedPreviousPayload);
     await expect(cache.fetchDashboardStageData("checking", "user-1", { force: true, version: 3 })).rejects.toThrow("Database offline.");
 
-    expect(cache.readDashboardStageDataCache("checking", "user-1", 3)).toEqual(previousPayload);
-    await expect(cache.fetchDashboardStageData("checking", "user-1", { version: 3 })).resolves.toEqual(previousPayload);
+    expect(cache.readDashboardStageDataCache("checking", "user-1", 3)).toEqual(normalizedPreviousPayload);
+    await expect(cache.fetchDashboardStageData("checking", "user-1", { version: 3 })).resolves.toEqual(normalizedPreviousPayload);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
