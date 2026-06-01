@@ -6,6 +6,10 @@ const topbarAmountFormatter = new Intl.NumberFormat("it-IT", {
 
 function formatTopbarAmount(amount: string) {
   const normalized = amount.trim().replace(/\u2212/g, "-");
+  if (normalized === "") {
+    return "";
+  }
+
   const numericText = normalized.includes(",")
     ? normalized.replace(/\./g, "").replace(",", ".")
     : normalized;
@@ -20,6 +24,10 @@ function formatTopbarAmount(amount: string) {
 
 export function getDashboardTopbarValueParts(value: string) {
   const normalized = value.trim().replace(/\u00a0/g, " ");
+  if (normalized === "") {
+    return { amount: "", currency: "" };
+  }
+
   const match = normalized.match(/^(.*?)[\s]*([^\d\s.,+-]+)$/);
 
   if (!match) {

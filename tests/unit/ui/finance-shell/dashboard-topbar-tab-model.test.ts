@@ -32,6 +32,14 @@ describe("dashboard topbar tab model", () => {
     });
   });
 
+  it("keeps empty placeholders empty instead of formatting them as zero", () => {
+    expect(getDashboardTopbarValueParts("")).toEqual({
+      amount: "",
+      currency: ""
+    });
+    expect(getDashboardTopbarValueTextClass("")).toBe("text-[15px] tracking-normal");
+  });
+
   it("scales mono-word identity labels instead of truncating them", () => {
     expect(getDashboardTopbarIdentityTextClass("TR")).toBe("text-[12px] tracking-[0.06em]");
     expect(getDashboardTopbarIdentityTextClass("BBVA")).toBe("text-[11px] tracking-[0.03em]");
