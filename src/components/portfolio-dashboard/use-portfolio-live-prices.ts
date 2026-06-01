@@ -24,8 +24,8 @@ type UsePortfolioLivePricesOptions = {
   shouldLoad: boolean;
 };
 
-const livePriceValueMaxAgeMs = 10_000;
-const livePriceRefreshIntervalMs = 15_000;
+const livePriceValueMaxAgeMs = 4_000;
+const livePriceRefreshIntervalMs = 5_000;
 
 function normalizePriceKey(
   value: string | null | undefined,

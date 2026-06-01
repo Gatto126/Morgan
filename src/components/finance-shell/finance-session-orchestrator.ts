@@ -103,7 +103,7 @@ type WarmFinanceSessionOptions = {
 };
 
 const defaultWarmupMaxWaitMs = 1_500;
-const backgroundLivePriceMaxAgeMs = 60_000;
+const backgroundLivePriceMaxAgeMs = 0;
 const priorityRank = {
   background: 0,
   active: 1,
