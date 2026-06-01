@@ -147,11 +147,11 @@ function shouldDelayUnreadyTopbarPublish(
   });
 }
 
-function shouldDelayInitialZeroTopbarPublish(
+function shouldDropInitialZeroTopbarPublish(
   previousItems: DashboardTopbarItem[],
   nextItems: DashboardTopbarItem[]
 ) {
-  return !previousItems.some((item) => hasNonZeroTopbarValue(item.value))
+  return previousItems.length === 0
     && nextItems.length > 0
     && nextItems.every((item) => isZeroOnlyTopbarValue(item.value));
 }
@@ -238,9 +238,13 @@ export function publishDashboardTopbar(
   }
 
   const previousItems = entries.get(cacheKey)?.items ?? readStoredDashboardTopbarItems(stage, userId);
+  if (shouldDropInitialZeroTopbarPublish(previousItems, items)) {
+    clearDelayedTopbarPublish(cacheKey);
+    return;
+  }
+
   if (
     shouldDelayUnreadyTopbarPublish(previousItems, items)
-    || shouldDelayInitialZeroTopbarPublish(previousItems, items)
   ) {
     clearDelayedTopbarPublish(cacheKey);
     delayedTopbarPublishes.set(cacheKey, globalThis.setTimeout(() => {

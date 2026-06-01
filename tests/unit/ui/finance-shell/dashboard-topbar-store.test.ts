@@ -137,7 +137,7 @@ describe("dashboard topbar store", () => {
     expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
   });
 
-  it("delays an initial all-zero publish during bootstrap", async () => {
+  it("drops an initial all-zero publish during bootstrap", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     const store = await loadTopbarStoreModule();
@@ -154,6 +154,10 @@ describe("dashboard topbar store", () => {
         value: "0,00"
       }
     ]);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+
+    vi.advanceTimersByTime(3_000);
 
     expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
 
@@ -174,16 +178,9 @@ describe("dashboard topbar store", () => {
       "123,45 \u20ac",
       "67,89 \u20ac"
     ]);
-
-    vi.advanceTimersByTime(3_000);
-
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1").map((item) => item.value)).toEqual([
-      "123,45 \u20ac",
-      "67,89 \u20ac"
-    ]);
   });
 
-  it("publishes a real initial all-zero topbar after the bootstrap guard expires", async () => {
+  it("keeps an initial all-zero topbar hidden until a real value arrives", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     const store = await loadTopbarStoreModule();
@@ -198,10 +195,18 @@ describe("dashboard topbar store", () => {
 
     vi.advanceTimersByTime(3_000);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "123,45 \u20ac"
+    }]);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
   });
 
-  it("delays all-zero publish when the only stored values are zero", async () => {
+  it("does not persist only-zero bootstrap values across reloads", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     let store = await loadTopbarStoreModule();
@@ -213,6 +218,8 @@ describe("dashboard topbar store", () => {
     }]);
     vi.advanceTimersByTime(3_000);
 
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+
     store = await loadTopbarStoreModule();
     store.publishDashboardTopbar("dashboard", "user-1", [{
       active: true,
@@ -220,7 +227,7 @@ describe("dashboard topbar store", () => {
       value: "0,00"
     }]);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
 
     store.publishDashboardTopbar("dashboard", "user-1", [{
       active: true,
