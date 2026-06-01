@@ -88,7 +88,15 @@ describe("dashboard stage data cache", () => {
   });
 
   it("shares an in-flight force refresh for the same cache key", async () => {
-    const payload = { providers: [{ sourceInstitution: "Imported" }] };
+    const payload = {
+      dailyData: [{
+        date: "2026-06-01",
+        month: "2026-06",
+        providers: { Imported: 1 },
+        total: 1
+      }],
+      providers: [{ sourceInstitution: "Imported" }]
+    };
     let resolveFetch: (response: Response) => void = () => undefined;
     const fetchMock = vi.fn().mockReturnValue(new Promise<Response>((resolve) => {
       resolveFetch = resolve;
@@ -140,16 +148,24 @@ describe("dashboard stage data cache", () => {
   it("force refresh bypasses cached data", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ providers: [{ sourceInstitution: "A" }] }))
-      .mockResolvedValueOnce(jsonResponse({ providers: [{ sourceInstitution: "B" }] }));
+      .mockResolvedValueOnce(jsonResponse({
+        dailyData: [{ date: "2026-06-01", month: "2026-06", providers: { A: 1 }, total: 1 }],
+        providers: [{ sourceInstitution: "A" }]
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        dailyData: [{ date: "2026-06-01", month: "2026-06", providers: { B: 2 }, total: 2 }],
+        providers: [{ sourceInstitution: "B" }]
+      }));
     vi.stubGlobal("fetch", fetchMock);
 
     const cache = await loadCacheModule();
 
     await expect(cache.fetchDashboardStageData("investment", "user-1", { version: 2 })).resolves.toEqual(normalizeDashboardStageData("investment", {
+      dailyData: [{ date: "2026-06-01", month: "2026-06", providers: { A: 1 }, total: 1 }],
       providers: [{ sourceInstitution: "A" }]
     }));
     await expect(cache.fetchDashboardStageData("investment", "user-1", { force: true, version: 2 })).resolves.toEqual(normalizeDashboardStageData("investment", {
+      dailyData: [{ date: "2026-06-01", month: "2026-06", providers: { B: 2 }, total: 2 }],
       providers: [{ sourceInstitution: "B" }]
     }));
 
@@ -260,14 +276,20 @@ describe("dashboard stage data cache", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ error: "Database offline." }, { status: 503 }))
-      .mockResolvedValueOnce(jsonResponse({ providers: [] }));
+      .mockResolvedValueOnce(jsonResponse({
+        dailyData: [{ date: "2026-06-01", month: "2026-06", providers: { trade_republic: 1 }, total: 1 }],
+        providers: [{ sourceInstitution: "trade_republic" }]
+      }));
     vi.stubGlobal("fetch", fetchMock);
 
     const cache = await loadCacheModule();
 
     await expect(cache.fetchDashboardStageData("crypto", "user-1", { version: 1 })).rejects.toThrow("Database offline.");
     await expect(cache.fetchDashboardStageData("crypto", "user-1", { version: 1 })).resolves.toEqual(
-      normalizeDashboardStageData("crypto", { providers: [] })
+      normalizeDashboardStageData("crypto", {
+        dailyData: [{ date: "2026-06-01", month: "2026-06", providers: { trade_republic: 1 }, total: 1 }],
+        providers: [{ sourceInstitution: "trade_republic" }]
+      })
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(2);

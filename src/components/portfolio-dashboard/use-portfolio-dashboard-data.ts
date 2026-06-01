@@ -7,6 +7,7 @@ import {
 } from "@/components/finance-shell/dashboard-stage-data-cache";
 
 import type { PortfolioData } from "./types";
+import { hasUsablePortfolioStageData } from "./portfolio-stage-data-readiness";
 
 type UsePortfolioDashboardDataOptions = {
   endpoint: string;
@@ -78,6 +79,9 @@ export function usePortfolioDashboardData({
         force,
         version: transactionCount
       });
+      if (!hasUsablePortfolioStageData(payload, transactionCount)) {
+        throw new Error(fetchErrorMessage);
+      }
 
       applyPortfolioPayload(payload);
     } catch (fetchError: unknown) {
@@ -117,6 +121,15 @@ export function usePortfolioDashboardData({
       return;
     }
 
+    if (!hasUsablePortfolioStageData(cachedData, transactionCount)) {
+      hasLoadedRef.current = true;
+      const refreshTimer = window.setTimeout(() => {
+        void fetchDashboard({ force: true });
+      }, 0);
+
+      return () => window.clearTimeout(refreshTimer);
+    }
+
     knownProviderKeysRef.current = new Set(cachedData.providers.map((provider) => provider.sourceInstitution));
     hasLoadedRef.current = true;
     const hydrateTimer = window.setTimeout(() => {
@@ -129,7 +142,7 @@ export function usePortfolioDashboardData({
     }, 0);
 
     return () => window.clearTimeout(hydrateTimer);
-  }, [data, fetchDashboardIfStale, shouldLoad, stage, transactionCount, userId]);
+  }, [data, fetchDashboard, fetchDashboardIfStale, shouldLoad, stage, transactionCount, userId]);
 
   useEffect(() => {
     if (!shouldLoad || hasLoadedRef.current) {
@@ -171,6 +184,14 @@ export function usePortfolioDashboardData({
 
     const cachedData = readDashboardStageDataCache(stage, userId, transactionCount);
     if (cachedData) {
+      if (!hasUsablePortfolioStageData(cachedData, transactionCount)) {
+        const refreshTimer = window.setTimeout(() => {
+          void fetchDashboard({ force: true });
+        }, 0);
+
+        return () => window.clearTimeout(refreshTimer);
+      }
+
       const hydrateTimer = window.setTimeout(() => {
         applyPortfolioPayload(cachedData);
         pendingImportRefreshRef.current = false;

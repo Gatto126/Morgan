@@ -1,6 +1,7 @@
 import type { BinanceBalanceRow, DashboardData } from "@/components/dashboard/types";
 import type { CheckingData } from "@/components/checking-dashboard/types";
 import type { PortfolioData } from "@/components/portfolio-dashboard/types";
+import { hasUsablePortfolioStageData } from "@/components/portfolio-dashboard/portfolio-stage-data-readiness";
 import { getMillisecondsUntilNextUtcDate, getUtcDateKey } from "@/shared/date-keys";
 
 import type { DashboardStageKey } from "./dashboard-stage-items";
@@ -22,7 +23,7 @@ type DashboardStageDataEntry<TData> = {
 };
 
 type StoredDashboardStageDataEntry = {
-  cacheVersion: 1;
+  cacheVersion: 2;
   data: unknown;
   fetchedAt: number;
   stage: DashboardStageKey;
@@ -52,7 +53,8 @@ const dashboardStageEndpoints = {
 const cacheTtlMs = 60_000;
 const historicalStageFreshTtlBufferMs = 5 * 60_000;
 const staleCacheTtlMs = 6 * 60 * 60 * 1_000;
-const storageCachePrefix = "morgan:dashboard-stage-data:v1:";
+const storageCacheVersion = 2;
+const storageCachePrefix = `morgan:dashboard-stage-data:v${storageCacheVersion}:`;
 const dashboardStageDataCache = new Map<string, DashboardStageDataEntry<unknown>>();
 
 export const dashboardStageDataFreshTtlMs = cacheTtlMs;
@@ -114,7 +116,7 @@ function readStoredDashboardStageData(
   try {
     const parsed = JSON.parse(rawEntry) as Partial<StoredDashboardStageDataEntry>;
     const fetchedAt = parsed.fetchedAt;
-    const isSameEntry = parsed.cacheVersion === 1
+    const isSameEntry = parsed.cacheVersion === storageCacheVersion
       && typeof fetchedAt === "number"
       && parsed.data !== undefined;
 
@@ -137,6 +139,19 @@ function readStoredDashboardStageData(
   }
 }
 
+function removeStoredDashboardStageData(cacheKey: string) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.removeItem(`${storageCachePrefix}${cacheKey}`);
+  } catch {
+    // Removing invalid cache is best-effort.
+  }
+}
+
 function writeStoredDashboardStageData(
   cacheKey: string,
   stage: DashboardStageKey,
@@ -152,7 +167,7 @@ function writeStoredDashboardStageData(
 
   try {
     const entry: StoredDashboardStageDataEntry = {
-      cacheVersion: 1,
+      cacheVersion: storageCacheVersion,
       data,
       fetchedAt,
       stage,
@@ -163,6 +178,18 @@ function writeStoredDashboardStageData(
   } catch {
     // Private cache persistence is best-effort; memory cache still covers same-page navigation.
   }
+}
+
+function isCacheableDashboardStageData<TStage extends DashboardStageKey>(
+  stage: TStage,
+  version: number,
+  data: DashboardStageDataMap[TStage]
+) {
+  if ((stage === "investment" || stage === "crypto") && version > 0) {
+    return hasUsablePortfolioStageData(data as PortfolioData, version);
+  }
+
+  return true;
 }
 
 export function isDashboardStageDataCacheFresh(
@@ -187,6 +214,12 @@ export function readDashboardStageDataCache<TStage extends DashboardStageKey>(
 
   if (isUsableEntry(entry, maxAgeMs) && entry?.data !== undefined) {
     const normalizedData = normalizeDashboardStageData(stage, entry.data) as DashboardStageDataMap[TStage];
+    if (!isCacheableDashboardStageData(stage, version, normalizedData)) {
+      dashboardStageDataCache.delete(cacheKey);
+      removeStoredDashboardStageData(cacheKey);
+      return null;
+    }
+
     dashboardStageDataCache.set(cacheKey, {
       ...entry,
       data: normalizedData
@@ -197,6 +230,11 @@ export function readDashboardStageDataCache<TStage extends DashboardStageKey>(
   const storedEntry = readStoredDashboardStageData(cacheKey, maxAgeMs);
   if (storedEntry?.data !== undefined) {
     const normalizedData = normalizeDashboardStageData(stage, storedEntry.data) as DashboardStageDataMap[TStage];
+    if (!isCacheableDashboardStageData(stage, version, normalizedData)) {
+      removeStoredDashboardStageData(cacheKey);
+      return null;
+    }
+
     dashboardStageDataCache.set(cacheKey, {
       ...storedEntry,
       data: normalizedData
@@ -216,6 +254,11 @@ export function seedDashboardStageDataCache<TStage extends DashboardStageKey>(
 ) {
   const cacheKey = getDashboardStageCacheKey(stage, userId, version);
   const normalizedData = normalizeDashboardStageData(stage, data) as DashboardStageDataMap[TStage];
+  if (!isCacheableDashboardStageData(stage, version, normalizedData)) {
+    dashboardStageDataCache.delete(cacheKey);
+    removeStoredDashboardStageData(cacheKey);
+    return;
+  }
 
   dashboardStageDataCache.set(cacheKey, {
     data: normalizedData,
@@ -273,6 +316,14 @@ export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
       }
 
       const normalizedPayload = normalizeDashboardStageData(stage, payload) as DashboardStageDataMap[TStage];
+      if (!isCacheableDashboardStageData(stage, version, normalizedPayload)) {
+        if (dashboardStageDataCache.get(cacheKey)?.promise === promise) {
+          dashboardStageDataCache.delete(cacheKey);
+          removeStoredDashboardStageData(cacheKey);
+        }
+        throw new Error(fallbackErrorMessage);
+      }
+
       const fetchedAt = Date.now();
       if (dashboardStageDataCache.get(cacheKey)?.promise === promise) {
         dashboardStageDataCache.set(cacheKey, {
