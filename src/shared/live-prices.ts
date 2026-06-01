@@ -61,6 +61,28 @@ type LivePriceRequest = {
   cryptos?: string[];
 };
 
+export type LivePriceDiagnosticQuote = {
+  attemptedAt: number | null;
+  fetchedAt: number | null;
+  key: string;
+  kind: "crypto" | "isin";
+  quoteAgeMs: number | null;
+  source: LiveQuoteSource | null;
+  status: LiveQuoteStatus | "missing";
+  value: number | null;
+};
+
+export type LivePriceDiagnostics = {
+  lastFetchAt: number | null;
+  maxQuoteAgeMs: number | null;
+  missingKeys: string[];
+  oldestFetchAt: number | null;
+  quotes: LivePriceDiagnosticQuote[];
+  requested: { cryptos: string[]; isins: string[] };
+  requestedKeys: string[];
+  unavailableKeys: string[];
+};
+
 type LivePriceRequestOptions = {
   maxAgeMs?: number;
 };
@@ -144,6 +166,13 @@ function trackInFlightRequest(
   });
 }
 
+function getRequestedDiagnosticKeys({ isins, cryptos }: Required<LivePriceRequest>) {
+  return [
+    ...isins.map((key) => ({ key, kind: "isin" as const })),
+    ...cryptos.map((key) => ({ key, kind: "crypto" as const }))
+  ];
+}
+
 function buildPriceRequestUrl({ isins, cryptos }: NormalizedLivePriceRequest) {
   const params = new URLSearchParams();
   if (isins.length > 0) {
@@ -200,6 +229,55 @@ export function getLivePriceRequestKey({ isins, cryptos }: LivePriceRequest) {
   }
 
   return `isins=${normalizedIsins.join(",")}|cryptos=${normalizedCryptos.join(",")}`;
+}
+
+export function getLivePriceDiagnostics(
+  request: LivePriceRequest,
+  now = Date.now()
+): LivePriceDiagnostics {
+  const normalizedRequest = {
+    cryptos: normalizeKeys(request.cryptos, "crypto"),
+    isins: normalizeKeys(request.isins, "isin")
+  };
+  const requestedKeys = getRequestedDiagnosticKeys(normalizedRequest);
+  const quotes = requestedKeys.map(({ key, kind }): LivePriceDiagnosticQuote => {
+    const quote = globalLiveQuotesCache[key];
+    const quoteAgeMs = typeof quote?.fetchedAt === "number"
+      ? Math.max(0, now - quote.fetchedAt)
+      : null;
+
+    return {
+      attemptedAt: quote?.attemptedAt ?? null,
+      fetchedAt: quote?.fetchedAt ?? null,
+      key,
+      kind,
+      quoteAgeMs,
+      source: quote?.source ?? null,
+      status: quote?.status ?? "missing",
+      value: quote?.value ?? null
+    };
+  });
+  const fetchedAtValues = quotes
+    .map((quote) => quote.fetchedAt)
+    .filter((fetchedAt): fetchedAt is number => typeof fetchedAt === "number");
+  const quoteAgeValues = quotes
+    .map((quote) => quote.quoteAgeMs)
+    .filter((quoteAgeMs): quoteAgeMs is number => typeof quoteAgeMs === "number");
+
+  return {
+    lastFetchAt: fetchedAtValues.length > 0 ? Math.max(...fetchedAtValues) : null,
+    maxQuoteAgeMs: quoteAgeValues.length > 0 ? Math.max(...quoteAgeValues) : null,
+    missingKeys: quotes
+      .filter((quote) => quote.status === "missing" || quote.fetchedAt === null)
+      .map((quote) => quote.key),
+    oldestFetchAt: fetchedAtValues.length > 0 ? Math.min(...fetchedAtValues) : null,
+    quotes,
+    requested: normalizedRequest,
+    requestedKeys: requestedKeys.map(({ key }) => key),
+    unavailableKeys: quotes
+      .filter((quote) => quote.status === "unavailable")
+      .map((quote) => quote.key)
+  };
 }
 
 export async function fetchAndCacheLivePrices(

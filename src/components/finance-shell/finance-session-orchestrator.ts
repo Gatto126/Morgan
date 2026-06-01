@@ -3,7 +3,12 @@
 import { getBinanceLivePriceKeys } from "@/components/dashboard/binance-live-values";
 import type { BinanceBalanceRow, DashboardData, ProviderSummary } from "@/components/dashboard/types";
 import type { PortfolioData } from "@/components/portfolio-dashboard/types";
-import { fetchAndCacheLivePrices, globalLivePricesCache } from "@/shared/live-prices";
+import {
+  fetchAndCacheLivePrices,
+  getLivePriceDiagnostics,
+  globalLivePricesCache,
+  type LivePriceDiagnostics
+} from "@/shared/live-prices";
 
 import {
   fetchDashboardStageData,
@@ -17,6 +22,13 @@ import {
 import { ACTIVE_PROFILE_PERSISTENCE_KEY } from "./persistence-state";
 import type { UserRecord } from "./types";
 import { fetchDashboardPreviewData } from "./use-account-portfolio-preview-data";
+
+declare global {
+  interface Window {
+    __MORGAN_FINANCE_DIAGNOSTICS__?: ReturnType<typeof getFinanceSessionDiagnostics>;
+    morganFinanceDiagnostics?: () => ReturnType<typeof getFinanceSessionDiagnostics>;
+  }
+}
 
 export type FinanceSessionEvent =
   | "app-boot"
@@ -57,9 +69,16 @@ type EnsureFinanceStageReadyOptions = {
 
 type FinanceStageRequestEntry = {
   dataFetchedAt: number | null;
+  dataFetchDurationMs: number | null;
+  dataRequestedAt: number;
   dateKey: string;
+  errorMessage: string | null;
   event: FinanceSessionEvent;
+  livePriceDiagnostics: LivePriceDiagnostics | null;
+  livePriceFetchDurationMs: number | null;
   livePriceFetchedAt: number | null;
+  livePriceRequestedAt: number | null;
+  livePriceStatus: "idle" | "loading" | "ready" | "error";
   priority: FinanceSessionPriority;
   promise: Promise<unknown | null>;
   stage: DashboardStageKey;
@@ -124,6 +143,29 @@ function addPriceKey(keys: Set<string>, value: string | null | undefined) {
   if (value) {
     keys.add(value);
   }
+}
+
+function publishFinanceSessionDiagnostics() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const diagnostics = getFinanceSessionDiagnostics();
+  window.morganFinanceDiagnostics = () => getFinanceSessionDiagnostics();
+  window.__MORGAN_FINANCE_DIAGNOSTICS__ = diagnostics;
+
+  try {
+    window.sessionStorage.setItem("morgan:finance-session-diagnostics:v1", JSON.stringify({
+      stages: diagnostics,
+      updatedAt: Date.now()
+    }));
+  } catch {
+    // Diagnostics are best-effort and must never affect app rendering.
+  }
+
+  window.dispatchEvent(new CustomEvent("morgan:finance-diagnostics", {
+    detail: diagnostics
+  }));
 }
 
 function getHigherPriority(
@@ -320,12 +362,21 @@ export async function warmLivePricesForStageData(
   { maxAgeMs = 0 }: { maxAgeMs?: number } = {}
 ) {
   const keys = collectStageLivePriceKeys(stage, data);
+  const emptyDiagnostics = getLivePriceDiagnostics(keys);
 
   if (keys.isins.length === 0 && keys.cryptos.length === 0) {
-    return globalLivePricesCache;
+    return {
+      diagnostics: emptyDiagnostics,
+      prices: globalLivePricesCache
+    };
   }
 
-  return fetchAndCacheLivePrices(keys, { maxAgeMs });
+  const prices = await fetchAndCacheLivePrices(keys, { maxAgeMs });
+
+  return {
+    diagnostics: getLivePriceDiagnostics(keys),
+    prices
+  };
 }
 
 export function ensureFinanceStageData({
@@ -344,14 +395,23 @@ export function ensureFinanceStageData({
   if (existingEntry && !force && existingEntry.status !== "error") {
     existingEntry.priority = getHigherPriority(existingEntry.priority, priority);
     existingEntry.event = event;
+    publishFinanceSessionDiagnostics();
     return existingEntry.promise;
   }
 
+  const dataRequestedAt = Date.now();
   const entry: FinanceStageRequestEntry = {
     dataFetchedAt: null,
+    dataFetchDurationMs: null,
+    dataRequestedAt,
     dateKey,
+    errorMessage: null,
     event,
+    livePriceDiagnostics: null,
+    livePriceFetchDurationMs: null,
     livePriceFetchedAt: null,
+    livePriceRequestedAt: null,
+    livePriceStatus: "idle",
     priority,
     promise: Promise.resolve(null),
     stage,
@@ -365,34 +425,54 @@ export function ensureFinanceStageData({
   })
     .then((data) => {
       entry.dataFetchedAt = Date.now();
+      entry.dataFetchDurationMs = entry.dataFetchedAt - dataRequestedAt;
       entry.status = "ready";
+      publishFinanceSessionDiagnostics();
       return data as unknown;
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       entry.status = "error";
+      entry.errorMessage = error instanceof Error ? error.message : "Could not load stage data.";
+      entry.dataFetchDurationMs = Date.now() - dataRequestedAt;
+      publishFinanceSessionDiagnostics();
       return null;
     });
 
   entry.promise = promise;
   financeStageRequests.set(requestKey, entry);
+  publishFinanceSessionDiagnostics();
 
   return promise;
 }
 
 export async function ensureFinanceStageReady(options: EnsureFinanceStageReadyOptions) {
   const data = await ensureFinanceStageData(options);
-  await warmLivePricesForStageData(options.stage, data, {
-    maxAgeMs: options.livePriceMaxAgeMs ?? 0
-  }).catch(() => globalLivePricesCache);
-
   const requestKey = getFinanceStageRequestKey({
     binanceRefreshKey: options.binanceRefreshKey,
     stage: options.stage,
     user: options.user
   });
   const entry = financeStageRequests.get(requestKey);
+  const livePriceRequestedAt = Date.now();
+  if (entry) {
+    entry.livePriceRequestedAt = livePriceRequestedAt;
+    entry.livePriceStatus = "loading";
+    publishFinanceSessionDiagnostics();
+  }
+
+  const warmup = await warmLivePricesForStageData(options.stage, data, {
+    maxAgeMs: options.livePriceMaxAgeMs ?? 0
+  }).catch(() => ({
+    diagnostics: getLivePriceDiagnostics(collectStageLivePriceKeys(options.stage, data)),
+    prices: globalLivePricesCache
+  }));
+
   if (entry) {
     entry.livePriceFetchedAt = Date.now();
+    entry.livePriceFetchDurationMs = entry.livePriceFetchedAt - livePriceRequestedAt;
+    entry.livePriceDiagnostics = warmup.diagnostics;
+    entry.livePriceStatus = warmup.diagnostics.missingKeys.length > 0 ? "error" : "ready";
+    publishFinanceSessionDiagnostics();
   }
 
   return {
@@ -495,22 +575,38 @@ export function invalidateFinanceProfile(userId: string) {
       financeStageRequests.delete(key);
     }
   }
+  publishFinanceSessionDiagnostics();
 }
 
 export function resetFinanceSessionOrchestrator() {
   financeStageRequests.clear();
+  publishFinanceSessionDiagnostics();
 }
 
 export function getFinanceSessionDiagnostics() {
   return [...financeStageRequests.entries()].map(([key, entry]) => ({
     dataFetchedAt: entry.dataFetchedAt,
+    dataFetchDurationMs: entry.dataFetchDurationMs,
+    dataRequestedAt: entry.dataRequestedAt,
     dateKey: entry.dateKey,
+    errorMessage: entry.errorMessage,
     event: entry.event,
     key,
+    lastFetchAt: entry.livePriceDiagnostics?.lastFetchAt ?? null,
+    livePriceDiagnostics: entry.livePriceDiagnostics,
+    livePriceFetchDurationMs: entry.livePriceFetchDurationMs,
     livePriceFetchedAt: entry.livePriceFetchedAt,
+    livePriceRequestedAt: entry.livePriceRequestedAt,
+    livePriceStatus: entry.livePriceStatus,
+    maxQuoteAgeMs: entry.livePriceDiagnostics?.maxQuoteAgeMs ?? null,
+    missingKeys: entry.livePriceDiagnostics?.missingKeys ?? [],
+    oldestFetchAt: entry.livePriceDiagnostics?.oldestFetchAt ?? null,
     priority: entry.priority,
+    quoteCount: entry.livePriceDiagnostics?.quotes.length ?? 0,
+    requestedLiveKeys: entry.livePriceDiagnostics?.requestedKeys ?? [],
     stage: entry.stage,
     status: entry.status,
+    unavailableKeys: entry.livePriceDiagnostics?.unavailableKeys ?? [],
     userId: entry.userId,
     version: entry.version
   }));

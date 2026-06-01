@@ -1,11 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   collectStageLivePriceKeys,
+  ensureFinanceStageReady,
   getFinanceStageRequestKey,
-  getPrioritizedProfileStageWarmupOrder
+  getFinanceSessionDiagnostics,
+  getPrioritizedProfileStageWarmupOrder,
+  resetFinanceSessionOrchestrator
 } from "@/components/finance-shell/finance-session-orchestrator";
 import type { UserRecord } from "@/components/finance-shell/types";
+import {
+  globalLivePricesCache,
+  globalLivePricesCacheUpdatedAt,
+  globalLiveQuotesCache
+} from "@/shared/live-prices";
 
 const user: UserRecord = {
   id: "profile-1",
@@ -18,6 +26,20 @@ const user: UserRecord = {
 };
 
 describe("finance session orchestrator", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetFinanceSessionOrchestrator();
+    for (const key of Object.keys(globalLivePricesCache)) {
+      delete globalLivePricesCache[key];
+    }
+    for (const key of Object.keys(globalLivePricesCacheUpdatedAt)) {
+      delete globalLivePricesCacheUpdatedAt[key];
+    }
+    for (const key of Object.keys(globalLiveQuotesCache)) {
+      delete globalLiveQuotesCache[key];
+    }
+  });
+
   it("keys stage requests by profile, stage, version and date", () => {
     expect(getFinanceStageRequestKey({
       dateKey: "2026-06-01",
@@ -96,5 +118,59 @@ describe("finance session orchestrator", () => {
       cryptos: ["BTC"],
       isins: []
     });
+  });
+
+  it("records diagnostics for stage data and live quotes", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/transactions/dashboard?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            accountTotals: { checking: 0, crypto: 0, heritage: 0, investment: 0 },
+            dailyData: [],
+            monthlyData: [],
+            providerSummaries: [{
+              checking: { cashback: 0, expenses: 0, income: 0, interest: 0, tax: 0, total: 0 },
+              cryptoTokens: [{ investedValue: 0, quantity: 0.1, tokenName: "Bitcoin", tokenSymbol: "BTC" }],
+              investmentProducts: [],
+              sourceInstitution: "trade_republic",
+              total: 0
+            }]
+          })
+        };
+      }
+
+      if (url === "/api/prices?cryptos=BTC") {
+        return {
+          ok: true,
+          json: async () => ({ BTC: 62000 })
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await ensureFinanceStageReady({
+      event: "dashboard-change",
+      priority: "user",
+      stage: "dashboard",
+      user
+    });
+
+    expect(getFinanceSessionDiagnostics()).toEqual([
+      expect.objectContaining({
+        event: "dashboard-change",
+        livePriceStatus: "ready",
+        missingKeys: [],
+        priority: "user",
+        quoteCount: 1,
+        requestedLiveKeys: ["BTC"],
+        stage: "dashboard",
+        status: "ready",
+        userId: user.id,
+        version: user.transactionCount
+      })
+    ]);
   });
 });

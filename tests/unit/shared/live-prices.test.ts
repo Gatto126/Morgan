@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   fetchAndCacheLivePrices,
+  getLivePriceDiagnostics,
   getLivePriceRequestKey,
   globalLiveQuotesCache,
   globalLivePricesCache,
@@ -100,6 +101,28 @@ describe("live price client cache", () => {
       source: "api/prices",
       status: "unavailable",
       value: 62000
+    });
+  });
+
+  it("reports quote diagnostics with age and missing keys", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-30T10:00:00.000Z"));
+    saveLivePricesToCache({ BTC: 62000 });
+    vi.setSystemTime(new Date("2026-05-30T10:00:12.000Z"));
+
+    expect(getLivePriceDiagnostics({
+      cryptos: ["BTC", "ETH"],
+      isins: ["IE00B4L5Y983"]
+    })).toMatchObject({
+      lastFetchAt: new Date("2026-05-30T10:00:00.000Z").getTime(),
+      maxQuoteAgeMs: 12_000,
+      missingKeys: ["IE00B4L5Y983", "ETH"],
+      requested: {
+        cryptos: ["BTC", "ETH"],
+        isins: ["IE00B4L5Y983"]
+      },
+      requestedKeys: ["IE00B4L5Y983", "BTC", "ETH"],
+      unavailableKeys: []
     });
   });
 
