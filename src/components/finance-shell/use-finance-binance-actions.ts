@@ -82,6 +82,8 @@ export function useFinanceBinanceActions({
     if (!activeUser) return;
 
     try {
+      let updatedUser: UserRecord | null = null;
+
       keepApiSettingsOpen();
       setError(null);
       setNotice(null);
@@ -101,16 +103,11 @@ export function useFinanceBinanceActions({
         throw new Error(payload.error ?? "Failed to save API keys.");
       }
 
-      const updatedUser: UserRecord = {
+      updatedUser = {
         ...activeUser,
         hasBinanceCredentials: payload.user.hasBinanceCredentials,
         binanceApiKeyPreview: payload.user.binanceApiKeyPreview
       };
-      setActiveUser(updatedUser);
-      clearApiKeyDraft();
-      setUsers((prevUsers) =>
-        prevUsers.map((user) => (user.id === activeUser.id ? updatedUser : user))
-      );
 
       keepApiSettingsOpen();
       setIsTesting(true);
@@ -149,6 +146,11 @@ export function useFinanceBinanceActions({
       seedDashboardStageDataCache("binance", activeUser.id, binanceRefreshKey, cachePayload, fetchedAt);
       seedDashboardStageDataCache("binance", activeUser.id, nextRefreshKey, cachePayload, fetchedAt);
       setBinanceRefreshKey(nextRefreshKey);
+      setActiveUser(updatedUser);
+      clearApiKeyDraft();
+      setUsers((prevUsers) =>
+        prevUsers.map((user) => (user.id === activeUser.id ? updatedUser : user))
+      );
       void ensureFinanceStageReady({
         binanceRefreshKey: nextRefreshKey,
         event: "binance-connect",

@@ -234,12 +234,12 @@ export function FinanceShell({
     importedTransactionsHandlerRef.current = async (counts) => {
       const userBeforeImport = activeUser;
 
-      applyImportedTransactionCounts(counts);
       if (!userBeforeImport) {
         return;
       }
 
       await warmImportedProfileData(userBeforeImport, counts, { binanceRefreshKey });
+      applyImportedTransactionCounts(counts);
     };
 
     return () => {

@@ -60,6 +60,25 @@ export function useDashboardData({
   const lastRefreshTransactionCountRef = useRef(transactionCount);
   const hasLoadedRef = useRef(!!initialData);
 
+  const applyDashboardPayload = useCallback((payload: DashboardData) => {
+    const currentKeys = getProviderKeys(payload.providerSummaries);
+    if (pendingImportRefreshRef.current) {
+      const addedKeys = new Set([...currentKeys].filter((key) => !knownProviderKeysRef.current.has(key)));
+      if (addedKeys.size > 0) {
+        setNewProviderKeys(addedKeys);
+        setTimeout(() => setNewProviderKeys(new Set()), 1000);
+      }
+    }
+    knownProviderKeysRef.current = currentKeys;
+
+    setData(payload);
+    setHasFreshData(true);
+    setFreshDataVersion(transactionCount);
+    setDataVersion((version) => version + 1);
+    setError(null);
+    setLoading(false);
+  }, [transactionCount]);
+
   const fetchDashboard = useCallback(
     async ({ force = false }: { force?: boolean } = {}) => {
       try {
@@ -69,21 +88,7 @@ export function useDashboardData({
           version: transactionCount
         });
 
-        const currentKeys = getProviderKeys(payload.providerSummaries);
-        if (pendingImportRefreshRef.current) {
-          const addedKeys = new Set([...currentKeys].filter((key) => !knownProviderKeysRef.current.has(key)));
-          if (addedKeys.size > 0) {
-            setNewProviderKeys(addedKeys);
-            setTimeout(() => setNewProviderKeys(new Set()), 1000);
-          }
-        }
-        knownProviderKeysRef.current = currentKeys;
-
-        setData(payload);
-        setHasFreshData(true);
-        setFreshDataVersion(transactionCount);
-        setDataVersion((version) => version + 1);
-        setError(null);
+        applyDashboardPayload(payload);
       } catch (fetchError: unknown) {
         setError(fetchError instanceof Error ? fetchError.message : "Errore nel caricamento.");
         setData((currentData) => currentData ?? null);
@@ -95,7 +100,7 @@ export function useDashboardData({
         }
       }
     },
-    [transactionCount, userId]
+    [applyDashboardPayload, transactionCount, userId]
   );
   const fetchDashboardIfStale = useCallback(() => {
     if (!isDashboardStageDataCacheFresh("dashboard", userId, transactionCount)) {
@@ -175,8 +180,33 @@ export function useDashboardData({
     lastRefreshTransactionCountRef.current = transactionCount;
     pendingImportRefreshRef.current = true;
     setHasFreshData(false);
-    void fetchDashboard({ force: true });
-  }, [transactionCount, fetchDashboard, shouldLoad, loading]);
+
+    const cachedData = readDashboardStageDataCache("dashboard", userId, transactionCount);
+    if (cachedData) {
+      const hydrateTimer = window.setTimeout(() => {
+        applyDashboardPayload(cachedData);
+        pendingImportRefreshRef.current = false;
+        setImportRefreshVersion((version) => version + 1);
+        fetchDashboardIfStale();
+      }, 0);
+
+      return () => window.clearTimeout(hydrateTimer);
+    }
+
+    const refreshTimer = window.setTimeout(() => {
+      void fetchDashboard({ force: true });
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [
+    applyDashboardPayload,
+    fetchDashboard,
+    fetchDashboardIfStale,
+    loading,
+    shouldLoad,
+    transactionCount,
+    userId
+  ]);
 
   return {
     data,

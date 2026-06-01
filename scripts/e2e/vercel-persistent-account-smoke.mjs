@@ -69,6 +69,7 @@ const httpErrors = [];
 const steps = [];
 const screenshots = [];
 const diagnosticsSnapshots = [];
+const topbarFlashChecks = [];
 
 if (!testEmail || !testPassword) {
   throw new Error("Set MORGAN_TEST_EMAIL and MORGAN_TEST_PASSWORD, or create .env.e2e.local, to run the persistent-account smoke test.");
@@ -286,28 +287,97 @@ async function createSmokeProfile(page) {
 }
 
 async function importSmokeTransactions(page) {
-  await importFileThroughUi(
-    page,
-    {
-      buffer: Buffer.from(buildTradeRepublicCsv(), "utf8"),
-      mimeType: "text/csv",
-      name: "vercel-smoke-trade-republic.csv"
-    },
-    3,
-    {
-      label: "imported_vercel_smoke_trade_republic",
-      reviewTimeoutMs: 45_000,
-      spinnerTimeoutMs: 180_000,
-      steps
-    }
-  );
+  const stopTopbarFlashMonitor = await startTopbarZeroFlashMonitor(page, "transaction import");
 
-  return waitForProfile(page, profileName, (profile) =>
-    profile.transactionCount > 0 &&
-    profile.checkingCount > 0 &&
-    profile.investmentCount > 0 &&
-    profile.cryptoCount > 0,
-  "after smoke import", { timeoutMs: 60_000 });
+  try {
+    await importFileThroughUi(
+      page,
+      {
+        buffer: Buffer.from(buildTradeRepublicCsv(), "utf8"),
+        mimeType: "text/csv",
+        name: "vercel-smoke-trade-republic.csv"
+      },
+      3,
+      {
+        label: "imported_vercel_smoke_trade_republic",
+        reviewTimeoutMs: 45_000,
+        spinnerTimeoutMs: 180_000,
+        steps
+      }
+    );
+
+    return await waitForProfile(page, profileName, (profile) =>
+      profile.transactionCount > 0 &&
+      profile.checkingCount > 0 &&
+      profile.investmentCount > 0 &&
+      profile.cryptoCount > 0,
+    "after smoke import", { timeoutMs: 60_000 });
+  } finally {
+    const samples = await stopTopbarFlashMonitor();
+    topbarFlashChecks.push({
+      label: "transaction import",
+      samples: samples.length
+    });
+  }
+}
+
+async function startTopbarZeroFlashMonitor(page, label) {
+  const monitorId = `morganTopbarZeroFlashMonitor_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  await page.evaluate(({ monitorId: id, monitorLabel }) => {
+    const getAmounts = (value) => value.match(/\d[\d.]*,\d{2}/g) ?? [];
+    const isZeroAmount = (amount) => Number(amount.replace(/\./g, "").replace(",", ".")) === 0;
+    const readValues = () => Array.from(document.querySelectorAll(".dashboard-topbar-tab"))
+      .map((tab) => (tab.textContent ?? "").replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    const samples = [];
+    const sample = () => {
+      const values = readValues();
+      const amountsByValue = values.map(getAmounts);
+      const allZero = values.length > 0 && amountsByValue.every((amounts) =>
+        amounts.length > 0 && amounts.every(isZeroAmount)
+      );
+
+      samples.push({
+        allZero,
+        label: monitorLabel,
+        timestamp: Date.now(),
+        values
+      });
+    };
+
+    sample();
+    window[id] = {
+      label: monitorLabel,
+      samples,
+      timerId: window.setInterval(sample, 200)
+    };
+  }, { monitorId, monitorLabel: label });
+
+  return async () => {
+    const result = await page.evaluate(({ monitorId: id }) => {
+      const monitor = window[id];
+      if (!monitor) {
+        return { label: id, samples: [] };
+      }
+
+      window.clearInterval(monitor.timerId);
+      delete window[id];
+
+      return {
+        label: monitor.label,
+        samples: monitor.samples
+      };
+    }, { monitorId });
+    const zeroSamples = result.samples.filter((sample) => sample.allZero);
+
+    assert(
+      zeroSamples.length === 0,
+      `${label}: topbar flashed all-zero values: ${JSON.stringify(zeroSamples.slice(0, 5))}`
+    );
+
+    return result.samples;
+  };
 }
 
 async function expectStableTopbarValues(page, label, { minimumNumeric = 1 } = {}) {
@@ -389,9 +459,19 @@ async function connectBinance(page) {
   await panel.getByRole("heading", { name: "BINANCE", exact: true }).waitFor({ state: "visible", timeout: 15_000 });
   await panel.getByPlaceholder("Enter API Key", { exact: true }).fill(binanceApiKey);
   await panel.getByPlaceholder("Enter Secret Key", { exact: true }).fill(binanceApiSecret);
-  await panel.locator('button[title="Save API Keys"]').click();
-  await panel.getByText("Connected!", { exact: false }).waitFor({ state: "visible", timeout: 120_000 });
-  await panel.locator('button[title="Delete Saved API Keys"]').waitFor({ state: "visible", timeout: 90_000 });
+  const stopTopbarFlashMonitor = await startTopbarZeroFlashMonitor(page, "binance connect");
+
+  try {
+    await panel.locator('button[title="Save API Keys"]').click();
+    await panel.getByText("Connected!", { exact: false }).waitFor({ state: "visible", timeout: 120_000 });
+    await panel.locator('button[title="Delete Saved API Keys"]').waitFor({ state: "visible", timeout: 90_000 });
+  } finally {
+    const samples = await stopTopbarFlashMonitor();
+    topbarFlashChecks.push({
+      label: "binance connect",
+      samples: samples.length
+    });
+  }
   await saveScreenshot(page, "02-binance-connected-settings.png");
 
   const closeButton = page.getByRole("button", { name: "Esci dalle impostazioni", exact: true });
@@ -478,6 +558,7 @@ try {
     profileAfterImport,
     topbarChecks,
     binanceResult,
+    topbarFlashChecks,
     diagnosticsSnapshots,
     steps,
     screenshots,
@@ -505,6 +586,7 @@ try {
     cleanupAfterRun,
     steps,
     diagnosticsSnapshots,
+    topbarFlashChecks,
     error: error instanceof Error ? error.message : String(error),
     screenshots,
     browserErrors,

@@ -14,6 +14,12 @@ type UseBinanceBalancesOptions = {
   binanceRefreshKey: number;
 };
 
+type BinanceBalancesPayload = {
+  balances?: BinanceBalanceRow[];
+  hasApiKey?: boolean;
+  isStale?: boolean;
+};
+
 export function useBinanceBalances({
   userId,
   isActive,
@@ -29,18 +35,11 @@ export function useBinanceBalances({
   const [isBinanceNew, setIsBinanceNew] = useState(false);
   const [isBinanceSyncing, setIsBinanceSyncing] = useState(false);
   const [filterSmallBinance, setFilterSmallBinance] = useState(true);
-  const prevBinanceCountRef = useRef(0);
+  const prevBinanceCountRef = useRef(Array.isArray(initialPayload?.balances) ? initialPayload.balances.length : 0);
   const binanceListRef = useRef<HTMLDivElement>(null);
   const lastPreloadKeyRef = useRef("");
 
-  const loadBinanceBalances = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
-    const payload = await fetchDashboardStageData("binance", userId, {
-      force,
-      version: binanceRefreshKey
-    }).catch(() => null);
-
-    if (!payload) return null;
-
+  const applyBinancePayload = useCallback((payload: BinanceBalancesPayload) => {
     if (Array.isArray(payload.balances)) {
       const wasEmpty = prevBinanceCountRef.current === 0;
       prevBinanceCountRef.current = payload.balances.length;
@@ -52,9 +51,20 @@ export function useBinanceBalances({
     }
     setHasFreshBinanceBalances(true);
     setFreshBinanceRefreshKey(binanceRefreshKey);
+  }, [binanceRefreshKey]);
+
+  const loadBinanceBalances = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    const payload = await fetchDashboardStageData("binance", userId, {
+      force,
+      version: binanceRefreshKey
+    }).catch(() => null);
+
+    if (!payload) return null;
+
+    applyBinancePayload(payload);
 
     return payload as { isStale?: boolean; hasApiKey?: boolean };
-  }, [binanceRefreshKey, userId]);
+  }, [applyBinancePayload, binanceRefreshKey, userId]);
 
   const fetchBinanceBalances = useCallback(async (syncIfStale = true) => {
     try {
@@ -82,6 +92,18 @@ export function useBinanceBalances({
       // Network errors leave the current Binance state untouched.
     }
   }, [loadBinanceBalances, userId]);
+
+  useEffect(() => {
+    const cachedPayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey);
+
+    if (cachedPayload) {
+      const hydrateTimer = window.setTimeout(() => {
+        applyBinancePayload(cachedPayload);
+      }, 0);
+
+      return () => window.clearTimeout(hydrateTimer);
+    }
+  }, [applyBinancePayload, binanceRefreshKey, userId]);
 
   useEffect(() => {
     if (!shouldLoad) {
