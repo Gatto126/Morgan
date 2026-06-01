@@ -242,6 +242,35 @@ describe("dashboard topbar store", () => {
     expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
   });
 
+  it("clears stale all-zero stored values on the next bootstrap", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    let store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "123,45 \u20ac"
+    }]);
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "0,00"
+    }]);
+    vi.advanceTimersByTime(3_000);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
+
+    store = await loadTopbarStoreModule();
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "0,00"
+    }]);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+  });
+
   it("clears persisted topbar layout when publishing an empty topbar", async () => {
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     const store = await loadTopbarStoreModule();

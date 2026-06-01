@@ -151,7 +151,7 @@ function shouldDropInitialZeroTopbarPublish(
   previousItems: DashboardTopbarItem[],
   nextItems: DashboardTopbarItem[]
 ) {
-  return previousItems.length === 0
+  return !previousItems.some((item) => hasNonZeroTopbarValue(item.value))
     && nextItems.length > 0
     && nextItems.every((item) => isZeroOnlyTopbarValue(item.value));
 }
@@ -171,6 +171,15 @@ function commitDashboardTopbar(cacheKey: string, items: DashboardTopbarItem[]) {
   });
   writeStoredTopbarItems(cacheKey, items);
   emitTopbarChange();
+}
+
+function dropUnverifiedTopbar(cacheKey: string) {
+  const hadEntry = entries.delete(cacheKey);
+  removeStoredTopbarItems(cacheKey);
+
+  if (hadEntry) {
+    emitTopbarChange();
+  }
 }
 
 export function readStoredDashboardTopbarItems(
@@ -240,6 +249,7 @@ export function publishDashboardTopbar(
   const previousItems = entries.get(cacheKey)?.items ?? readStoredDashboardTopbarItems(stage, userId);
   if (shouldDropInitialZeroTopbarPublish(previousItems, items)) {
     clearDelayedTopbarPublish(cacheKey);
+    dropUnverifiedTopbar(cacheKey);
     return;
   }
 
