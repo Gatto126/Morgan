@@ -7,6 +7,8 @@ import {
   fetchAndCacheLivePrices,
   getLivePriceDiagnostics,
   globalLivePricesCache,
+  LIVE_PRICES_UPDATED_EVENT,
+  type LivePricesUpdatedEventDetail,
   type LivePriceDiagnostics
 } from "@/shared/live-prices";
 
@@ -108,6 +110,7 @@ const priorityRank = {
   user: 2
 } satisfies Record<FinanceSessionPriority, number>;
 const financeStageRequests = new Map<string, FinanceStageRequestEntry>();
+let livePriceDiagnosticsListenerRegistered = false;
 const loginWarmupFetchOptions: RequestInit = {
   cache: "no-store",
   headers: {
@@ -145,10 +148,51 @@ function addPriceKey(keys: Set<string>, value: string | null | undefined) {
   }
 }
 
+function refreshFinanceStageLivePriceDiagnostics(now = Date.now()) {
+  let didUpdate = false;
+
+  for (const entry of financeStageRequests.values()) {
+    const requested = entry.livePriceDiagnostics?.requested;
+    if (!requested || (requested.cryptos.length === 0 && requested.isins.length === 0)) {
+      continue;
+    }
+
+    const diagnostics = getLivePriceDiagnostics(requested, now);
+    entry.livePriceDiagnostics = diagnostics;
+    entry.livePriceFetchedAt = diagnostics.lastFetchAt ?? entry.livePriceFetchedAt;
+    entry.livePriceStatus = diagnostics.missingKeys.length > 0 ? "error" : "ready";
+    didUpdate = true;
+  }
+
+  return didUpdate;
+}
+
+function registerLivePriceDiagnosticsListener() {
+  if (
+    livePriceDiagnosticsListenerRegistered
+    || typeof window === "undefined"
+  ) {
+    return;
+  }
+
+  livePriceDiagnosticsListenerRegistered = true;
+  window.addEventListener(LIVE_PRICES_UPDATED_EVENT, ((event: CustomEvent<LivePricesUpdatedEventDetail>) => {
+    const eventTime = typeof event.detail?.updatedAt === "number"
+      ? event.detail.updatedAt
+      : Date.now();
+
+    if (refreshFinanceStageLivePriceDiagnostics(eventTime)) {
+      publishFinanceSessionDiagnostics();
+    }
+  }) as EventListener);
+}
+
 function publishFinanceSessionDiagnostics() {
   if (typeof window === "undefined") {
     return;
   }
+
+  registerLivePriceDiagnosticsListener();
 
   const diagnostics = getFinanceSessionDiagnostics();
   const diagnosticsPayload = JSON.stringify({
@@ -603,30 +647,36 @@ export function resetFinanceSessionOrchestrator() {
 }
 
 export function getFinanceSessionDiagnostics() {
-  return [...financeStageRequests.entries()].map(([key, entry]) => ({
-    dataFetchedAt: entry.dataFetchedAt,
-    dataFetchDurationMs: entry.dataFetchDurationMs,
-    dataRequestedAt: entry.dataRequestedAt,
-    dateKey: entry.dateKey,
-    errorMessage: entry.errorMessage,
-    event: entry.event,
-    key,
-    lastFetchAt: entry.livePriceDiagnostics?.lastFetchAt ?? null,
-    livePriceDiagnostics: entry.livePriceDiagnostics,
-    livePriceFetchDurationMs: entry.livePriceFetchDurationMs,
-    livePriceFetchedAt: entry.livePriceFetchedAt,
-    livePriceRequestedAt: entry.livePriceRequestedAt,
-    livePriceStatus: entry.livePriceStatus,
-    maxQuoteAgeMs: entry.livePriceDiagnostics?.maxQuoteAgeMs ?? null,
-    missingKeys: entry.livePriceDiagnostics?.missingKeys ?? [],
-    oldestFetchAt: entry.livePriceDiagnostics?.oldestFetchAt ?? null,
-    priority: entry.priority,
-    quoteCount: entry.livePriceDiagnostics?.quotes.length ?? 0,
-    requestedLiveKeys: entry.livePriceDiagnostics?.requestedKeys ?? [],
-    stage: entry.stage,
-    status: entry.status,
-    unavailableKeys: entry.livePriceDiagnostics?.unavailableKeys ?? [],
-    userId: entry.userId,
-    version: entry.version
-  }));
+  return [...financeStageRequests.entries()].map(([key, entry]) => {
+    const livePriceDiagnostics = entry.livePriceDiagnostics
+      ? getLivePriceDiagnostics(entry.livePriceDiagnostics.requested)
+      : null;
+
+    return {
+      dataFetchedAt: entry.dataFetchedAt,
+      dataFetchDurationMs: entry.dataFetchDurationMs,
+      dataRequestedAt: entry.dataRequestedAt,
+      dateKey: entry.dateKey,
+      errorMessage: entry.errorMessage,
+      event: entry.event,
+      key,
+      lastFetchAt: livePriceDiagnostics?.lastFetchAt ?? null,
+      livePriceDiagnostics,
+      livePriceFetchDurationMs: entry.livePriceFetchDurationMs,
+      livePriceFetchedAt: entry.livePriceFetchedAt,
+      livePriceRequestedAt: entry.livePriceRequestedAt,
+      livePriceStatus: entry.livePriceStatus,
+      maxQuoteAgeMs: livePriceDiagnostics?.maxQuoteAgeMs ?? null,
+      missingKeys: livePriceDiagnostics?.missingKeys ?? [],
+      oldestFetchAt: livePriceDiagnostics?.oldestFetchAt ?? null,
+      priority: entry.priority,
+      quoteCount: livePriceDiagnostics?.quotes.length ?? 0,
+      requestedLiveKeys: livePriceDiagnostics?.requestedKeys ?? [],
+      stage: entry.stage,
+      status: entry.status,
+      unavailableKeys: livePriceDiagnostics?.unavailableKeys ?? [],
+      userId: entry.userId,
+      version: entry.version
+    };
+  });
 }

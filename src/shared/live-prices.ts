@@ -12,6 +12,13 @@ export type LiveQuote = {
   value: number | null;
 };
 
+export const LIVE_PRICES_UPDATED_EVENT = "morgan:live-prices-updated";
+
+export type LivePricesUpdatedEventDetail = {
+  keys: string[];
+  updatedAt: number;
+};
+
 export const globalLivePricesCache: Record<string, number | null> = {};
 export const globalLiveQuotesCache: Record<string, LiveQuote> = {};
 export const globalLivePricesCacheUpdatedAt: Record<string, number> = {};
@@ -25,6 +32,26 @@ const livePriceFetchOptions: RequestInit = {
     Pragma: "no-cache"
   }
 };
+
+function notifyLivePricesUpdated(keys: string[], updatedAt: number) {
+  if (keys.length === 0 || typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.dispatchEvent(new CustomEvent<LivePricesUpdatedEventDetail>(
+      LIVE_PRICES_UPDATED_EVENT,
+      {
+        detail: {
+          keys,
+          updatedAt
+        }
+      }
+    ));
+  } catch {
+    // Live price notifications are diagnostic-only and must never affect pricing.
+  }
+}
 
 export function saveLivePricesToCache(prices: Record<string, number | null>) {
   const now = Date.now();
@@ -52,6 +79,8 @@ export function saveLivePricesToCache(prices: Record<string, number | null>) {
     };
     cachedPrices[key] = value;
   }
+
+  notifyLivePricesUpdated(Object.keys(cachedPrices), now);
 
   return cachedPrices;
 }

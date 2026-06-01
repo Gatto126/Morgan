@@ -7,6 +7,7 @@ import {
   globalLiveQuotesCache,
   globalLivePricesCache,
   globalLivePricesCacheUpdatedAt,
+  LIVE_PRICES_UPDATED_EVENT,
   saveLivePricesToCache
 } from "@/shared/live-prices";
 import { PRICE_REQUEST_LIMITS } from "@/domain/pricing/price-request";
@@ -68,6 +69,32 @@ describe("live price client cache", () => {
       "/api/prices?isins=IE00B4L5Y983&cryptos=BTC",
       livePriceFetchOptions
     );
+  });
+
+  it("notifies browser diagnostics after live prices update", () => {
+    const dispatchEvent = vi.fn();
+    class TestCustomEvent {
+      detail: unknown;
+      type: string;
+
+      constructor(type: string, init: { detail?: unknown } = {}) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    }
+
+    vi.stubGlobal("CustomEvent", TestCustomEvent);
+    vi.stubGlobal("window", { dispatchEvent });
+
+    saveLivePricesToCache({ BTC: 62000 });
+
+    expect(dispatchEvent).toHaveBeenCalledOnce();
+    expect(dispatchEvent.mock.calls[0]?.[0]).toMatchObject({
+      detail: {
+        keys: ["BTC"]
+      },
+      type: LIVE_PRICES_UPDATED_EVENT
+    });
   });
 
   it("reuses fresh cached prices without another request", async () => {

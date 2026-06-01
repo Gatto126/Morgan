@@ -12,7 +12,8 @@ import type { UserRecord } from "@/components/finance-shell/types";
 import {
   globalLivePricesCache,
   globalLivePricesCacheUpdatedAt,
-  globalLiveQuotesCache
+  globalLiveQuotesCache,
+  saveLivePricesToCache
 } from "@/shared/live-prices";
 
 const user: UserRecord = {
@@ -27,6 +28,7 @@ const user: UserRecord = {
 
 describe("finance session orchestrator", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     resetFinanceSessionOrchestrator();
     for (const key of Object.keys(globalLivePricesCache)) {
@@ -170,6 +172,66 @@ describe("finance session orchestrator", () => {
         status: "ready",
         userId: user.id,
         version: user.transactionCount
+      })
+    ]);
+  });
+
+  it("reports refreshed live quote diagnostics after a later price update", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T08:00:00.000Z"));
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/transactions/dashboard?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            accountTotals: { checking: 0, crypto: 0, heritage: 0, investment: 0 },
+            dailyData: [],
+            monthlyData: [],
+            providerSummaries: [{
+              checking: { cashback: 0, expenses: 0, income: 0, interest: 0, tax: 0, total: 0 },
+              cryptoTokens: [{ investedValue: 0, quantity: 0.1, tokenName: "Bitcoin", tokenSymbol: "BTC" }],
+              investmentProducts: [],
+              sourceInstitution: "trade_republic",
+              total: 0
+            }]
+          })
+        };
+      }
+
+      if (url === "/api/prices?cryptos=BTC") {
+        return {
+          ok: true,
+          json: async () => ({ BTC: 62000 })
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await ensureFinanceStageReady({
+      event: "dashboard-change",
+      priority: "user",
+      stage: "dashboard",
+      user
+    });
+
+    vi.setSystemTime(new Date("2026-06-01T08:00:15.000Z"));
+    saveLivePricesToCache({ BTC: 63000 });
+
+    expect(getFinanceSessionDiagnostics()).toEqual([
+      expect.objectContaining({
+        lastFetchAt: new Date("2026-06-01T08:00:15.000Z").getTime(),
+        maxQuoteAgeMs: 0,
+        livePriceDiagnostics: expect.objectContaining({
+          quotes: [
+            expect.objectContaining({
+              key: "BTC",
+              value: 63000
+            })
+          ]
+        }),
+        stage: "dashboard"
       })
     ]);
   });
