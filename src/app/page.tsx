@@ -1,7 +1,8 @@
 import { cookies, headers } from "next/headers";
 
 import { AuthShell } from "@/components/auth-shell";
-import { FinanceShell, type PrimedDashboardStageData } from "@/components/finance-shell";
+import type { PrimedDashboardStageData } from "@/components/finance-shell";
+import { FinanceShellClient } from "@/components/finance-shell-client";
 import {
   getDashboardStageDataVersion,
   isDashboardStageKey,
@@ -114,7 +115,7 @@ export default async function HomePage() {
   const initialDashboardStageData = await getInitialDashboardStageData(defaultActiveUser, defaultStage);
 
   return (
-    <FinanceShell
+    <FinanceShellClient
       accountName={session.user.name}
       initialDashboardStageData={initialDashboardStageData}
       initialSelection={initialSelection}

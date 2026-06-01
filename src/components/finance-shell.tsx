@@ -41,6 +41,13 @@ export type PrimedDashboardStageData = {
   version: number;
 };
 
+export type FinanceShellProps = {
+  accountName: string;
+  initialDashboardStageData?: PrimedDashboardStageData | null;
+  initialSelection?: PersistedFinanceSelection | null;
+  initialUsers: UserRecord[];
+};
+
 function getSuggestedFirstProfileName(accountName: string) {
   const trimmedName = accountName.trim();
   const emailLocalPart = trimmedName.includes("@") ? trimmedName.split("@")[0] : trimmedName;
@@ -52,12 +59,7 @@ export function FinanceShell({
   initialDashboardStageData,
   initialSelection,
   initialUsers
-}: {
-  accountName: string;
-  initialDashboardStageData?: PrimedDashboardStageData | null;
-  initialSelection?: PersistedFinanceSelection | null;
-  initialUsers: UserRecord[];
-}) {
+}: FinanceShellProps) {
   const [initialFinanceState] = useState(() => resolveInitialFinanceState(initialUsers, initialSelection ?? null));
   const [hasSeededInitialStageData] = useState(() => {
     if (initialDashboardStageData) {
