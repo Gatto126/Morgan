@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useLayoutEffect, useMemo } from "react";
 import { ChartPie, Coins, Landmark, Wallet } from "lucide-react";
 import {
   seedDashboardTopbarLayout,
@@ -107,7 +107,7 @@ export function DashboardTabs({
 
   usePublishDashboardTopbar("dashboard", userId, items);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!data || !valuesKnown) {
       return;
     }

@@ -276,12 +276,40 @@ export function seedDashboardTopbarLayout(
   }
 
   const cacheKey = getEntryKey(userId, stage);
-  writeStoredTopbarItems(cacheKey, items);
+  const previousEntry = entries.get(cacheKey);
+  if (previousEntry) {
+    if (shouldDropUnreadyTopbarPublish(previousEntry.items, items)) {
+      return;
+    }
 
-  if (entries.has(cacheKey)) {
+    const previousById = new Map(previousEntry.items.map((item) => [item.id, item]));
+    const nextIds = new Set(items.map((item) => item.id));
+    const mergedItems = [
+      ...items.map((item) => {
+        const previousItem = previousById.get(item.id);
+
+        return previousItem
+          ? {
+              ...item,
+              active: previousItem.active,
+              onClick: previousItem.onClick,
+              suppressInitialChanges: previousItem.suppressInitialChanges ?? item.suppressInitialChanges
+            }
+          : item;
+      }),
+      ...previousEntry.items.filter((item) => !nextIds.has(item.id))
+    ];
+
+    entries.set(cacheKey, {
+      items: mergedItems,
+      updatedAt: Date.now()
+    });
+    writeStoredTopbarItems(cacheKey, mergedItems);
+    emitTopbarChange();
     return;
   }
 
+  writeStoredTopbarItems(cacheKey, items);
   entries.set(cacheKey, {
     items,
     updatedAt: Date.now()
