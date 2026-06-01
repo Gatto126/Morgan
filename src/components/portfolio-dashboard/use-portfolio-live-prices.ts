@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   fetchAndCacheLivePrices,
-  globalLivePricesCache
+  globalLivePricesCache,
+  globalLiveQuotesCache,
+  type LiveQuote
 } from "@/shared/live-prices";
-import { areLivePriceKeysSettled } from "@/shared/live-price-readiness";
+import { areLivePriceKeysValued } from "@/shared/live-price-readiness";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 
 import type { PortfolioDashboardConfig, PortfolioProviderSummary } from "./types";
@@ -66,6 +68,7 @@ export function usePortfolioLivePrices({
   shouldLoad
 }: UsePortfolioLivePricesOptions) {
   const [livePrices, setLivePrices] = useState<Record<string, number | null>>(globalLivePricesCache);
+  const [liveQuotes, setLiveQuotes] = useState<Record<string, LiveQuote>>(globalLiveQuotesCache);
   const [readyRequestKey, setReadyRequestKey] = useState("");
   const [pricesReady, setPricesReady] = useState(false);
   const lastPreloadKeyRef = useRef("");
@@ -87,7 +90,8 @@ export function usePortfolioLivePrices({
     const requestKey = getPriceRequestKey(currentProviders, priceQueryParam);
 
     setLivePrices(prev => ({ ...prev, ...prices }));
-    if (areLivePriceKeysSettled(requiredKeys, prices)) {
+    setLiveQuotes({ ...globalLiveQuotesCache });
+    if (areLivePriceKeysValued(requiredKeys, prices)) {
       setReadyRequestKey(requestKey);
       setPricesReady(true);
     } else {
@@ -143,9 +147,10 @@ export function usePortfolioLivePrices({
 
   const requestKey = getPriceRequestKey(providers, priceQueryParam);
   const requiredKeys = getRequiredPriceKeys(providers, priceQueryParam);
-  const cachedPricesReady = areLivePriceKeysSettled(requiredKeys, livePrices);
+  const cachedPricesReady = areLivePriceKeysValued(requiredKeys, livePrices);
 
   return {
+    liveQuotes,
     livePrices,
     pricesReady: requestKey === "" || cachedPricesReady || (pricesReady && readyRequestKey === requestKey)
   };

@@ -1,7 +1,19 @@
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { PRICE_REQUEST_LIMITS } from "@/domain/pricing/price-request";
 
+export type LiveQuoteStatus = "available" | "unavailable";
+export type LiveQuoteSource = "api/prices";
+
+export type LiveQuote = {
+  attemptedAt: number;
+  fetchedAt: number | null;
+  source: LiveQuoteSource;
+  status: LiveQuoteStatus;
+  value: number | null;
+};
+
 export const globalLivePricesCache: Record<string, number | null> = {};
+export const globalLiveQuotesCache: Record<string, LiveQuote> = {};
 export const globalLivePricesCacheUpdatedAt: Record<string, number> = {};
 
 const inFlightPriceKeyRequests = new Map<string, Promise<Record<string, number | null>>>();
@@ -16,10 +28,32 @@ const livePriceFetchOptions: RequestInit = {
 
 export function saveLivePricesToCache(prices: Record<string, number | null>) {
   const now = Date.now();
-  Object.assign(globalLivePricesCache, prices);
+  const cachedPrices: Record<string, number | null> = {};
+
   for (const key of Object.keys(prices)) {
+    const price = prices[key];
+    const previousQuote = globalLiveQuotesCache[key];
+    const previousValue = previousQuote?.value;
+    const hasNumericPrice = typeof price === "number" && Number.isFinite(price);
+    const value = hasNumericPrice
+      ? price
+      : typeof previousValue === "number" && Number.isFinite(previousValue)
+        ? previousValue
+        : null;
+
+    globalLivePricesCache[key] = value;
     globalLivePricesCacheUpdatedAt[key] = now;
+    globalLiveQuotesCache[key] = {
+      attemptedAt: now,
+      fetchedAt: hasNumericPrice ? now : previousQuote?.fetchedAt ?? null,
+      source: "api/prices",
+      status: hasNumericPrice ? "available" : "unavailable",
+      value
+    };
+    cachedPrices[key] = value;
   }
+
+  return cachedPrices;
 }
 
 type LivePriceRequest = {
@@ -205,8 +239,7 @@ export async function fetchAndCacheLivePrices(
         }
 
         const prices = await response.json() as Record<string, number | null>;
-        saveLivePricesToCache(prices);
-        return prices;
+        return saveLivePricesToCache(prices);
       })
       .catch(() => ({}));
 

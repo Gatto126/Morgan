@@ -9,6 +9,10 @@ import {
   measurePerformanceStep
 } from "@/server/logging/performance";
 import { getCachedProfileData, makeProfileStageCacheKey } from "@/server/services/profile-data-cache";
+import {
+  getProfileStageSnapshot,
+  parseProfileStageSnapshotVersion
+} from "@/server/services/profile-stage-snapshot";
 import { getCheckingSummaryData } from "@/server/services/checking-data";
 
 const log = apiLogger("Checking");
@@ -30,9 +34,17 @@ export async function GET(request: NextRequest) {
     await measurePerformanceStep(trace, "auth.requireOwnedProfile", () => requireOwnedProfile(request, userId));
 
     const version = request.nextUrl.searchParams.get("v");
+    const snapshotVersion = parseProfileStageSnapshotVersion(version);
+    const dateKey = request.nextUrl.searchParams.get("d") ?? undefined;
     const checkingData = await getCachedProfileData(
       makeProfileStageCacheKey("checking", userId, version),
-      () => getCheckingSummaryData(userId, undefined, new Date(), trace),
+      () => getProfileStageSnapshot(
+        "checking",
+        userId,
+        snapshotVersion,
+        () => getCheckingSummaryData(userId, undefined, new Date(), trace),
+        { dateKey, trace }
+      ),
       {
         onMetric: (metric) => trace.addStep("profile.cache", metric.durationMs ?? 0, metric)
       }

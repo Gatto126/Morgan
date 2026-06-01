@@ -107,7 +107,7 @@ describe("portfolio chart data", () => {
     });
   });
 
-  it("keeps the current provider point historical until live prices are ready", () => {
+  it("keeps the current provider point pending until live prices are ready", () => {
     const points = buildPortfolioChartData({
       data: portfolioData,
       activeTab: "trade_republic",
@@ -122,10 +122,10 @@ describe("portfolio chart data", () => {
     const todayPoint = points.find((point) => point.rawMonth === "2026-03-15");
 
     expect(todayPoint).toMatchObject({
-      "iShares Core MSCI World UCITS ETF USD (Acc)": 35000,
-      balance: 35000,
-      heritage: 35000,
-      trade_republic: 35000
+      "iShares Core MSCI World UCITS ETF USD (Acc)": null,
+      balance: null,
+      heritage: null,
+      trade_republic: null
     });
   });
 

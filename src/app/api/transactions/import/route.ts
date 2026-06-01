@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authGuardResponse, requireOwnedProfile } from "@/server/auth/auth-guard";
 import { internalServerErrorResponse } from "@/server/api/error-response";
 import { assertUserExists, importPreviewTransactions, previewTransactionSchema } from "@/server/services/transaction-import";
+import { invalidateProfileStageSnapshots } from "@/server/services/profile-stage-snapshot";
 import { apiLogger } from "@/server/logging/logger";
 import {
   requestSecurityResponse,
@@ -33,6 +34,9 @@ export async function POST(request: Request) {
     await assertUserExists(payload.userId);
 
     const result = await importPreviewTransactions(payload.userId, payload.transactions, payload.statementFileName);
+    if (result.insertedCount > 0) {
+      await invalidateProfileStageSnapshots(payload.userId);
+    }
 
     log.info(`Importate ${result.insertedCount} transazioni, ${result.skippedCount} duplicate saltate`);
     log.response("POST", "/api/transactions/import", 201, {

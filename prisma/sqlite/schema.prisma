@@ -21,6 +21,7 @@ model User {
   investmentTransactions    InvestmentTransaction[]
   cryptoTransactions        CryptoTransaction[]
   binanceBalances           BinanceBalance[]
+  stageSnapshots            ProfileStageSnapshot[]
 
   @@unique([ownerId, name])
   @@index([ownerId])
@@ -234,6 +235,22 @@ model PriceCache {
   key       String   @id // e.g. "DE000ETFL252" or "BTC"
   price     Float?
   timestamp DateTime @default(now())
+}
+
+model ProfileStageSnapshot {
+  id        String   @id @default(cuid())
+  userId    String
+  stage     String
+  version   Int
+  dateKey   String
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stage, version, dateKey])
+  @@index([stage, dateKey])
+  @@index([userId])
 }
 
 model BinanceBalance {

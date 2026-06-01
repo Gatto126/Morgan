@@ -133,7 +133,11 @@ export function buildPortfolioChartData({
     return point;
   });
 
-  return todayKey && applyLiveToday
+  if (!todayKey) {
+    return chartPoints;
+  }
+
+  return applyLiveToday
     ? applyLiveTodayPoint(chartPoints, {
         activeProvider,
         activeTab,
@@ -141,7 +145,12 @@ export function buildPortfolioChartData({
         livePrices,
         todayKey
       })
-    : chartPoints;
+    : applyPendingTodayPoint(chartPoints, {
+        activeProvider,
+        activeTab,
+        data,
+        todayKey
+      });
 }
 
 export function getPortfolioXAxisTicks(chartData: ChartPoint[]) {
@@ -218,6 +227,58 @@ function applyLiveTodayPoint(
   }
 
   return [...chartPoints, todayPoint];
+}
+
+function applyPendingTodayPoint(
+  chartPoints: ChartPoint[],
+  {
+    activeProvider,
+    activeTab,
+    data,
+    todayKey
+  }: {
+    activeProvider: PortfolioProviderSummary | null;
+    activeTab: string;
+    data: PortfolioData;
+    todayKey: string;
+  }
+) {
+  const todayIndex = chartPoints.findIndex((point) => point.rawMonth === todayKey);
+  const basePoint = todayIndex >= 0
+    ? chartPoints[todayIndex]
+    : chartPoints[chartPoints.length - 1] ?? { rawMonth: todayKey };
+  const todayPoint: ChartPoint = {
+    ...basePoint,
+    date: todayKey,
+    heritage: null,
+    month: todayKey,
+    rawMonth: todayKey
+  };
+
+  data.providers.forEach((provider) => {
+    todayPoint[provider.sourceInstitution] = hasOpenProviderHoldings(provider) ? null : 0;
+  });
+
+  if (activeTab !== "ALL") {
+    todayPoint.balance = null;
+    activeProvider?.products.forEach((product) => {
+      if (Math.abs(product.quantity) > 0.000001) {
+        todayPoint[product.productName] = null;
+      }
+    });
+  }
+
+  if (todayIndex >= 0) {
+    const nextPoints = [...chartPoints];
+    nextPoints[todayIndex] = todayPoint;
+    return nextPoints;
+  }
+
+  return [...chartPoints, todayPoint];
+}
+
+function hasOpenProviderHoldings(provider: PortfolioProviderSummary) {
+  return provider.products.some((product) => Math.abs(product.quantity) > 0.000001);
 }
 
 function getProviderLiveTotal(

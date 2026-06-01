@@ -10,6 +10,10 @@ import {
   measurePerformanceStep
 } from "@/server/logging/performance";
 import { getCachedProfileData, makeProfileStageCacheKey } from "@/server/services/profile-data-cache";
+import {
+  getProfileStageSnapshot,
+  parseProfileStageSnapshotVersion
+} from "@/server/services/profile-stage-snapshot";
 import { getInvestmentPortfolioSummaryData } from "@/server/services/portfolio-data";
 
 const log = apiLogger("Investment");
@@ -31,9 +35,17 @@ export async function GET(request: NextRequest) {
     await measurePerformanceStep(trace, "auth.requireOwnedProfile", () => requireOwnedProfile(request, userId));
 
     const version = request.nextUrl.searchParams.get("v");
+    const snapshotVersion = parseProfileStageSnapshotVersion(version);
+    const dateKey = request.nextUrl.searchParams.get("d") ?? undefined;
     const { result, transactionCount } = await getCachedProfileData(
       makeProfileStageCacheKey("investment", userId, version),
-      () => getInvestmentPortfolioSummaryData(userId, { trace }),
+      () => getProfileStageSnapshot(
+        "investment",
+        userId,
+        snapshotVersion,
+        () => getInvestmentPortfolioSummaryData(userId, { trace }),
+        { dateKey, trace }
+      ),
       {
         onMetric: (metric) => trace.addStep("profile.cache", metric.durationMs ?? 0, metric)
       }

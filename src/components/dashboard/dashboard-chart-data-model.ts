@@ -366,23 +366,23 @@ function buildLiveTodayValues({
     : data.accountTotals.checking;
   const investment = livePriceReadiness.investment
     ? getLiveInvestmentValues(data.providerSummaries, livePrices)
-    : getHistoricalInvestmentValues(data.providerSummaries, basePoint, data.accountTotals.investment);
+    : getPendingInvestmentValues(data.providerSummaries);
   const crypto = livePriceReadiness.crypto
     ? getLiveCryptoValues(data.providerSummaries, livePrices)
-    : getHistoricalCryptoValues(data.providerSummaries, basePoint);
+    : getPendingCryptoValues(data.providerSummaries);
+  const investmentTotal = livePriceReadiness.investment ? investment.total : null;
   const cryptoWithBinance = livePriceReadiness.crypto
     ? crypto.total + (hasBinancePortfolio ? binanceTotalCents : 0)
-    : typeof basePoint.crypto === "number"
-      ? basePoint.crypto
-      : hasBinancePortfolio
-        ? binanceTotalCents
-        : data.accountTotals.crypto;
+    : null;
+  const heritage = investmentTotal !== null && cryptoWithBinance !== null
+    ? checkingVal + investmentTotal + cryptoWithBinance
+    : null;
   const liveValues: DashboardChartPoint = {
     checking: checkingVal,
-    investment: investment.total,
+    investment: investmentTotal,
     crypto: cryptoWithBinance,
-    heritage: checkingVal + investment.total + cryptoWithBinance,
-    binance: hasBinancePortfolio ? binanceTotalCents : null
+    heritage,
+    binance: livePriceReadiness.crypto && hasBinancePortfolio ? binanceTotalCents : null
   };
 
   for (const [productName, value] of investment.products) {
@@ -404,7 +404,7 @@ function getLiveInvestmentValues(
   providerSummaries: ProviderSummary[],
   livePrices: Record<string, number | null>
 ) {
-  const products = new Map<string, number>();
+  const products = new Map<string, number | null>();
   let total = 0;
 
   providerSummaries.forEach((provider) => {
@@ -426,32 +426,25 @@ function getLiveInvestmentValues(
   return { products, total };
 }
 
-function getHistoricalInvestmentValues(
-  providerSummaries: ProviderSummary[],
-  basePoint: DashboardChartPoint,
-  fallbackTotal: number
-) {
-  const products = new Map<string, number>();
-  const total = typeof basePoint.investment === "number" ? basePoint.investment : fallbackTotal;
-
+function getPendingInvestmentValues(providerSummaries: ProviderSummary[]) {
+  const products = new Map<string, number | null>();
   providerSummaries.forEach((provider) => {
     provider.investmentProducts.forEach((product) => {
-      const value = basePoint[product.productName];
-      if (typeof value === "number") {
-        products.set(product.productName, (products.get(product.productName) ?? 0) + value);
+      if (Math.abs(product.quantity) > NON_ZERO_THRESHOLD) {
+        products.set(product.productName, null);
       }
     });
   });
 
-  return { products, total };
+  return { products, total: 0 };
 }
 
 function getLiveCryptoValues(
   providerSummaries: ProviderSummary[],
   livePrices: Record<string, number | null>
 ) {
-  const institutions = new Map<string, number>();
-  const tokens = new Map<string, number>();
+  const institutions = new Map<string, number | null>();
+  const tokens = new Map<string, number | null>();
   let total = 0;
 
   providerSummaries.forEach((provider) => {
@@ -481,29 +474,24 @@ function getLiveCryptoValues(
   return { institutions, tokens, total };
 }
 
-function getHistoricalCryptoValues(
-  providerSummaries: ProviderSummary[],
-  basePoint: DashboardChartPoint
-) {
-  const institutions = new Map<string, number>();
-  const tokens = new Map<string, number>();
-  const total = typeof basePoint.crypto === "number" ? basePoint.crypto : 0;
-
+function getPendingCryptoValues(providerSummaries: ProviderSummary[]) {
+  const institutions = new Map<string, number | null>();
+  const tokens = new Map<string, number | null>();
   providerSummaries.forEach((provider) => {
-    const institutionValue = basePoint[`crypto_inst_${provider.sourceInstitution}`];
-    if (typeof institutionValue === "number") {
-      institutions.set(provider.sourceInstitution, institutionValue);
-    }
-
+    let hasProviderHoldings = false;
     provider.cryptoTokens.forEach((token) => {
-      const value = basePoint[token.tokenName];
-      if (typeof value === "number") {
-        tokens.set(token.tokenName, (tokens.get(token.tokenName) ?? 0) + value);
+      if (Math.abs(token.quantity) > NON_ZERO_THRESHOLD) {
+        hasProviderHoldings = true;
+        tokens.set(token.tokenName, null);
       }
     });
+
+    if (hasProviderHoldings) {
+      institutions.set(provider.sourceInstitution, null);
+    }
   });
 
-  return { institutions, tokens, total };
+  return { institutions, tokens, total: 0 };
 }
 
 function getLiveTabValue(activeTab: AccountTab, liveValues: DashboardChartPoint) {

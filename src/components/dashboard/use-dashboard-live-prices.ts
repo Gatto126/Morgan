@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchAndCacheLivePrices,
-  globalLivePricesCache
+  globalLivePricesCache,
+  globalLiveQuotesCache,
+  type LiveQuote
 } from "@/shared/live-prices";
-import { areLivePriceKeysSettled } from "@/shared/live-price-readiness";
+import { areLivePriceKeysValued } from "@/shared/live-price-readiness";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { getBinanceLivePriceKeys } from "./binance-live-values";
 import type { BinanceBalanceRow, ProviderSummary } from "./types";
@@ -99,6 +101,7 @@ export function useDashboardLivePrices(
   { binanceBalances = [], isActive, shouldLoad }: UseDashboardLivePricesOptions
 ) {
   const [livePrices, setLivePrices] = useState<Record<string, number | null>>(globalLivePricesCache);
+  const [liveQuotes, setLiveQuotes] = useState<Record<string, LiveQuote>>(globalLiveQuotesCache);
   const [readyRequestKey, setReadyRequestKey] = useState("");
   const [investmentPricesReady, setInvestmentPricesReady] = useState(false);
   const [cryptoPricesReady, setCryptoPricesReady] = useState(false);
@@ -138,11 +141,12 @@ export function useDashboardLivePrices(
     const cryptoKeys = getRequiredCryptoPriceKeys(summaries, balances);
     const requiredKeys = getRequiredPriceKeys(summaries, balances);
     const requestKey = getPriceRequestKey(summaries, balances);
-    const investmentReady = areLivePriceKeysSettled(investmentKeys, prices);
-    const cryptoReady = areLivePriceKeysSettled(cryptoKeys, prices);
-    const allReady = areLivePriceKeysSettled(requiredKeys, prices);
+    const investmentReady = areLivePriceKeysValued(investmentKeys, prices);
+    const cryptoReady = areLivePriceKeysValued(cryptoKeys, prices);
+    const allReady = areLivePriceKeysValued(requiredKeys, prices);
 
     setLivePrices((previousPrices) => ({ ...previousPrices, ...prices }));
+    setLiveQuotes({ ...globalLiveQuotesCache });
     setReadyRequestKey(requestKey);
     setInvestmentPricesReady(investmentReady);
     setCryptoPricesReady(cryptoReady);
@@ -196,13 +200,14 @@ export function useDashboardLivePrices(
   const cryptoKeys = getRequiredCryptoPriceKeys(providerSummaries, binanceBalances);
   const requiredKeys = getRequiredPriceKeys(providerSummaries, binanceBalances);
   const readyForRequest = requestKey === "" || readyRequestKey === requestKey;
-  const cachedInvestmentReady = areLivePriceKeysSettled(investmentKeys, livePrices);
-  const cachedCryptoReady = areLivePriceKeysSettled(cryptoKeys, livePrices);
-  const cachedPricesReady = areLivePriceKeysSettled(requiredKeys, livePrices);
+  const cachedInvestmentReady = areLivePriceKeysValued(investmentKeys, livePrices);
+  const cachedCryptoReady = areLivePriceKeysValued(cryptoKeys, livePrices);
+  const cachedPricesReady = areLivePriceKeysValued(requiredKeys, livePrices);
 
   return {
     cryptoPricesReady: requestKey === "" || cachedCryptoReady || (readyForRequest && cryptoPricesReady),
     investmentPricesReady: requestKey === "" || cachedInvestmentReady || (readyForRequest && investmentPricesReady),
+    liveQuotes,
     livePrices,
     pricesReady: requestKey === "" || cachedPricesReady || (readyForRequest && pricesReady)
   };

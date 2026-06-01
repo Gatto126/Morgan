@@ -24,6 +24,7 @@ import {
   getTradeRepublicCryptoPortfolioSummaryData
 } from "@/server/services/portfolio-data";
 import { getCachedProfileData, makeProfileStageCacheKey } from "@/server/services/profile-data-cache";
+import { getProfileStageSnapshot } from "@/server/services/profile-stage-snapshot";
 import { listProfiles } from "@/server/services/profile-service";
 
 export const dynamic = "force-dynamic";
@@ -64,9 +65,21 @@ async function getInitialDashboardStageData(
   const dashboardStage = resolveVisibleDashboardStage(stage, activeUser);
   const version = getDashboardStageDataVersion(dashboardStage, activeUser);
   const cacheKey = makeProfileStageCacheKey(dashboardStage, activeUser.id, String(version));
+  const loadStageData = () => {
+    if (dashboardStage === "binance") {
+      return loadDashboardStageData(dashboardStage, activeUser.id);
+    }
+
+    return getProfileStageSnapshot(
+      dashboardStage,
+      activeUser.id,
+      version,
+      () => loadDashboardStageData(dashboardStage, activeUser.id)
+    );
+  };
   const data = await getCachedProfileData(
     cacheKey,
-    () => loadDashboardStageData(dashboardStage, activeUser.id)
+    loadStageData
   );
 
   return {

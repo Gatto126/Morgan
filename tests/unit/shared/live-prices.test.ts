@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fetchAndCacheLivePrices,
   getLivePriceRequestKey,
+  globalLiveQuotesCache,
   globalLivePricesCache,
   globalLivePricesCacheUpdatedAt,
   saveLivePricesToCache
@@ -15,6 +16,9 @@ function clearLivePriceCache() {
   }
   for (const key of Object.keys(globalLivePricesCacheUpdatedAt)) {
     delete globalLivePricesCacheUpdatedAt[key];
+  }
+  for (const key of Object.keys(globalLiveQuotesCache)) {
+    delete globalLiveQuotesCache[key];
   }
 }
 
@@ -75,6 +79,28 @@ describe("live price client cache", () => {
       BTC: 62000
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the latest numeric live price when a refresh returns null", async () => {
+    saveLivePricesToCache({ BTC: 62000 });
+    const originalFetchedAt = globalLiveQuotesCache.BTC.fetchedAt;
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ BTC: null })
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    globalLivePricesCacheUpdatedAt.BTC = Date.now() - 61_000;
+
+    await expect(fetchAndCacheLivePrices({ cryptos: ["BTC"] })).resolves.toEqual({
+      BTC: 62000
+    });
+    expect(globalLivePricesCache.BTC).toBe(62000);
+    expect(globalLiveQuotesCache.BTC).toMatchObject({
+      fetchedAt: originalFetchedAt,
+      source: "api/prices",
+      status: "unavailable",
+      value: 62000
+    });
   });
 
   it("only requests stale or missing prices when cache has partial coverage", async () => {
