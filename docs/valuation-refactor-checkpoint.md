@@ -1,7 +1,7 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `0c61c53`
+Current baseline commit: `7da67dd`
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -18,6 +18,19 @@ Morgan must behave like a trustworthy personal finance and portfolio aggregator:
 The key product rule is:
 
 > Navigation should change only the view selector, not trigger the creation of the value.
+
+Current invariant to preserve across all dashboards:
+
+```text
+heritage = checking + investment + crypto
+checking = BBVA + Trade Republic cash
+investment = ETF/stock/investment products with live market prices
+crypto = Trade Republic crypto + Binance current balances
+Trade Republic crypto = BTC + ETH + other imported TR crypto holdings
+Binance = BTC + ETH + SOL + XRP + other synced Binance balances
+```
+
+All topbar, card and current chart values must come from the same current valuation snapshot. Main dashboard, checking, investment, crypto and Binance dashboards may show different slices, but they must not create different current totals for the same profile/date/version.
 
 ## Target Architecture
 
@@ -396,10 +409,22 @@ Implemented so far:
   - `src/components/portfolio-dashboard/portfolio-provider-cards.tsx`
 - Binance dashboard total/topbar/flat current chart line now prefer the Binance total from the central valuation snapshot:
   - `src/components/binance-dashboard.tsx`
+- Binance balances now use the synced Binance EUR value as a valid fallback inside the central valuation when a Binance live quote key is missing or unavailable:
+  - `src/components/finance-shell/current-valuations-store.ts`
+- The main dashboard resting topbar now prefers the central valuation chart point before falling back to the legacy local current snapshot:
+  - `src/components/dashboard.tsx`
+- Binance dashboard manual current sync now seeds the Binance stage cache and forces a profile valuation refresh after balances are synced:
+  - `src/components/binance-dashboard.tsx`
 
 Important limitation:
 
 The app is still hybrid. Several components still calculate fallback values locally. The central valuation store now exists, topbar seed helper consumes it, login/profile/import/Binance orchestration refreshes it, dashboard cards prefer it, and dashboard/portfolio/Binance current chart points can consume it. Remaining local logic mainly acts as fallback while snapshots are not available and in historical/tooltip transformations.
+
+Known mismatch found during production smoke and current mitigation:
+
+- The main dashboard resting topbar used to read the legacy `buildDashboardCurrentSnapshot(...)` path while crypto/investment dashboards preferred `useCurrentValuationSnapshot(...)`. `src/components/dashboard.tsx` now prefers the central valuation chart point for resting topbar/card current values, with the local builder only as fallback while a snapshot is unavailable.
+- The Binance dashboard manual sync button used to update local balances without forcing the central current valuation. `src/components/binance-dashboard.tsx` now seeds the Binance stage cache and calls `ensureFinanceCurrentValuation(... force: true)` after sync.
+- The document and code should treat `investment` like `crypto` for current values: both depend on live market quotes and must be valued centrally, not rebuilt independently per dashboard.
 
 ## Gaps To Close
 
@@ -525,7 +550,18 @@ The goal is to identify in seconds whether a stale value is caused by:
 
 ### Gap 5: Binance History
 
-Current Binance is correct as a live/current value but has no historical line beyond the current point. Later:
+Current Binance is correct as a live/current value but has no historical account reconstruction yet. Treat Binance as a current-only provider until a dedicated historical Binance sync exists.
+
+Current policy before Binance history exists:
+
+- include Binance in the central current valuation;
+- include Binance in current `crypto` and current `heritage`;
+- include Binance in topbar, cards, and today's current chart point;
+- do not backfill historical Binance values into old `crypto`/`heritage` chart points;
+- do not pretend the historical Binance line is known before a real historical sync;
+- if a chart needs to represent Binance now, keep it as current-only / flat-current / current marker behavior, clearly distinct from reconstructed historical data.
+
+Later:
 
 - implement Binance historical sync if API allows;
 - store historical Binance balance/value snapshots;
@@ -535,7 +571,8 @@ Until then:
 
 - topbar should include Binance current value;
 - crypto dashboard can show Binance current card;
-- graph history for Binance may be flat/current-only.
+- graph history for Binance may be flat/current-only;
+- a future "sync" control should be about missing Binance historical sync state, not merely current balance refresh. Current balance refresh should still refresh/invalidate the central valuation.
 
 ## Implementation Plan
 

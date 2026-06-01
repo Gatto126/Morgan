@@ -22,8 +22,10 @@ import {
 import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import {
   fetchDashboardStageData,
-  readDashboardStageDataCache
+  readDashboardStageDataCache,
+  seedDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
+import { ensureFinanceCurrentValuation } from "./finance-shell/finance-session-orchestrator";
 import { useCurrentValuationSnapshot } from "./finance-shell/current-valuations-store";
 import { usePublishDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
 import {
@@ -56,6 +58,10 @@ interface BinanceDashboardProps {
   reviewElement?: React.ReactNode;
   previewTransactionsCount?: number;
   binanceRefreshKey?: number;
+  checkingCount?: number;
+  cryptoCount?: number;
+  hasBinanceCredentials?: boolean;
+  investmentCount?: number;
   transactionCount?: number;
   isActive?: boolean;
   shouldLoad?: boolean;
@@ -78,6 +84,11 @@ export function BinanceDashboard({
   reviewElement,
   previewTransactionsCount = 0,
   binanceRefreshKey = 0,
+  checkingCount = 0,
+  cryptoCount = 0,
+  hasBinanceCredentials = true,
+  investmentCount = 0,
+  transactionCount = 0,
   isActive = true,
   shouldLoad = isActive,
   showSettingsView = false,
@@ -143,6 +154,7 @@ export function BinanceDashboard({
     }
     setBalancesKnown(true);
     setFreshBinanceRefreshKey(binanceRefreshKey);
+    return data;
   }, [binanceRefreshKey, userId]);
 
   useEffect(() => {
@@ -173,13 +185,45 @@ export function BinanceDashboard({
         throw new Error(data.error ?? "Binance sync failed.");
       }
 
+      let syncedBalances: BinanceBalance[] = [];
+      const syncedAt = typeof data.syncedAt === "string" ? data.syncedAt : new Date().toISOString();
+
       if (Array.isArray(data.balances)) {
-        setBalances(data.balances);
+        syncedBalances = data.balances;
+        setBalances(syncedBalances);
         setBalancesKnown(true);
         setFreshBinanceRefreshKey(binanceRefreshKey);
       } else {
-        await loadBalances({ force: true });
+        const loadedData = await loadBalances({ force: true });
+        syncedBalances = Array.isArray(loadedData.balances)
+          ? loadedData.balances as BinanceBalance[]
+          : [];
       }
+
+      seedDashboardStageDataCache("binance", userId, binanceRefreshKey, {
+        balances: syncedBalances,
+        hasApiKey: typeof data.hasApiKey === "boolean" ? data.hasApiKey : true,
+        isStale: typeof data.isStale === "boolean" ? data.isStale : false,
+        syncedAt
+      });
+
+      await ensureFinanceCurrentValuation({
+        binanceRefreshKey,
+        event: "binance-sync",
+        force: true,
+        livePriceMaxAgeMs: 0,
+        priority: "user",
+        user: {
+          binanceApiKeyPreview: null,
+          checkingCount,
+          cryptoCount,
+          hasBinanceCredentials,
+          id: userId,
+          investmentCount,
+          name: "",
+          transactionCount
+        }
+      });
 
       setSyncNotice("Sync complete.");
     } catch (error) {

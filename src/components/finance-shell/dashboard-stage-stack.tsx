@@ -280,6 +280,10 @@ export function DashboardStageStack({
           key={`binance-${activeUser.id}`}
           userId={activeUser.id}
           binanceRefreshKey={binanceRefreshKey}
+          checkingCount={activeUser.checkingCount}
+          cryptoCount={activeUser.cryptoCount}
+          hasBinanceCredentials={activeUser.hasBinanceCredentials}
+          investmentCount={activeUser.investmentCount}
           transactionCount={activeUser.transactionCount}
         />
       ) : null}

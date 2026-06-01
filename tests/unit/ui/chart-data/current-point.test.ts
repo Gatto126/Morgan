@@ -20,7 +20,7 @@ describe("current chart point values", () => {
     expect(getDashboardPointValue(point, "heritage")).toBe(300);
     expect(getDashboardPointValue(point, "investment")).toBe(125);
     expect(getDashboardPointValue(point, "crypto")).toBe(75);
-    expect(getDashboardPointValue({ binance: 25, rawMonth: "2026-06-01" }, "crypto")).toBe(25);
+    expect(getDashboardPointValue({ binance: 25, rawMonth: "2026-06-01" }, "crypto")).toBeNull();
     expect(getDashboardPointValue({ binance: 0, rawMonth: "2026-06-01" }, "crypto")).toBeNull();
   });
 

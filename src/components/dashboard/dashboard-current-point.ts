@@ -6,14 +6,12 @@ export function getDashboardPointValue(point: DashboardChartPoint | null, tabKey
     return null;
   }
 
-  const binancePoint = typeof point.binance === "number" && point.binance > 0 ? point.binance : null;
-
   if (tabKey === "crypto") {
-    return typeof point.crypto === "number" ? point.crypto : binancePoint;
+    return typeof point.crypto === "number" ? point.crypto : null;
   }
 
   if (tabKey === "heritage") {
-    return typeof point.heritage === "number" ? point.heritage : binancePoint;
+    return typeof point.heritage === "number" ? point.heritage : null;
   }
 
   const value = point[tabKey];
