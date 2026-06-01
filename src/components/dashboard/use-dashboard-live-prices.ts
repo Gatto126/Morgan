@@ -3,6 +3,8 @@ import {
   fetchAndCacheLivePrices,
   globalLivePricesCache,
   globalLiveQuotesCache,
+  LIVE_PRICES_UPDATED_EVENT,
+  type LivePricesUpdatedEventDetail,
   type LiveQuote
 } from "@/shared/live-prices";
 import { areLivePriceKeysValued } from "@/shared/live-price-readiness";
@@ -143,6 +145,21 @@ export function useDashboardLivePrices(
     setInvestmentPricesReady(investmentReady);
     setCryptoPricesReady(cryptoReady);
     setPricesReady(allReady);
+  }, []);
+
+  useEffect(() => {
+    const handleLivePricesUpdated = (event: Event) => {
+      const updatedKeys = (event as CustomEvent<LivePricesUpdatedEventDetail>).detail?.keys ?? [];
+      if (updatedKeys.length === 0) {
+        return;
+      }
+
+      setLivePrices({ ...globalLivePricesCache });
+      setLiveQuotes({ ...globalLiveQuotesCache });
+    };
+
+    window.addEventListener(LIVE_PRICES_UPDATED_EVENT, handleLivePricesUpdated);
+    return () => window.removeEventListener(LIVE_PRICES_UPDATED_EVENT, handleLivePricesUpdated);
   }, []);
 
   useEffect(() => {
