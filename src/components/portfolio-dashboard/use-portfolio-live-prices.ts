@@ -4,6 +4,8 @@ import {
   fetchAndCacheLivePrices,
   globalLivePricesCache
 } from "@/shared/live-prices";
+import { areLivePriceKeysSettled } from "@/shared/live-price-readiness";
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 
 import type { PortfolioDashboardConfig, PortfolioProviderSummary } from "./types";
 
@@ -17,7 +19,17 @@ type UsePortfolioLivePricesOptions = {
 const livePriceValueMaxAgeMs = 10_000;
 const livePriceRefreshIntervalMs = 15_000;
 
-function getRequiredPriceKeys(providers: PortfolioProviderSummary[] | undefined) {
+function normalizePriceKey(
+  value: string | null | undefined,
+  priceQueryParam: PortfolioDashboardConfig["priceQueryParam"]
+) {
+  return priceQueryParam === "cryptos" ? normalizeCryptoSymbol(value) : value;
+}
+
+function getRequiredPriceKeys(
+  providers: PortfolioProviderSummary[] | undefined,
+  priceQueryParam: PortfolioDashboardConfig["priceQueryParam"]
+) {
   if (!providers) {
     return [];
   }
@@ -26,8 +38,14 @@ function getRequiredPriceKeys(providers: PortfolioProviderSummary[] | undefined)
     ...new Set(
       providers
         .flatMap((provider) => provider.products)
-        .filter((product) => product.isin && product.quantity > 0.000001)
-        .map((product) => product.isin as string)
+        .map((product) => ({
+          key: normalizePriceKey(product.isin, priceQueryParam),
+          quantity: product.quantity
+        }))
+        .filter((product): product is { key: string; quantity: number } =>
+          !!product.key && product.quantity > 0.000001
+        )
+        .map((product) => product.key)
     )
   ].sort();
 }
@@ -36,17 +54,9 @@ function getPriceRequestKey(
   providers: PortfolioProviderSummary[] | undefined,
   priceQueryParam: PortfolioDashboardConfig["priceQueryParam"]
 ) {
-  const keys = getRequiredPriceKeys(providers);
+  const keys = getRequiredPriceKeys(providers, priceQueryParam);
 
   return keys.length > 0 ? `${priceQueryParam}:${keys.join(",")}` : "";
-}
-
-function areLivePricesReady(keys: string[], livePrices: Record<string, number | null>) {
-  if (keys.length === 0) {
-    return true;
-  }
-
-  return keys.every((key) => livePrices[key] != null);
 }
 
 export function usePortfolioLivePrices({
@@ -61,22 +71,23 @@ export function usePortfolioLivePrices({
   const lastPreloadKeyRef = useRef("");
 
   const fetchLivePrices = useCallback(async (currentProviders: PortfolioProviderSummary[]) => {
-    const allIsins = new Set<string>();
+    const priceKeys = new Set<string>();
     for (const provider of currentProviders) {
       for (const product of provider.products) {
-        if (product.isin && product.quantity > 0.000001) allIsins.add(product.isin);
+        const priceKey = normalizePriceKey(product.isin, priceQueryParam);
+        if (priceKey && product.quantity > 0.000001) priceKeys.add(priceKey);
       }
     }
-    if (allIsins.size === 0) return;
+    if (priceKeys.size === 0) return;
 
     const prices = await fetchAndCacheLivePrices({
-      [priceQueryParam]: [...allIsins]
+      [priceQueryParam]: [...priceKeys]
     }, { maxAgeMs: livePriceValueMaxAgeMs });
-    const requiredKeys = getRequiredPriceKeys(currentProviders);
+    const requiredKeys = getRequiredPriceKeys(currentProviders, priceQueryParam);
     const requestKey = getPriceRequestKey(currentProviders, priceQueryParam);
 
     setLivePrices(prev => ({ ...prev, ...prices }));
-    if (areLivePricesReady(requiredKeys, prices)) {
+    if (areLivePriceKeysSettled(requiredKeys, prices)) {
       setReadyRequestKey(requestKey);
       setPricesReady(true);
     } else {
@@ -90,8 +101,12 @@ export function usePortfolioLivePrices({
 
     const requestKey = providers
       .flatMap((provider) => provider.products)
-      .filter((product) => product.isin && product.quantity > 0.000001)
-      .map((product) => product.isin)
+      .map((product) => ({
+        key: normalizePriceKey(product.isin, priceQueryParam),
+        quantity: product.quantity
+      }))
+      .filter((product) => product.key && product.quantity > 0.000001)
+      .map((product) => product.key)
       .sort()
       .join(",");
 
@@ -101,7 +116,7 @@ export function usePortfolioLivePrices({
 
     lastPreloadKeyRef.current = requestKey;
     void fetchLivePrices(providers);
-  }, [providers, fetchLivePrices, shouldLoad]);
+  }, [providers, fetchLivePrices, priceQueryParam, shouldLoad]);
 
   useEffect(() => {
     if (!isActive || !providers) return;

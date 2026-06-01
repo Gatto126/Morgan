@@ -1,4 +1,5 @@
 import type { ChartPoint } from "@/types/chart";
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 
 import type { MonthBucket, PortfolioBucket, PortfolioData, PortfolioProviderSummary, TimeRange } from "./types";
 
@@ -247,7 +248,8 @@ function getProductLiveValue(
     return null;
   }
 
-  const livePrice = product.isin ? livePrices[product.isin] : null;
+  const priceKey = normalizeCryptoSymbol(product.isin);
+  const livePrice = priceKey ? livePrices[priceKey] : null;
 
   return livePrice != null
     ? Math.round(product.quantity * livePrice * 100)

@@ -3,6 +3,8 @@ import {
   fetchAndCacheLivePrices,
   globalLivePricesCache
 } from "@/shared/live-prices";
+import { areLivePriceKeysSettled } from "@/shared/live-price-readiness";
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { getBinanceLivePriceKeys } from "./binance-live-values";
 import type { BinanceBalanceRow, ProviderSummary } from "./types";
 
@@ -29,8 +31,9 @@ function getPriceRequestKey(
       }
     }
     for (const token of provider.cryptoTokens) {
-      if (token.tokenSymbol && Math.abs(token.quantity) > 0.000001) {
-        cryptos.add(token.tokenSymbol);
+      const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
+      if (tokenSymbol && Math.abs(token.quantity) > 0.000001) {
+        cryptos.add(tokenSymbol);
       }
     }
   }
@@ -81,21 +84,14 @@ function getRequiredCryptoPriceKeys(
 
   for (const provider of summaries ?? []) {
     for (const token of provider.cryptoTokens) {
-      if (token.tokenSymbol && Math.abs(token.quantity) > 0.000001) {
-        keys.add(token.tokenSymbol);
+      const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
+      if (tokenSymbol && Math.abs(token.quantity) > 0.000001) {
+        keys.add(tokenSymbol);
       }
     }
   }
 
   return [...keys].sort();
-}
-
-function areLivePricesReady(keys: string[], livePrices: Record<string, number | null>) {
-  if (keys.length === 0) {
-    return true;
-  }
-
-  return keys.every((key) => livePrices[key] != null);
 }
 
 export function useDashboardLivePrices(
@@ -123,8 +119,9 @@ export function useDashboardLivePrices(
         }
       }
       for (const token of provider.cryptoTokens) {
-        if (token.tokenSymbol && Math.abs(token.quantity) > 0.000001) {
-          allCryptos.add(token.tokenSymbol);
+        const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
+        if (tokenSymbol && Math.abs(token.quantity) > 0.000001) {
+          allCryptos.add(tokenSymbol);
         }
       }
     }
@@ -141,9 +138,9 @@ export function useDashboardLivePrices(
     const cryptoKeys = getRequiredCryptoPriceKeys(summaries, balances);
     const requiredKeys = getRequiredPriceKeys(summaries, balances);
     const requestKey = getPriceRequestKey(summaries, balances);
-    const investmentReady = areLivePricesReady(investmentKeys, prices);
-    const cryptoReady = areLivePricesReady(cryptoKeys, prices);
-    const allReady = areLivePricesReady(requiredKeys, prices);
+    const investmentReady = areLivePriceKeysSettled(investmentKeys, prices);
+    const cryptoReady = areLivePriceKeysSettled(cryptoKeys, prices);
+    const allReady = areLivePriceKeysSettled(requiredKeys, prices);
 
     setLivePrices((previousPrices) => ({ ...previousPrices, ...prices }));
     setReadyRequestKey(requestKey);

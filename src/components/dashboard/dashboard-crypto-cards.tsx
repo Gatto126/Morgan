@@ -1,4 +1,5 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 
 import { DashboardBinanceCard } from "./dashboard-binance-card";
 import {
@@ -48,9 +49,10 @@ export function DashboardCryptoCards({
   return (
     <div className="flex flex-col gap-5">
       {providersWithTokens.map((provider) => {
-        const providerHasLivePrice = provider.cryptoTokens.some((token) =>
-          token.tokenSymbol ? livePrices[token.tokenSymbol] != null : false
-        );
+        const providerHasLivePrice = provider.cryptoTokens.some((token) => {
+          const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
+          return tokenSymbol ? livePrices[tokenSymbol] != null : false;
+        });
 
         return (
           <DashboardCardShell
@@ -61,7 +63,8 @@ export function DashboardCryptoCards({
           >
             <div className="space-y-4">
               {provider.cryptoTokens.map((token) => {
-              const price = token.tokenSymbol ? livePrices[token.tokenSymbol] : null;
+              const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
+              const price = tokenSymbol ? livePrices[tokenSymbol] : null;
               const currentValueCents = price == null
                 ? token.investedValue
                 : Math.round(token.quantity * price * 100);

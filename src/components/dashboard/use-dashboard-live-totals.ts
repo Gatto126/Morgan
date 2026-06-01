@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 
 import type { BinanceBalanceRow, DashboardData, ProviderSummary } from "./types";
 
@@ -42,7 +43,8 @@ export function useDashboardLiveTotals({
     for (const token of provider.cryptoTokens) {
       if (Math.abs(token.quantity) > 0.000001) {
         hasHoldings = true;
-        const livePrice = token.tokenSymbol ? livePrices[token.tokenSymbol] : null;
+        const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
+        const livePrice = tokenSymbol ? livePrices[tokenSymbol] : null;
         if (livePrice != null) {
           liveTotal += Math.round(token.quantity * livePrice * 100);
         } else {

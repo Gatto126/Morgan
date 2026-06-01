@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import type { UIEvent } from "react";
 
 import { SlotValue } from "@/components/finance-shell/slot-value";
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { scheduleIdleTask, useDeferredTransactionRows } from "@/hooks/use-deferred-transaction-rows";
 import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transaction-rows";
 import { cn } from "@/shared/utils";
@@ -13,7 +14,7 @@ import type { PortfolioDashboardConfig, PortfolioProviderSummary, PortfolioTrans
 type PortfolioProviderCardsProps = {
   portalNode: HTMLElement | null;
   providers: PortfolioProviderSummary[];
-  config: Pick<PortfolioDashboardConfig, "identifierLabel" | "showCashback" | "transactionFilter">;
+  config: Pick<PortfolioDashboardConfig, "identifierLabel" | "priceQueryParam" | "showCashback" | "transactionFilter">;
   livePrices: Record<string, number | null>;
   isActive: boolean;
   transactionRowsEndpoint: string;
@@ -27,6 +28,13 @@ const LOAD_MORE_SCROLL_THRESHOLD_PX = 160;
 
 function getFallbackUnitPriceCents(investedValue: number, quantity: number) {
   return Math.abs(quantity) > 0.000001 ? Math.round(investedValue / quantity) : investedValue;
+}
+
+function getProductPriceKey(
+  product: PortfolioProviderSummary["products"][number],
+  config: Pick<PortfolioDashboardConfig, "priceQueryParam">
+) {
+  return config.priceQueryParam === "cryptos" ? normalizeCryptoSymbol(product.isin) : product.isin;
 }
 
 export function PortfolioProviderCards({
@@ -65,9 +73,10 @@ export function PortfolioProviderCards({
   return createPortal(
     <div className={cn("flex flex-col gap-5 w-full pb-6 lg:pb-0", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
       {providers.map((provider) => {
-        const providerHasLivePrice = provider.products.some((product) =>
-          product.isin ? livePrices[product.isin] != null : false
-        );
+        const providerHasLivePrice = provider.products.some((product) => {
+          const priceKey = getProductPriceKey(product, config);
+          return priceKey ? livePrices[priceKey] != null : false;
+        });
 
         return (
           <div key={provider.sourceInstitution} className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
@@ -91,7 +100,8 @@ export function PortfolioProviderCards({
                       </span>
                       <span className="text-xs font-bold text-[color:var(--text-main)] flex-shrink-0 pt-[1px]">
                         {(() => {
-                          const price = product.isin ? livePrices[product.isin] : null;
+                          const priceKey = getProductPriceKey(product, config);
+                          const price = priceKey ? livePrices[priceKey] : null;
                           const priceCents = price != null
                             ? Math.round(price * 100)
                             : getFallbackUnitPriceCents(product.investedValue, product.quantity);
@@ -128,7 +138,8 @@ export function PortfolioProviderCards({
                       <div className="flex justify-between">
                         <span className="pl-3 text-[color:var(--text-dim)] font-medium">Current Value</span>
                         {(() => {
-                          const price = product.isin ? livePrices[product.isin] : null;
+                          const priceKey = getProductPriceKey(product, config);
+                          const price = priceKey ? livePrices[priceKey] : null;
                           if (price == null) {
                             return (
                               <span className="font-semibold text-[color:var(--text-dim)] underline decoration-dotted decoration-[color:var(--text-dim)]">

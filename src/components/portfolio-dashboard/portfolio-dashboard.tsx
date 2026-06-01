@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { cn } from "@/shared/utils";
 import type { ChartPoint } from "@/types/chart";
 import { DashboardPanelHost } from "@/components/dashboard-panel-host";
@@ -137,7 +138,8 @@ export function PortfolioDashboard({
     for (const prod of provider.products) {
       if (Math.abs(prod.quantity) > 0.000001) {
         hasHoldings = true;
-        const livePrice = prod.isin ? livePrices[prod.isin] : null;
+        const priceKey = normalizeCryptoSymbol(prod.isin);
+        const livePrice = priceKey ? livePrices[priceKey] : null;
         if (livePrice != null) {
           liveTotal += Math.round(prod.quantity * livePrice * 100);
         } else {

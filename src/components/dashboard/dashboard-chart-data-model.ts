@@ -1,3 +1,5 @@
+import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
+
 import type { DashboardChartPoint } from "./dashboard-chart-types";
 import { filterData } from "./formatters";
 import type { AccountTab, DashboardData, MonthlyBucket, ProviderSummary, TimeRange } from "./types";
@@ -460,7 +462,8 @@ function getLiveCryptoValues(
         return;
       }
 
-      const livePrice = token.tokenSymbol ? livePrices[token.tokenSymbol] : null;
+      const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
+      const livePrice = tokenSymbol ? livePrices[tokenSymbol] : null;
       const value = livePrice != null
         ? Math.round(token.quantity * livePrice * 100)
         : token.investedValue;
