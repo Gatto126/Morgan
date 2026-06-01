@@ -52,7 +52,7 @@ export function DashboardTopbarTab({
     ));
   };
   const valuePending = value === "--" || value === "-";
-  const displayValue = valuePending ? "0,00 \u20ac" : value;
+  const displayValue = valuePending ? "" : value;
   const { amount, currency } = getDashboardTopbarValueParts(displayValue);
   const showEuroIcon = currency === "EUR" || currency === "\u20ac";
   const hasTextIdentity = !!label;

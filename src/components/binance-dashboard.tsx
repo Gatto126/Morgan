@@ -91,11 +91,8 @@ export function BinanceDashboard({
   const [timeRange, setTimeRange] = useState<BinanceTimeRange>("ALL");
   const [selectedPoint, setSelectedPoint] = useState<{ month: string; seriesKey: string; value: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const initialBinancePayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey);
-  const [balances, setBalances] = useState<BinanceBalance[]>(
-    Array.isArray(initialBinancePayload?.balances) ? initialBinancePayload.balances as BinanceBalance[] : []
-  );
-  const [balancesKnown, setBalancesKnown] = useState(!!initialBinancePayload);
+  const [balances, setBalances] = useState<BinanceBalance[]>([]);
+  const [balancesKnown, setBalancesKnown] = useState(false);
   const [freshBinanceRefreshKey, setFreshBinanceRefreshKey] = useState(binanceRefreshKey);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -116,6 +113,23 @@ export function BinanceDashboard({
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  useEffect(() => {
+    const cachedPayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey);
+    if (!cachedPayload) {
+      return;
+    }
+
+    const hydrateTimer = window.setTimeout(() => {
+      if (Array.isArray(cachedPayload.balances)) {
+        setBalances(cachedPayload.balances as BinanceBalance[]);
+      }
+      setBalancesKnown(true);
+      setFreshBinanceRefreshKey(binanceRefreshKey);
+    }, 0);
+
+    return () => window.clearTimeout(hydrateTimer);
+  }, [binanceRefreshKey, userId]);
 
   const loadBalances = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     const data = await fetchDashboardStageData("binance", userId, { force, version: binanceRefreshKey });

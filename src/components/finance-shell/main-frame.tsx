@@ -1,13 +1,20 @@
+"use client";
+
 import type { ChangeEvent, ReactNode, RefObject } from "react";
+import dynamic from "next/dynamic";
 
 import PlusIcon from "../ui/plus-icon";
 import { DashboardStageStack } from "./dashboard-stage-stack";
-import { DashboardTopbarShell } from "./dashboard-topbar-shell";
 import { SidebarNavigation } from "./sidebar-navigation";
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
 
 import { cn } from "@/shared/utils";
+
+const DashboardTopbarShell = dynamic(
+  () => import("./dashboard-topbar-shell").then((mod) => mod.DashboardTopbarShell),
+  { ssr: false }
+);
 
 type FinanceShellMainFrameProps = {
   activeUser: UserRecord | null;
