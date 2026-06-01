@@ -34,6 +34,18 @@ const emptyEntry: DashboardTopbarEntry = {
 const pendingTopbarValue = "--";
 const storagePrefix = "morgan:dashboard-topbar:v1:";
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+const stageRootOrder: Partial<Record<DashboardStageKey, string[]>> = {
+  binance: ["binance"],
+  checking: ["checking"],
+  crypto: ["crypto"],
+  dashboard: ["heritage", "checking", "investment", "crypto"],
+  investment: ["investment"]
+};
+const providerOrder: Record<string, number> = {
+  bbva: 0,
+  trade_republic: 1,
+  binance: 2
+};
 
 function getEntryKey(userId: string, stage: DashboardStageKey) {
   return `${userId}:${stage}`;
@@ -64,6 +76,63 @@ function serializeItems(items: DashboardTopbarItem[]): StoredDashboardTopbarItem
     label,
     value
   }));
+}
+
+function normalizeProviderKey(stage: DashboardStageKey, item: DashboardTopbarItem) {
+  const stagePrefix = `${stage}:`;
+  const identity = item.id.startsWith(stagePrefix)
+    ? item.id.slice(stagePrefix.length)
+    : item.id;
+
+  return identity
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function getItemSortLabel(stage: DashboardStageKey, item: DashboardTopbarItem) {
+  return (item.label ?? normalizeProviderKey(stage, item))
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeDashboardTopbarItems(
+  stage: DashboardStageKey,
+  items: DashboardTopbarItem[]
+) {
+  const roots = stageRootOrder[stage] ?? [];
+
+  return items
+    .map((item, index) => ({
+      index,
+      item,
+      providerKey: normalizeProviderKey(stage, item),
+      rootIndex: roots.indexOf(item.id)
+    }))
+    .sort((left, right) => {
+      const leftIsRoot = left.rootIndex !== -1;
+      const rightIsRoot = right.rootIndex !== -1;
+
+      if (leftIsRoot || rightIsRoot) {
+        if (leftIsRoot && rightIsRoot) {
+          return left.rootIndex - right.rootIndex;
+        }
+
+        return leftIsRoot ? -1 : 1;
+      }
+
+      const providerRankDelta =
+        (providerOrder[left.providerKey] ?? Number.POSITIVE_INFINITY)
+        - (providerOrder[right.providerKey] ?? Number.POSITIVE_INFINITY);
+
+      if (providerRankDelta !== 0) {
+        return providerRankDelta;
+      }
+
+      const labelDelta = getItemSortLabel(stage, left.item).localeCompare(getItemSortLabel(stage, right.item));
+      return labelDelta !== 0 ? labelDelta : left.index - right.index;
+    })
+    .map(({ item }) => item);
 }
 
 function writeStoredTopbarItems(cacheKey: string, items: DashboardTopbarItem[]) {
@@ -207,7 +276,7 @@ export function readStoredDashboardTopbarItems(
       return [];
     }
 
-    return parsedItems
+    const items = parsedItems
       .filter((item): item is StoredDashboardTopbarItem => typeof item.id === "string")
       .map((item) => {
         const storedValue = item.value && item.value !== "--" && item.value !== "-"
@@ -224,6 +293,8 @@ export function readStoredDashboardTopbarItems(
           value: placeholderValues ? "" : storedValue
         };
       });
+
+    return normalizeDashboardTopbarItems(stage, items);
   } catch {
     return [];
   }
@@ -243,27 +314,28 @@ export function publishDashboardTopbar(
   items: DashboardTopbarItem[]
 ) {
   const cacheKey = getEntryKey(userId, stage);
+  const normalizedItems = normalizeDashboardTopbarItems(stage, items);
 
-  if (items.length === 0) {
+  if (normalizedItems.length === 0) {
     clearDelayedTopbarPublish(cacheKey);
-    commitDashboardTopbar(cacheKey, items);
+    commitDashboardTopbar(cacheKey, normalizedItems);
     return;
   }
 
   const previousItems = entries.get(cacheKey)?.items ?? readStoredDashboardTopbarItems(stage, userId);
-  if (shouldDropInitialZeroTopbarPublish(previousItems, items)) {
+  if (shouldDropInitialZeroTopbarPublish(previousItems, normalizedItems)) {
     clearDelayedTopbarPublish(cacheKey);
     dropUnverifiedTopbar(cacheKey);
     return;
   }
 
-  if (shouldDropUnreadyTopbarPublish(previousItems, items)) {
+  if (shouldDropUnreadyTopbarPublish(previousItems, normalizedItems)) {
     clearDelayedTopbarPublish(cacheKey);
     return;
   }
 
   clearDelayedTopbarPublish(cacheKey);
-  commitDashboardTopbar(cacheKey, items);
+  commitDashboardTopbar(cacheKey, normalizedItems);
 }
 
 export function seedDashboardTopbarLayout(
@@ -271,21 +343,23 @@ export function seedDashboardTopbarLayout(
   userId: string,
   items: DashboardTopbarItem[]
 ) {
-  if (items.length === 0) {
+  const normalizedItems = normalizeDashboardTopbarItems(stage, items);
+
+  if (normalizedItems.length === 0) {
     return;
   }
 
   const cacheKey = getEntryKey(userId, stage);
   const previousEntry = entries.get(cacheKey);
   if (previousEntry) {
-    if (shouldDropUnreadyTopbarPublish(previousEntry.items, items)) {
+    if (shouldDropUnreadyTopbarPublish(previousEntry.items, normalizedItems)) {
       return;
     }
 
     const previousById = new Map(previousEntry.items.map((item) => [item.id, item]));
-    const nextIds = new Set(items.map((item) => item.id));
+    const nextIds = new Set(normalizedItems.map((item) => item.id));
     const mergedItems = [
-      ...items.map((item) => {
+      ...normalizedItems.map((item) => {
         const previousItem = previousById.get(item.id);
 
         return previousItem
@@ -299,19 +373,20 @@ export function seedDashboardTopbarLayout(
       }),
       ...previousEntry.items.filter((item) => !nextIds.has(item.id))
     ];
+    const normalizedMergedItems = normalizeDashboardTopbarItems(stage, mergedItems);
 
     entries.set(cacheKey, {
-      items: mergedItems,
+      items: normalizedMergedItems,
       updatedAt: Date.now()
     });
-    writeStoredTopbarItems(cacheKey, mergedItems);
+    writeStoredTopbarItems(cacheKey, normalizedMergedItems);
     emitTopbarChange();
     return;
   }
 
-  writeStoredTopbarItems(cacheKey, items);
+  writeStoredTopbarItems(cacheKey, normalizedItems);
   entries.set(cacheKey, {
-    items,
+    items: normalizedItems,
     updatedAt: Date.now()
   });
   emitTopbarChange();

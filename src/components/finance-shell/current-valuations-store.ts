@@ -803,7 +803,33 @@ function isSnapshotCurrentForProfile(
     && snapshot.version.investmentCount === profile.investmentCount
     && snapshot.version.cryptoCount === profile.cryptoCount
     && snapshot.version.binanceRefreshKey === (options.binanceRefreshKey ?? 0)
-    && snapshot.version.dateKey === (options.dateKey ?? getUtcDateKey());
+    && snapshot.version.dateKey === (options.dateKey ?? getUtcDateKey())
+    && isSnapshotLivePriceFresh(snapshot, options);
+}
+
+function isSnapshotLivePriceFresh(
+  snapshot: CurrentValuationSnapshot,
+  options: EnsureCurrentValuationOptions
+) {
+  if (typeof options.livePriceMaxAgeMs !== "number") {
+    return true;
+  }
+
+  const hasRequestedQuotes = snapshot.quoteKeys.cryptos.length > 0 || snapshot.quoteKeys.isins.length > 0;
+  if (!hasRequestedQuotes) {
+    return true;
+  }
+
+  if (snapshot.diagnostics.missingKeys.length > 0 || snapshot.diagnostics.unavailableKeys.length > 0) {
+    return false;
+  }
+
+  if (typeof snapshot.diagnostics.maxQuoteAgeMs !== "number") {
+    return false;
+  }
+
+  const elapsedSinceSnapshotMs = Math.max(0, Date.now() - snapshot.updatedAt);
+  return snapshot.diagnostics.maxQuoteAgeMs + elapsedSinceSnapshotMs <= options.livePriceMaxAgeMs;
 }
 
 async function fetchCurrentValuationStageData(

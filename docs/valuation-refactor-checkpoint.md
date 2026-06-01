@@ -1,7 +1,7 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `7da67dd`
+Current baseline commit: `3b5d8b7`
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -415,6 +415,11 @@ Implemented so far:
   - `src/components/dashboard.tsx`
 - Binance dashboard manual current sync now seeds the Binance stage cache and forces a profile valuation refresh after balances are synced:
   - `src/components/binance-dashboard.tsx`
+- dashboard topbar publication now normalizes stage/provider order in the shared topbar store:
+  - `src/components/finance-shell/dashboard-topbar-store.ts`
+- dashboard navigation now refreshes the central valuation alongside the visible stage, and current valuation freshness accounts for live quote age:
+  - `src/components/finance-shell.tsx`
+  - `src/components/finance-shell/current-valuations-store.ts`
 
 Important limitation:
 
@@ -425,6 +430,8 @@ Known mismatch found during production smoke and current mitigation:
 - The main dashboard resting topbar used to read the legacy `buildDashboardCurrentSnapshot(...)` path while crypto/investment dashboards preferred `useCurrentValuationSnapshot(...)`. `src/components/dashboard.tsx` now prefers the central valuation chart point for resting topbar/card current values, with the local builder only as fallback while a snapshot is unavailable.
 - The Binance dashboard manual sync button used to update local balances without forcing the central current valuation. `src/components/binance-dashboard.tsx` now seeds the Binance stage cache and calls `ensureFinanceCurrentValuation(... force: true)` after sync.
 - The document and code should treat `investment` like `crypto` for current values: both depend on live market quotes and must be valued centrally, not rebuilt independently per dashboard.
+- Production smoke after `3b5d8b7` showed provider tabs could swap order between publishers. The shared topbar store now applies a canonical order per stage, so clicking BBVA/TR or switching dashboards must not reorder the buttons.
+- Production smoke also showed Trade Republic crypto prices could fail to refresh when Binance API was not connected. Binance is optional: a no-Binance profile must still fetch TR crypto live quotes and publish `crypto = Trade Republic crypto`.
 
 ## Gaps To Close
 
@@ -458,6 +465,7 @@ Remaining work:
 - migrate checking dashboard card/topbar/chart where useful, though checking does not depend on live quotes;
 - remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough;
 - expand tests for orchestration races and UI consistency.
+- watch the topbar UI while changing dashboard/stage: values are increasingly centralized, but active state, animations and stored hydration still live in the topbar UI bridge.
 
 Snapshot shape should include:
 
@@ -705,6 +713,7 @@ Manual production smoke after deploy:
    - visible `--`;
    - card/topbar mismatch;
    - today chart point mismatch.
+   - provider tabs reordering after clicking BBVA/TR or switching dashboard.
 6. Keep main dashboard open for 20-30 seconds, then enter crypto/investment and confirm values were already updated.
 7. Run direct reload tests:
    - F5 on dashboard;
@@ -712,13 +721,17 @@ Manual production smoke after deploy:
    - F5 on investment;
    - F5 on crypto;
    - F5 on Binance.
-8. Run state-transition tests:
+8. Run no-Binance crypto checks:
+   - use a profile without Binance credentials;
+   - confirm the Binance dashboard/button is not required for TR crypto prices;
+   - confirm main `crypto`, crypto dashboard total, cards and today's chart point agree after focus/navigation.
+9. Run state-transition tests:
    - switch profile while a dashboard is still loading;
    - import transactions, then navigate before the loader closes;
    - connect Binance API and watch crypto/heritage/topbar/card;
    - delete Binance API and confirm Binance values disappear coherently;
    - background the tab for a few minutes, return to focus, then navigate to crypto/investment.
-9. Run degraded-data checks when possible:
+10. Run degraded-data checks when possible:
    - simulate slow/offline network and confirm last validated values do not become zero;
    - simulate missing quote and confirm diagnostics show `missingKeys`;
    - confirm session expiry/401 does not look like an empty portfolio.

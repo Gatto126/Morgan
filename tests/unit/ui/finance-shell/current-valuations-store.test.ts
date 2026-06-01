@@ -201,6 +201,52 @@ describe("current valuations store", () => {
     });
   });
 
+  it("values Trade Republic crypto without requiring Binance credentials", () => {
+    const now = 1_000;
+    const snapshot = buildCurrentValuationSnapshot({
+      dashboardData,
+      dateKey: "2026-06-01",
+      livePrices: {
+        BTC: 20_000,
+        IE00B4L5Y983: 100
+      },
+      liveQuotes: {
+        BTC: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 20_000
+        },
+        IE00B4L5Y983: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 100
+        }
+      },
+      now,
+      profile: {
+        ...profile,
+        hasBinanceCredentials: false
+      }
+    });
+
+    expect(snapshot.status).toBe("ready");
+    expect(snapshot.totals).toMatchObject({
+      binance: { cents: 0, status: "ready" },
+      checking: { cents: 10_000, status: "ready" },
+      crypto: { cents: 1_000_000, status: "ready" },
+      heritage: { cents: 1_030_000, status: "ready" },
+      investment: { cents: 20_000, status: "ready" }
+    });
+    expect(selectCurrentValuationTopbar(snapshot, "crypto").map((item) => item.id)).toEqual([
+      "crypto",
+      "crypto:trade_republic"
+    ]);
+  });
+
   it("keeps aggregate values pending when a required live quote is missing", () => {
     const snapshot = buildCurrentValuationSnapshot({
       dashboardData,

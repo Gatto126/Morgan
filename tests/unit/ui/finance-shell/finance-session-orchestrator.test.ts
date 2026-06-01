@@ -253,6 +253,78 @@ describe("finance session orchestrator", () => {
     expect(getCurrentValuationSnapshot(valuationUser.id)).toBe(result.snapshot);
   });
 
+  it("refreshes Trade Republic crypto valuation without Binance credentials", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T08:00:00.000Z"));
+
+    const valuationUser: UserRecord = {
+      ...user,
+      checkingCount: 0,
+      cryptoCount: 1,
+      hasBinanceCredentials: false,
+      id: "profile-current-valuation-no-binance",
+      investmentCount: 0,
+      transactionCount: 1
+    };
+    let btcPrice = 60_000;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/transactions/dashboard?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            accountTotals: { checking: 0, crypto: 0, heritage: 0, investment: 0 },
+            dailyData: [],
+            monthlyData: [],
+            providerSummaries: [{
+              checking: { cashback: 0, expenses: 0, income: 0, interest: 0, tax: 0, total: 0 },
+              cryptoTokens: [{ investedValue: 0, quantity: 0.1, tokenName: "Bitcoin", tokenSymbol: "BTC" }],
+              investmentProducts: [],
+              sourceInstitution: "trade_republic",
+              total: 0
+            }]
+          })
+        };
+      }
+
+      if (url === "/api/prices?cryptos=BTC") {
+        return {
+          ok: true,
+          json: async () => ({ BTC: btcPrice })
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = await ensureFinanceCurrentValuation({
+      event: "login",
+      livePriceMaxAgeMs: 0,
+      priority: "user",
+      user: valuationUser
+    });
+
+    expect(first.snapshot.totals).toMatchObject({
+      binance: { cents: 0 },
+      crypto: { cents: 600_000 },
+      heritage: { cents: 600_000 }
+    });
+
+    vi.setSystemTime(new Date("2026-06-01T08:00:05.000Z"));
+    btcPrice = 61_000;
+
+    const second = await ensureFinanceCurrentValuation({
+      event: "dashboard-change",
+      livePriceMaxAgeMs: 0,
+      priority: "user",
+      user: valuationUser
+    });
+
+    expect(second.snapshot.totals.crypto.cents).toBe(610_000);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith("/api/binance/"))).toBe(false);
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/prices?cryptos=BTC")).toHaveLength(2);
+  });
+
   it("reports refreshed live quote diagnostics after a later price update", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-01T08:00:00.000Z"));

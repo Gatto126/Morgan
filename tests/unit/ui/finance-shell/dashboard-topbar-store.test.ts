@@ -201,6 +201,94 @@ describe("dashboard topbar store", () => {
     expect(store.readStoredDashboardTopbarItems("crypto", "user-1")).toEqual([]);
   });
 
+  it("keeps provider order canonical when publishers disagree", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("checking", "user-1", [
+      {
+        active: true,
+        id: "checking",
+        value: "4.485,13 \u20ac"
+      },
+      {
+        active: false,
+        id: "checking:trade_republic",
+        label: "TR",
+        value: "1.088,39 \u20ac"
+      },
+      {
+        active: false,
+        id: "checking:bbva",
+        label: "BBVA",
+        value: "3.396,74 \u20ac"
+      }
+    ]);
+
+    expect(store.readStoredDashboardTopbarItems("checking", "user-1").map((item) => item.id)).toEqual([
+      "checking",
+      "checking:bbva",
+      "checking:trade_republic"
+    ]);
+
+    store.publishDashboardTopbar("checking", "user-1", [
+      {
+        active: true,
+        id: "checking",
+        value: "4.485,13 \u20ac"
+      },
+      {
+        active: false,
+        id: "checking:bbva",
+        label: "BBVA",
+        value: "3.396,74 \u20ac"
+      },
+      {
+        active: true,
+        id: "checking:trade_republic",
+        label: "TR",
+        value: "1.088,39 \u20ac"
+      }
+    ]);
+
+    expect(store.readStoredDashboardTopbarItems("checking", "user-1").map((item) => item.id)).toEqual([
+      "checking",
+      "checking:bbva",
+      "checking:trade_republic"
+    ]);
+  });
+
+  it("keeps Binance after provider crypto entries", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("crypto", "user-1", [
+      {
+        active: true,
+        id: "crypto",
+        value: "2.467,76 \u20ac"
+      },
+      {
+        active: false,
+        id: "crypto:BINANCE",
+        label: "BINANCE",
+        value: "2.434,57 \u20ac"
+      },
+      {
+        active: false,
+        id: "crypto:trade_republic",
+        label: "TR",
+        value: "33,19 \u20ac"
+      }
+    ]);
+
+    expect(store.readStoredDashboardTopbarItems("crypto", "user-1").map((item) => item.id)).toEqual([
+      "crypto",
+      "crypto:trade_republic",
+      "crypto:BINANCE"
+    ]);
+  });
+
   it("keeps an initial all-zero topbar hidden until a real value arrives", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });

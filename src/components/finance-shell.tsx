@@ -490,14 +490,23 @@ export function FinanceShell({
 
     const stageKey = resolveVisibleDashboardStage(newStage, activeUser);
 
-    void ensureFinanceStageReady({
-      binanceRefreshKey,
-      event: "dashboard-change",
-      livePriceMaxAgeMs: 0,
-      priority: "user",
-      stage: stageKey,
-      user: activeUser
-    }).catch(() => {
+    void Promise.allSettled([
+      ensureFinanceStageReady({
+        binanceRefreshKey,
+        event: "dashboard-change",
+        livePriceMaxAgeMs: 0,
+        priority: "user",
+        stage: stageKey,
+        user: activeUser
+      }),
+      ensureFinanceCurrentValuation({
+        binanceRefreshKey,
+        event: "dashboard-change",
+        livePriceMaxAgeMs: 0,
+        priority: "user",
+        user: activeUser
+      })
+    ]).catch(() => {
       // The destination dashboard owns the visible error state.
     });
   }, [activeUser, binanceRefreshKey, navigateTo]);
