@@ -1,4 +1,5 @@
 import path from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 
 import { chromium } from "playwright";
 
@@ -13,6 +14,45 @@ import {
   waitForProfile
 } from "./e2e-helpers.mjs";
 
+function parseEnvValue(rawValue) {
+  const trimmed = rawValue.trim();
+
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+
+  return trimmed;
+}
+
+function loadEnvFile(filePath) {
+  if (!existsSync(filePath)) return false;
+
+  const body = readFileSync(filePath, "utf8");
+
+  for (const rawLine of body.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const separatorIndex = line.indexOf("=");
+    if (separatorIndex <= 0) continue;
+
+    const key = line.slice(0, separatorIndex).trim();
+    const value = parseEnvValue(line.slice(separatorIndex + 1));
+
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+
+  return true;
+}
+
+const envFileArg = process.argv.find((arg) => arg.startsWith("--env-file="));
+const envFilePath = path.resolve(envFileArg ? envFileArg.slice("--env-file=".length) : ".env.e2e.local");
+const loadedEnvFile = loadEnvFile(envFilePath);
 const baseUrl = process.env.TEST_BASE_URL ?? "https://morgan-chi.vercel.app";
 const testEmail = process.env.MORGAN_TEST_EMAIL ?? "";
 const testPassword = process.env.MORGAN_TEST_PASSWORD ?? "";
@@ -30,7 +70,7 @@ const steps = [];
 const screenshots = [];
 
 if (!testEmail || !testPassword) {
-  throw new Error("Set MORGAN_TEST_EMAIL and MORGAN_TEST_PASSWORD to run the persistent-account smoke test.");
+  throw new Error("Set MORGAN_TEST_EMAIL and MORGAN_TEST_PASSWORD, or create .env.e2e.local, to run the persistent-account smoke test.");
 }
 
 if (requireBinance && (!binanceApiKey || !binanceApiSecret)) {
@@ -355,6 +395,7 @@ try {
   console.log(JSON.stringify({
     ok: true,
     baseUrl,
+    loadedEnvFile,
     profileName,
     createdProfileId,
     keepProfile,
@@ -381,6 +422,7 @@ try {
   console.error(JSON.stringify({
     ok: false,
     baseUrl,
+    loadedEnvFile,
     profileName,
     createdProfileId,
     keepProfile,
