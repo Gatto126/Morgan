@@ -5,6 +5,10 @@ import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } 
 import type { BinanceBalanceRow } from "@/components/dashboard/types";
 
 import { seedDashboardStageDataCache } from "./dashboard-stage-data-cache";
+import {
+  ensureFinanceStageReady,
+  invalidateFinanceProfile
+} from "./finance-session-orchestrator";
 import type { SettingsSection } from "./settings-panel-types";
 import type { UserRecord } from "./types";
 
@@ -133,20 +137,27 @@ export function useFinanceBinanceActions({
           : "Connected! Empty wallet."
       );
       keepApiSettingsOpen();
-      setBinanceRefreshKey((key) => {
-        const nextKey = key + 1;
-        const fetchedAt = Date.now();
-        const cachePayload = {
-          balances,
-          hasApiKey: syncPayload.hasApiKey ?? true,
-          isStale: syncPayload.isStale ?? false,
-          syncedAt
-        };
+      const nextRefreshKey = binanceRefreshKey + 1;
+      const fetchedAt = Date.now();
+      const cachePayload = {
+        balances,
+        hasApiKey: syncPayload.hasApiKey ?? true,
+        isStale: syncPayload.isStale ?? false,
+        syncedAt
+      };
 
-        seedDashboardStageDataCache("binance", activeUser.id, key, cachePayload, fetchedAt);
-        seedDashboardStageDataCache("binance", activeUser.id, nextKey, cachePayload, fetchedAt);
-
-        return nextKey;
+      seedDashboardStageDataCache("binance", activeUser.id, binanceRefreshKey, cachePayload, fetchedAt);
+      seedDashboardStageDataCache("binance", activeUser.id, nextRefreshKey, cachePayload, fetchedAt);
+      setBinanceRefreshKey(nextRefreshKey);
+      void ensureFinanceStageReady({
+        binanceRefreshKey: nextRefreshKey,
+        event: "binance-connect",
+        livePriceMaxAgeMs: 0,
+        priority: "user",
+        stage: "binance",
+        user: updatedUser
+      }).catch(() => {
+        // Binance dashboard keeps the synced balances visible if live quote refresh fails.
       });
     } catch (err) {
       keepApiSettingsOpen();
@@ -157,6 +168,7 @@ export function useFinanceBinanceActions({
     }
   }, [
     activeUser,
+    binanceRefreshKey,
     clearApiKeyDraft,
     keepApiSettingsOpen,
     setActiveUser,
@@ -201,6 +213,7 @@ export function useFinanceBinanceActions({
         prevUsers.map((user) => (user.id === activeUser.id ? updatedUser : user))
       );
 
+      invalidateFinanceProfile(activeUser.id);
       if (deleteData) {
         setBinanceRefreshKey((key) => key + 1);
       }

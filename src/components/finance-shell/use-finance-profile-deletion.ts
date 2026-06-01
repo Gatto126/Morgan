@@ -6,6 +6,7 @@ import type { SettingsSection } from "./settings-panel-types";
 import type { UserRecord } from "./types";
 import { clearPersistedFinanceProfileSelection } from "./use-finance-profile-persistence";
 import type { Stage } from "./use-finance-navigation";
+import { invalidateFinanceProfile } from "./finance-session-orchestrator";
 
 type DeleteProfilePayload = {
   error?: string;
@@ -113,6 +114,7 @@ export function useFinanceProfileDeletion({
       }
 
       const remainingUsers = users.filter((user) => user.id !== profile.id);
+      invalidateFinanceProfile(profile.id);
       const transition = resolveProfileDeletionTransition({
         activeUserId,
         deletedProfileId: profile.id,

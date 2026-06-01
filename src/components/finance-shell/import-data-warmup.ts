@@ -1,27 +1,15 @@
 "use client";
 
-import { getBinanceLivePriceKeys } from "@/components/dashboard/binance-live-values";
-import type { BinanceBalanceRow, DashboardData } from "@/components/dashboard/types";
-import type { PortfolioData } from "@/components/portfolio-dashboard/types";
-import { fetchAndCacheLivePrices } from "@/shared/live-prices";
-
-import { fetchDashboardStageData } from "./dashboard-stage-data-cache";
 import {
-  getDashboardStageDataVersion,
   getVisibleDashboardStageKeys,
   type DashboardStageKey
 } from "./dashboard-stage-items";
-import { collectDashboardLivePriceKeys } from "./login-live-price-warmup";
+import { ensureFinanceStageReady } from "./finance-session-orchestrator";
 import type { UserRecord } from "./types";
 import type { ImportedTransactionCounts } from "./use-transaction-import";
 
 type WarmImportedProfileDataOptions = {
   binanceRefreshKey?: number;
-};
-
-type LivePriceKeySets = {
-  cryptos: Set<string>;
-  isins: Set<string>;
 };
 
 export function applyImportedTransactionCountsToUser(
@@ -73,77 +61,6 @@ export function getImportedProfileWarmupStages(
   return stages;
 }
 
-function isPortfolioData(data: unknown): data is PortfolioData {
-  return !!data
-    && typeof data === "object"
-    && Array.isArray((data as Partial<PortfolioData>).providers);
-}
-
-function isBinanceData(data: unknown): data is { balances?: BinanceBalanceRow[] } {
-  return !!data
-    && typeof data === "object"
-    && Array.isArray((data as { balances?: unknown }).balances);
-}
-
-function addDashboardLivePriceKeys(keys: LivePriceKeySets, dashboardData: DashboardData | null) {
-  const dashboardKeys = collectDashboardLivePriceKeys(dashboardData?.providerSummaries);
-
-  dashboardKeys.isins.forEach((isin) => keys.isins.add(isin));
-  dashboardKeys.cryptos.forEach((crypto) => keys.cryptos.add(crypto));
-}
-
-function addPortfolioLivePriceKeys(
-  keys: LivePriceKeySets,
-  stage: DashboardStageKey,
-  data: unknown
-) {
-  if ((stage !== "investment" && stage !== "crypto") || !isPortfolioData(data)) {
-    return;
-  }
-
-  const targetKeys = stage === "investment" ? keys.isins : keys.cryptos;
-
-  for (const provider of data.providers) {
-    for (const product of provider.products) {
-      if (product.isin && Math.abs(product.quantity) > 0.000001) {
-        targetKeys.add(product.isin);
-      }
-    }
-  }
-}
-
-function addBinanceLivePriceKeys(keys: LivePriceKeySets, data: unknown) {
-  if (!isBinanceData(data)) {
-    return;
-  }
-
-  getBinanceLivePriceKeys(data.balances).forEach((key) => keys.cryptos.add(key));
-}
-
-async function warmLivePrices(keys: LivePriceKeySets) {
-  if (keys.isins.size === 0 && keys.cryptos.size === 0) {
-    return;
-  }
-
-  await fetchAndCacheLivePrices({
-    cryptos: [...keys.cryptos],
-    isins: [...keys.isins]
-  }, { maxAgeMs: 0 });
-}
-
-function fetchImportedStageData(
-  stage: DashboardStageKey,
-  nextUser: UserRecord,
-  binanceRefreshKey: number
-) {
-  const version = getDashboardStageDataVersion(stage, nextUser, binanceRefreshKey);
-
-  return fetchDashboardStageData(stage, nextUser.id, {
-    force: true,
-    version
-  }).catch(() => null);
-}
-
 export async function warmImportedProfileData(
   user: UserRecord,
   counts: ImportedTransactionCounts,
@@ -156,42 +73,15 @@ export async function warmImportedProfileData(
     return nextUser;
   }
 
-  const stageRequests = new Map(
-    stages.map((stage) => [
-      stage,
-      fetchImportedStageData(stage, nextUser, binanceRefreshKey)
-    ])
-  );
-  const dashboardRequest = stageRequests.get("dashboard") as Promise<DashboardData | null> | undefined;
-  const dashboardData = dashboardRequest ? await dashboardRequest : null;
-  const dashboardPriceKeys: LivePriceKeySets = {
-    cryptos: new Set(),
-    isins: new Set()
-  };
-
-  addDashboardLivePriceKeys(dashboardPriceKeys, dashboardData);
-  const dashboardPriceWarmup = warmLivePrices(dashboardPriceKeys);
-
-  const stageResults = await Promise.all(
-    [...stageRequests.entries()].map(async ([stage, request]) => ({
-      data: await request,
-      stage
-    }))
-  );
-  const portfolioPriceKeys: LivePriceKeySets = {
-    cryptos: new Set(),
-    isins: new Set()
-  };
-
-  for (const { data, stage } of stageResults) {
-    addPortfolioLivePriceKeys(portfolioPriceKeys, stage, data);
-    addBinanceLivePriceKeys(portfolioPriceKeys, data);
-  }
-
   await Promise.allSettled([
-    dashboardPriceWarmup,
-    warmLivePrices(portfolioPriceKeys),
-    ...stageRequests.values()
+    ...stages.map((stage) => ensureFinanceStageReady({
+      binanceRefreshKey,
+      event: "import",
+      force: true,
+      priority: stage === "dashboard" ? "user" : "active",
+      stage,
+      user: nextUser
+    }))
   ]);
 
   return nextUser;

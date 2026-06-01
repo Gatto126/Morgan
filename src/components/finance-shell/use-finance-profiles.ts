@@ -40,6 +40,7 @@ type UseFinanceProfilesParams = {
   setShowUserSelectView: Dispatch<SetStateAction<boolean>>;
   setStage: Dispatch<SetStateAction<Stage>>;
   setUsers: Dispatch<SetStateAction<UserRecord[]>>;
+  onProfilePrefetch?: (user: UserRecord) => void;
 };
 
 export function useFinanceProfiles({
@@ -67,7 +68,8 @@ export function useFinanceProfiles({
   setShowUploadView,
   setShowUserSelectView,
   setStage,
-  setUsers
+  setUsers,
+  onProfilePrefetch
 }: UseFinanceProfilesParams) {
   const hasUsers = users.length > 0;
   const isRestoringProfileSelection = useFinanceProfilePersistence({
@@ -124,7 +126,8 @@ export function useFinanceProfiles({
     setShowSettingsView,
     setShowUploadView,
     setShowUserSelectView,
-    setStage
+    setStage,
+    onBeforeUserSelect: onProfilePrefetch
   });
   const {
     deletingProfileId,

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { authClient } from "@/client/auth-client";
 
 import { getDeleteAccountDialogResetState } from "./delete-account-dialog-helpers";
+import { resetFinanceSessionOrchestrator } from "./finance-session-orchestrator";
 import type { UserRecord } from "./types";
 import { clearPersistedFinanceProfileSelection } from "./use-finance-profile-persistence";
 
@@ -34,6 +35,7 @@ export function useFinanceAccountSessionActions({
   const handleSignOut = useCallback(() => {
     try {
       clearPersistedFinanceProfileSelection();
+      resetFinanceSessionOrchestrator();
       setUsers([]);
       setActiveUser(null);
       setIsSignedOut(true);
@@ -93,6 +95,7 @@ export function useFinanceAccountSessionActions({
       }
 
       clearPersistedFinanceProfileSelection();
+      resetFinanceSessionOrchestrator();
       setUsers([]);
       setActiveUser(null);
       setIsSignedOut(true);

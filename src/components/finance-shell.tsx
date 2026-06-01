@@ -3,11 +3,9 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { AuthShell } from "./auth-shell";
 import {
-  fetchDashboardStageData,
   seedDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
 import {
-  getDashboardStageDataVersion,
   isDashboardStageKey,
   resolveVisibleDashboardStage,
   type DashboardStageKey
@@ -30,6 +28,11 @@ import { useFinanceNavigation } from "./finance-shell/use-finance-navigation";
 import { useTransactionImport, type ImportedTransactionCounts } from "./finance-shell/use-transaction-import";
 import { dashboardStages, getStageTitle } from "./finance-shell/stage-title";
 import { warmImportedProfileData } from "./finance-shell/import-data-warmup";
+import {
+  ensureFinanceStageReady,
+  preloadFinanceProfileStages
+} from "./finance-shell/finance-session-orchestrator";
+import { getMillisecondsUntilNextUtcDate } from "@/shared/date-keys";
 
 export type PrimedDashboardStageData = {
   data: unknown;
@@ -118,6 +121,7 @@ export function FinanceShell({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const createUserInputRef = useRef<HTMLInputElement | null>(null);
   const importedTransactionsHandlerRef = useRef<((counts: ImportedTransactionCounts) => Promise<void>) | null>(null);
+  const lastProfileBootWarmupKeyRef = useRef("");
   const {
     parsing,
     approving,
@@ -177,6 +181,17 @@ export function FinanceShell({
     clearApiKeyDraft,
     clearPanelFeedback
   });
+  const preloadSelectedProfile = useCallback((user: UserRecord) => {
+    void preloadFinanceProfileStages({
+      activeStage: "dashboard",
+      binanceRefreshKey,
+      event: "profile-change",
+      priority: "user",
+      user
+    }).catch(() => {
+      // The destination dashboard owns the visible error state.
+    });
+  }, [binanceRefreshKey]);
   const {
     applyImportedTransactionCounts,
     deletingProfileId,
@@ -212,7 +227,8 @@ export function FinanceShell({
     setShowUploadView,
     setShowUserSelectView,
     setStage,
-    setUsers
+    setUsers,
+    onProfilePrefetch: preloadSelectedProfile
   });
   useEffect(() => {
     importedTransactionsHandlerRef.current = async (counts) => {
@@ -319,6 +335,103 @@ export function FinanceShell({
     setShowUploadView,
     setShowUserSelectView
   });
+  useEffect(() => {
+    if (!activeUser || !hasRestoredClientState) {
+      return;
+    }
+
+    const activeStage = isDashboardStageKey(stage)
+      ? resolveVisibleDashboardStage(stage, activeUser)
+      : "dashboard";
+    const warmupKey = [
+      activeUser.id,
+      activeUser.transactionCount,
+      activeUser.checkingCount,
+      activeUser.investmentCount,
+      activeUser.cryptoCount,
+      activeUser.hasBinanceCredentials ? "binance" : "no-binance",
+      binanceRefreshKey
+    ].join(":");
+
+    if (lastProfileBootWarmupKeyRef.current === warmupKey) {
+      return;
+    }
+
+    lastProfileBootWarmupKeyRef.current = warmupKey;
+
+    void preloadFinanceProfileStages({
+      activeStage,
+      binanceRefreshKey,
+      event: "app-boot",
+      priority: "active",
+      user: activeUser
+    }).catch(() => {
+      // Active views surface fetch failures when they need the data.
+    });
+  }, [activeUser, binanceRefreshKey, hasRestoredClientState, stage]);
+  useEffect(() => {
+    if (!activeUser || !hasRestoredClientState) {
+      return;
+    }
+
+    const refreshActiveStage = (event: "network-reconnect" | "tab-focus") => {
+      const activeStage = isDashboardStageKey(stage)
+        ? resolveVisibleDashboardStage(stage, activeUser)
+        : "dashboard";
+
+      void ensureFinanceStageReady({
+        binanceRefreshKey,
+        event,
+        livePriceMaxAgeMs: 0,
+        priority: "user",
+        stage: activeStage,
+        user: activeUser
+      }).catch(() => {
+        // Refresh is opportunistic; existing visible values stay mounted.
+      });
+    };
+
+    const handleFocus = () => refreshActiveStage("tab-focus");
+    const handleOnline = () => refreshActiveStage("network-reconnect");
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshActiveStage("tab-focus");
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [activeUser, binanceRefreshKey, hasRestoredClientState, stage]);
+  useEffect(() => {
+    if (!activeUser || !hasRestoredClientState) {
+      return;
+    }
+
+    const activeStage = isDashboardStageKey(stage)
+      ? resolveVisibleDashboardStage(stage, activeUser)
+      : "dashboard";
+    const timer = window.setTimeout(() => {
+      lastProfileBootWarmupKeyRef.current = "";
+      void preloadFinanceProfileStages({
+        activeStage,
+        binanceRefreshKey,
+        event: "daily-rollover",
+        priority: "user",
+        user: activeUser
+      }).catch(() => {
+        // The next user action or focus event will retry the fresh-day preload.
+      });
+    }, getMillisecondsUntilNextUtcDate() + 1_000);
+
+    return () => window.clearTimeout(timer);
+  }, [activeUser, binanceRefreshKey, hasRestoredClientState, stage]);
 
   function showApiSettingsPanel() {
     setShowSettingsView(true);
@@ -364,9 +477,15 @@ export function FinanceShell({
     }
 
     const stageKey = resolveVisibleDashboardStage(newStage, activeUser);
-    const version = getDashboardStageDataVersion(stageKey, activeUser, binanceRefreshKey);
 
-    void fetchDashboardStageData(stageKey, activeUser.id, { version }).catch(() => {
+    void ensureFinanceStageReady({
+      binanceRefreshKey,
+      event: "dashboard-change",
+      livePriceMaxAgeMs: 0,
+      priority: "user",
+      stage: stageKey,
+      user: activeUser
+    }).catch(() => {
       // The destination dashboard owns the visible error state.
     });
   }, [activeUser, binanceRefreshKey, navigateTo]);

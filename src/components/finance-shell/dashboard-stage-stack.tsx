@@ -2,13 +2,12 @@ import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
-import { prefetchDashboardStageData } from "./dashboard-stage-data-cache";
 import {
-  getDashboardStageDataVersion,
   getVisibleDashboardStageKeys,
   resolveVisibleDashboardStage,
   type DashboardStageKey
 } from "./dashboard-stage-items";
+import { ensureFinanceStageReady, getPrioritizedProfileStageWarmupOrder } from "./finance-session-orchestrator";
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
 
@@ -80,15 +79,6 @@ function scheduleDashboardWarmup(callback: () => void, delayMs = 0) {
   };
 }
 
-function getPrioritizedStageWarmupOrder(activeUser: UserRecord, activeStage: DashboardStageKey) {
-  const visibleStages = getVisibleDashboardStageKeys(activeUser);
-
-  return [
-    activeStage,
-    ...visibleStages.filter((stageKey) => stageKey !== activeStage)
-  ];
-}
-
 export function DashboardStageStack({
   activeUser,
   binanceRefreshKey,
@@ -154,7 +144,7 @@ export function DashboardStageStack({
     }
 
     let cancelled = false;
-    const stagesToWarm = getPrioritizedStageWarmupOrder(activeUser, activeDashboardStage);
+    const stagesToWarm = getPrioritizedProfileStageWarmupOrder(activeUser, activeDashboardStage);
 
     const cancelWarmupTask = scheduleDashboardWarmup(() => {
       void (async () => {
@@ -162,8 +152,13 @@ export function DashboardStageStack({
           if (cancelled) return;
 
           void dashboardStageModuleWarmers[stageKey]().catch(() => {});
-          const version = getDashboardStageDataVersion(stageKey, activeUser, binanceRefreshKey);
-          prefetchDashboardStageData(stageKey, activeUserId, { version });
+          void ensureFinanceStageReady({
+            binanceRefreshKey,
+            event: stageKey === activeDashboardStage ? "dashboard-change" : "profile-change",
+            priority: stageKey === activeDashboardStage ? "user" : "background",
+            stage: stageKey,
+            user: activeUser
+          });
           await new Promise((resolve) => globalThis.setTimeout(resolve, stageKey === activeDashboardStage ? 0 : 80));
         }
       })();

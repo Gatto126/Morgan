@@ -25,6 +25,7 @@ type UseFinanceProfileSelectionParams = {
   setShowUploadView: Dispatch<SetStateAction<boolean>>;
   setShowUserSelectView: Dispatch<SetStateAction<boolean>>;
   setStage: Dispatch<SetStateAction<Stage>>;
+  onBeforeUserSelect?: (user: UserRecord) => void;
 };
 
 export function useFinanceProfileSelection({
@@ -44,7 +45,8 @@ export function useFinanceProfileSelection({
   setShowSettingsView,
   setShowUploadView,
   setShowUserSelectView,
-  setStage
+  setStage,
+  onBeforeUserSelect
 }: UseFinanceProfileSelectionParams) {
   const pendingUserSelectionTimerRef = useRef<number | null>(null);
 
@@ -92,6 +94,8 @@ export function useFinanceProfileSelection({
       return;
     }
 
+    onBeforeUserSelect?.(user);
+
     if (pendingUserSelectionTimerRef.current) {
       window.clearTimeout(pendingUserSelectionTimerRef.current);
       pendingUserSelectionTimerRef.current = null;
@@ -111,6 +115,7 @@ export function useFinanceProfileSelection({
     activeUser?.id,
     commitUserSelection,
     handleCloseUserSelect,
+    onBeforeUserSelect,
     showUserSelectView
   ]);
 
