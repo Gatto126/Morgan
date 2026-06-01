@@ -255,11 +255,15 @@ async function importSmokeTransactions(page) {
 async function expectStableTopbarValues(page, label, { minimumNumeric = 1 } = {}) {
   const result = await page.waitForFunction(({ minimumNumeric: minNumeric }) => {
     const tabs = Array.from(document.querySelectorAll(".dashboard-topbar-tab"));
+    const getAmounts = (value) => value.match(/\d[\d.]*,\d{2}/g) ?? [];
+    const isZeroAmount = (amount) => Number(amount.replace(/\./g, "").replace(",", ".")) === 0;
     const values = tabs
       .map((tab) => (tab.textContent ?? "").replace(/\s+/g, " ").trim())
       .filter(Boolean);
     const pending = values.filter((value) => value.includes("--") || value === "0,00" || value === "0,00 €");
-    const numeric = values.filter((value) => /\d+[,.]\d{2}/.test(value) && !/^0[,.]00/.test(value));
+    const numeric = values.filter((value) =>
+      getAmounts(value).some((amount) => !isZeroAmount(amount))
+    );
 
     return {
       ok: values.length > 0 && pending.length === 0 && numeric.length >= minNumeric,
