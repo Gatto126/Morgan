@@ -11,6 +11,7 @@ import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { getBinanceLivePriceKeys } from "@/components/dashboard/binance-live-values";
 import type { BinanceBalanceRow } from "@/components/dashboard/types";
 
+import { BINANCE_PORTFOLIO_PROVIDER_KEY } from "./binance-portfolio-provider";
 import type { PortfolioDashboardConfig, PortfolioProviderSummary } from "./types";
 
 type UsePortfolioLivePricesOptions = {
@@ -38,6 +39,10 @@ function getRequiredPriceKeys(
   const keys = new Set<string>();
 
   for (const provider of providers ?? []) {
+    if (provider.sourceInstitution === BINANCE_PORTFOLIO_PROVIDER_KEY) {
+      continue;
+    }
+
     for (const product of provider.products) {
       const key = normalizePriceKey(product.isin, priceQueryParam);
       if (key && product.quantity > 0.000001) keys.add(key);
