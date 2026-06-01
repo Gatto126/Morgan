@@ -18,6 +18,7 @@ type CheckingProviderCardsProps = {
   valuesKnown: boolean;
   userId: string;
   isActive: boolean;
+  shouldPreloadRows?: boolean;
 };
 
 const INITIAL_TRANSACTION_ROWS = 20;
@@ -30,10 +31,11 @@ export function CheckingProviderCards({
   currentPoint,
   valuesKnown,
   userId,
-  isActive
+  isActive,
+  shouldPreloadRows = isActive
 }: CheckingProviderCardsProps) {
   useEffect(() => {
-    if (!isActive || providers.length === 0) {
+    if (!shouldPreloadRows || providers.length === 0) {
       return;
     }
 
@@ -51,7 +53,7 @@ export function CheckingProviderCards({
     }, 2_200);
 
     return cancelIdleTask;
-  }, [isActive, providers, userId]);
+  }, [providers, shouldPreloadRows, userId]);
 
   if (!portalNode) return null;
 
@@ -110,6 +112,7 @@ export function CheckingProviderCards({
             <div className="flex flex-col min-h-[280px] lg:h-[400px] flex-1 overflow-hidden rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[#1f1f1f]">
               <CheckingTransactionTable
                 isActive={isActive}
+                shouldPreloadRows={shouldPreloadRows}
                 provider={provider}
                 userId={userId}
               />
@@ -132,17 +135,21 @@ function formatPointValue(point: ChartPoint | null, key: string, valuesKnown: bo
 
 function CheckingTransactionTable({
   isActive,
+  shouldPreloadRows,
   provider,
   userId
 }: {
   isActive: boolean;
+  shouldPreloadRows: boolean;
   provider: CheckingProviderSummary;
   userId: string;
 }) {
   const {
     rowsContainerRef,
     shouldLoadRows
-  } = useDeferredTransactionRows(isActive, provider.transactionCount);
+  } = useDeferredTransactionRows(isActive, provider.transactionCount, {
+    preload: shouldPreloadRows
+  });
   const {
     error,
     hasMore,
@@ -152,7 +159,7 @@ function CheckingTransactionTable({
   } = useTransactionRows<CheckingTransaction>({
     endpoint: "/api/transactions/checking/rows",
     initialPageSize: INITIAL_TRANSACTION_ROWS,
-    isActive,
+    isActive: isActive || shouldPreloadRows,
     pageSize: NEXT_TRANSACTION_ROWS,
     shouldLoad: shouldLoadRows,
     sourceInstitution: provider.sourceInstitution,

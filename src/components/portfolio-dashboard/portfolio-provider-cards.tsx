@@ -23,6 +23,7 @@ type PortfolioProviderCardsProps = {
   valuesKnown: boolean;
   livePrices: Record<string, number | null>;
   isActive: boolean;
+  shouldPreloadRows?: boolean;
   transactionRowsEndpoint: string;
   userId: string;
   binanceBalances?: BinanceBalanceRow[];
@@ -55,6 +56,7 @@ export function PortfolioProviderCards({
   valuesKnown,
   livePrices,
   isActive,
+  shouldPreloadRows = isActive,
   transactionRowsEndpoint,
   userId,
   binanceBalances = [],
@@ -64,7 +66,7 @@ export function PortfolioProviderCards({
   binanceListRef
 }: PortfolioProviderCardsProps) {
   useEffect(() => {
-    if (!isActive || providers.length === 0) {
+    if (!shouldPreloadRows || providers.length === 0) {
       return;
     }
 
@@ -82,7 +84,7 @@ export function PortfolioProviderCards({
     }, 2_200);
 
     return cancelIdleTask;
-  }, [isActive, providers, transactionRowsEndpoint, userId]);
+  }, [providers, shouldPreloadRows, transactionRowsEndpoint, userId]);
 
   if (!portalNode) return null;
 
@@ -200,6 +202,7 @@ export function PortfolioProviderCards({
               <PortfolioTransactionTable
                 endpoint={transactionRowsEndpoint}
                 isActive={isActive}
+                shouldPreloadRows={shouldPreloadRows}
                 provider={provider}
                 transactionFilter={config.transactionFilter}
                 userId={userId}
@@ -232,12 +235,14 @@ function formatPointValue(value: number | null, valuesKnown: boolean) {
 function PortfolioTransactionTable({
   endpoint,
   isActive,
+  shouldPreloadRows,
   provider,
   userId,
   transactionFilter
 }: {
   endpoint: string;
   isActive: boolean;
+  shouldPreloadRows: boolean;
   provider: PortfolioProviderSummary;
   userId: string;
   transactionFilter: (transaction: PortfolioTransaction) => boolean;
@@ -245,7 +250,9 @@ function PortfolioTransactionTable({
   const {
     rowsContainerRef,
     shouldLoadRows
-  } = useDeferredTransactionRows(isActive, provider.transactionCount);
+  } = useDeferredTransactionRows(isActive, provider.transactionCount, {
+    preload: shouldPreloadRows
+  });
   const {
     error,
     hasMore,
@@ -255,7 +262,7 @@ function PortfolioTransactionTable({
   } = useTransactionRows<PortfolioTransaction>({
     endpoint,
     initialPageSize: INITIAL_TRANSACTION_ROWS,
-    isActive,
+    isActive: isActive || shouldPreloadRows,
     pageSize: NEXT_TRANSACTION_ROWS,
     shouldLoad: shouldLoadRows,
     sourceInstitution: provider.sourceInstitution,

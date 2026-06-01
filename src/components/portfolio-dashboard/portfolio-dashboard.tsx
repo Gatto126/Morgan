@@ -324,6 +324,7 @@ export function PortfolioDashboard({
         valuesKnown={dataFresh}
         livePrices={livePrices}
         isActive={isActive}
+        shouldPreloadRows={shouldLoad}
         transactionRowsEndpoint={`${config.endpoint}/rows`}
         userId={userId}
         binanceBalances={liveBinanceBalances}

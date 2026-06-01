@@ -246,6 +246,7 @@ export function CheckingDashboard({
         valuesKnown={!!data && dataFresh}
         userId={userId}
         isActive={isActive}
+        shouldPreloadRows={shouldLoad}
       />
     </div>
   );

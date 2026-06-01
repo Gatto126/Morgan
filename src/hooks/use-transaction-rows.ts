@@ -29,12 +29,19 @@ type TransactionRowsState<TTransaction> = {
   transactions: TTransaction[];
 };
 
-const TRANSACTION_ROWS_CACHE_MAX_AGE_MS = 60_000;
+const TRANSACTION_ROWS_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1_000;
+const transactionRowsStoragePrefix = "morgan:transaction-rows:v1:";
 const transactionRowsCache = new Map<string, {
   payload: TransactionRowsPayload<unknown>;
   updatedAt: number;
 }>();
 const inFlightTransactionRows = new Map<string, Promise<TransactionRowsPayload<unknown>>>();
+
+type StoredTransactionRowsPayload = {
+  cacheVersion: 1;
+  payload: TransactionRowsPayload<unknown>;
+  updatedAt: number;
+};
 
 type TransactionRowsPageRequestOptions = {
   endpoint: string;
@@ -75,10 +82,111 @@ function buildTransactionRowsPageRequest({
   };
 }
 
-async function fetchTransactionRows<TTransaction>(cacheKey: string, url: string) {
+function getSessionStorage() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredTransactionRows<TTransaction>(cacheKey: string) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  try {
+    const raw = storage.getItem(`${transactionRowsStoragePrefix}${cacheKey}`);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<StoredTransactionRowsPayload>;
+    if (
+      parsed.cacheVersion !== 1
+      || typeof parsed.updatedAt !== "number"
+      || !parsed.payload
+      || Date.now() - parsed.updatedAt > TRANSACTION_ROWS_CACHE_MAX_AGE_MS
+    ) {
+      storage.removeItem(`${transactionRowsStoragePrefix}${cacheKey}`);
+      return null;
+    }
+
+    return parsed.payload as TransactionRowsPayload<TTransaction>;
+  } catch {
+    storage.removeItem(`${transactionRowsStoragePrefix}${cacheKey}`);
+    return null;
+  }
+}
+
+function writeStoredTransactionRows(cacheKey: string, payload: TransactionRowsPayload<unknown>, updatedAt: number) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(`${transactionRowsStoragePrefix}${cacheKey}`, JSON.stringify({
+      cacheVersion: 1,
+      payload,
+      updatedAt
+    } satisfies StoredTransactionRowsPayload));
+  } catch {
+    // Transaction row persistence is best-effort; memory cache still covers same-page navigation.
+  }
+}
+
+export function readCachedTransactionRows<TTransaction>(cacheKey: string) {
   const cached = transactionRowsCache.get(cacheKey);
   if (cached && Date.now() - cached.updatedAt <= TRANSACTION_ROWS_CACHE_MAX_AGE_MS) {
     return cached.payload as TransactionRowsPayload<TTransaction>;
+  }
+
+  const storedPayload = readStoredTransactionRows<TTransaction>(cacheKey);
+  if (!storedPayload) {
+    return null;
+  }
+
+  transactionRowsCache.set(cacheKey, {
+    payload: storedPayload as TransactionRowsPayload<unknown>,
+    updatedAt: Date.now()
+  });
+  return storedPayload;
+}
+
+export function getTransactionRowsInitialPageKey({
+  endpoint,
+  initialPageSize = 20,
+  pageSize = 10,
+  sourceInstitution,
+  totalCount,
+  userId
+}: Omit<UseTransactionRowsOptions, "isActive" | "shouldLoad">) {
+  const requestKey = `${endpoint}|${userId}|${sourceInstitution}|${totalCount}|${initialPageSize}|${pageSize}`;
+  const { pageKey } = buildTransactionRowsPageRequest({
+    endpoint,
+    initialPageSize,
+    offset: 0,
+    pageSize,
+    replace: true,
+    requestKey,
+    sourceInstitution,
+    totalCount,
+    userId
+  });
+
+  return pageKey;
+}
+
+async function fetchTransactionRows<TTransaction>(cacheKey: string, url: string) {
+  const cachedPayload = readCachedTransactionRows<TTransaction>(cacheKey);
+  if (cachedPayload) {
+    return cachedPayload;
   }
 
   const inFlightRequest = inFlightTransactionRows.get(cacheKey);
@@ -94,10 +202,12 @@ async function fetchTransactionRows<TTransaction>(cacheKey: string, url: string)
         throw new Error(payload.error ?? "Errore nel caricamento delle transazioni.");
       }
 
+      const updatedAt = Date.now();
       transactionRowsCache.set(cacheKey, {
         payload: payload as TransactionRowsPayload<unknown>,
-        updatedAt: Date.now()
+        updatedAt
       });
+      writeStoredTransactionRows(cacheKey, payload as TransactionRowsPayload<unknown>, updatedAt);
       return payload;
     })
     .finally(() => {
@@ -147,13 +257,25 @@ export function useTransactionRows<TTransaction>({
   userId
 }: UseTransactionRowsOptions) {
   const requestKey = `${endpoint}|${userId}|${sourceInstitution}|${totalCount}|${initialPageSize}|${pageSize}`;
-  const [state, setState] = useState<TransactionRowsState<TTransaction>>({
-    error: null,
-    loading: false,
-    nextOffset: totalCount > 0 ? 0 : null,
-    requestKey,
-    total: totalCount,
-    transactions: []
+  const [state, setState] = useState<TransactionRowsState<TTransaction>>(() => {
+    const initialState = getInitialTransactionRowsState<TTransaction>({
+      endpoint,
+      initialPageSize,
+      pageSize,
+      requestKey,
+      sourceInstitution,
+      totalCount,
+      userId
+    });
+
+    return {
+      error: null,
+      loading: false,
+      nextOffset: initialState.nextOffset,
+      requestKey,
+      total: initialState.total,
+      transactions: initialState.transactions
+    };
   });
   const currentRequestKeyRef = useRef(requestKey);
   const loadingPageKeyRef = useRef<string | null>(null);
@@ -169,6 +291,22 @@ export function useTransactionRows<TTransaction>({
     const limit = replace ? initialPageSize : pageSize;
     const pageKey = `${activeRequestKey}|offset=${offset}|limit=${limit}`;
     if (loadingPageKeyRef.current === pageKey) {
+      return;
+    }
+
+    const cachedPayload = readCachedTransactionRows<TTransaction>(pageKey);
+    if (cachedPayload) {
+      currentRequestKeyRef.current = activeRequestKey;
+      setState((previousState) => ({
+        error: null,
+        loading: false,
+        nextOffset: cachedPayload.nextOffset,
+        requestKey: activeRequestKey,
+        total: cachedPayload.total,
+        transactions: replace
+          ? cachedPayload.transactions
+          : [...previousState.transactions, ...cachedPayload.transactions]
+      }));
       return;
     }
 
@@ -260,5 +398,42 @@ export function useTransactionRows<TTransaction>({
     loadNext,
     total,
     transactions
+  };
+}
+
+function getInitialTransactionRowsState<TTransaction>({
+  endpoint,
+  initialPageSize,
+  pageSize,
+  requestKey,
+  sourceInstitution,
+  totalCount,
+  userId
+}: {
+  endpoint: string;
+  initialPageSize: number;
+  pageSize: number;
+  requestKey: string;
+  sourceInstitution: string;
+  totalCount: number;
+  userId: string;
+}) {
+  const { pageKey } = buildTransactionRowsPageRequest({
+    endpoint,
+    initialPageSize,
+    offset: 0,
+    pageSize,
+    replace: true,
+    requestKey,
+    sourceInstitution,
+    totalCount,
+    userId
+  });
+  const cachedPayload = readCachedTransactionRows<TTransaction>(pageKey);
+
+  return {
+    nextOffset: cachedPayload?.nextOffset ?? (totalCount > 0 ? 0 : null),
+    total: cachedPayload?.total ?? totalCount,
+    transactions: cachedPayload?.transactions ?? []
   };
 }

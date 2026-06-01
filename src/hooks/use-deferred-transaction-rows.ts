@@ -28,17 +28,21 @@ export function useDeferredTransactionRows(
   totalCount: number,
   {
     fallbackDelayMs = 1_800,
-    idleTimeoutMs = 1_200
+    idleTimeoutMs = 1_200,
+    preload = false
   }: {
     fallbackDelayMs?: number;
     idleTimeoutMs?: number;
+    preload?: boolean;
   } = {}
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [shouldLoadRows, setShouldLoadRows] = useState(false);
 
   useEffect(() => {
-    if (!isActive || totalCount === 0 || shouldLoadRows) {
+    const canScheduleRows = isActive || preload;
+
+    if (!canScheduleRows || totalCount === 0 || shouldLoadRows) {
       return;
     }
 
@@ -52,6 +56,13 @@ export function useDeferredTransactionRows(
       }
 
       cancelIdleTask = scheduleIdleTask(() => setShouldLoadRows(true), idleTimeoutMs);
+    }
+
+    if (!isActive && preload) {
+      scheduleLoad();
+      return () => {
+        cancelIdleTask?.();
+      };
     }
 
     if (node && "IntersectionObserver" in window) {
@@ -72,10 +83,10 @@ export function useDeferredTransactionRows(
       cancelIdleTask?.();
       window.clearTimeout(fallbackTimer);
     };
-  }, [fallbackDelayMs, idleTimeoutMs, isActive, shouldLoadRows, totalCount]);
+  }, [fallbackDelayMs, idleTimeoutMs, isActive, preload, shouldLoadRows, totalCount]);
 
   return {
     rowsContainerRef: containerRef,
-    shouldLoadRows: isActive && shouldLoadRows
+    shouldLoadRows: (isActive || preload) && shouldLoadRows
   };
 }
