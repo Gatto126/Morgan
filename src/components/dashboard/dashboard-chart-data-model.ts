@@ -10,6 +10,7 @@ type BuildDashboardChartDataParams = {
   activeTab: AccountTab;
   binanceTotalCents: number;
   checkingProviders: string[];
+  currentValuationPoint?: DashboardChartPoint | null;
   cryptoInstitutions: string[];
   cryptoTokens: string[];
   data: DashboardData | null;
@@ -76,6 +77,7 @@ export function buildDashboardChartData({
   activeTab,
   binanceTotalCents,
   checkingProviders,
+  currentValuationPoint,
   cryptoInstitutions,
   cryptoTokens,
   data,
@@ -173,8 +175,19 @@ export function buildDashboardChartData({
     return entry;
   });
 
-  return todayKey
-    ? applyLiveTodayPoint(chartPoints, {
+  if (!todayKey) {
+    return chartPoints;
+  }
+
+  if (currentValuationPoint) {
+    return applyCurrentValuationTodayPoint(chartPoints, {
+      activeTab,
+      currentValuationPoint,
+      todayKey
+    });
+  }
+
+  return applyLiveTodayPoint(chartPoints, {
         activeTab,
         binanceTotalCents,
         data,
@@ -185,8 +198,7 @@ export function buildDashboardChartData({
         },
         livePrices,
         todayKey
-      })
-    : chartPoints;
+      });
 }
 
 function collectMonthlyKeys(
@@ -437,6 +449,39 @@ function applyLiveTodayPoint(
     month: todayKey,
     rawMonth: todayKey,
     value: getLiveTabValue(activeTab, liveValues)
+  };
+  const nextPoints = [...chartPoints];
+
+  if (todayIndex >= 0) {
+    nextPoints[todayIndex] = todayPoint;
+    return nextPoints;
+  }
+
+  return [...nextPoints, todayPoint];
+}
+
+function applyCurrentValuationTodayPoint(
+  chartPoints: DashboardChartPoint[],
+  {
+    activeTab,
+    currentValuationPoint,
+    todayKey
+  }: {
+    activeTab: AccountTab;
+    currentValuationPoint: DashboardChartPoint;
+    todayKey: string;
+  }
+) {
+  const todayIndex = chartPoints.findIndex((point) => point.rawMonth === todayKey);
+  const basePoint = todayIndex >= 0 ? chartPoints[todayIndex] : chartPoints[chartPoints.length - 1];
+  const resolvedBasePoint = basePoint ?? { rawMonth: todayKey };
+  const todayPoint: DashboardChartPoint = {
+    ...resolvedBasePoint,
+    ...currentValuationPoint,
+    date: todayKey,
+    month: todayKey,
+    rawMonth: todayKey,
+    value: getLiveTabValue(activeTab, currentValuationPoint)
   };
   const nextPoints = [...chartPoints];
 

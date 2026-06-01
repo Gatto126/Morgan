@@ -302,6 +302,48 @@ describe("dashboard chart data model", () => {
     });
   });
 
+  it("uses the current valuation point for today's dashboard chart point when provided", () => {
+    const points = buildDashboardChartData({
+      activeTab: "crypto",
+      binanceTotalCents: 2000,
+      checkingProviders: collectCheckingProviders(dashboardData),
+      currentValuationPoint: {
+        "Core ETF": 50_000,
+        Bitcoin: 710_000,
+        binance: 20_000,
+        checking: 10_000,
+        crypto: 730_000,
+        crypto_inst_trade_republic: 710_000,
+        heritage: 790_000,
+        investment: 50_000,
+        investment_inst_trade_republic: 50_000,
+        rawMonth: "2026-01-03",
+        value: 790_000
+      },
+      cryptoInstitutions: collectCryptoInstitutions(dashboardData),
+      cryptoTokens: collectCryptoTokens(dashboardData),
+      data: dashboardData,
+      hasBinancePortfolio: true,
+      investmentProducts: collectInvestmentProducts(dashboardData),
+      livePrices: {
+        BTC: 1,
+        IE00B4L5Y983: 1
+      },
+      todayKey: "2026-01-03",
+      timeRange: "ALL"
+    });
+    const todayPoint = points.find((point) => point.rawMonth === "2026-01-03");
+
+    expect(todayPoint).toMatchObject({
+      Bitcoin: 710_000,
+      binance: 20_000,
+      crypto: 730_000,
+      heritage: 790_000,
+      investment: 50_000,
+      value: 730_000
+    });
+  });
+
   it("keeps the current chart point pending until live prices are ready", () => {
     const points = buildDashboardChartData({
       activeTab: "heritage",

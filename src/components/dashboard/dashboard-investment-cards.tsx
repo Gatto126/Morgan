@@ -3,6 +3,7 @@ import {
   DashboardCardShell,
   DashboardMetricRow
 } from "./dashboard-card-parts";
+import type { CurrentValuationSnapshot } from "../finance-shell/current-valuations-store";
 import type { DashboardChartPoint } from "./dashboard-chart-types";
 import { formatEuroCents, formatProviderLabel } from "./formatters";
 import type { ProviderSummary } from "./types";
@@ -10,6 +11,7 @@ import type { ProviderSummary } from "./types";
 type DashboardInvestmentCardsProps = {
   providers: ProviderSummary[];
   currentPoint: DashboardChartPoint | null;
+  currentValuationSnapshot?: CurrentValuationSnapshot | null;
   valuesKnown: boolean;
   livePrices: Record<string, number | null>;
 };
@@ -27,9 +29,30 @@ function getPointValue(point: DashboardChartPoint | null, key: string, valuesKno
   return typeof value === "number" ? value : null;
 }
 
+function getUnitPriceCentsFromCurrentValue(currentValueCents: number | null, investedValue: number, quantity: number) {
+  return currentValueCents !== null && Math.abs(quantity) > 0.000001
+    ? Math.round(currentValueCents / quantity)
+    : getFallbackUnitPriceCents(investedValue, quantity);
+}
+
+function getValuationProductValue(
+  snapshot: CurrentValuationSnapshot | null | undefined,
+  providerId: string,
+  productName: string
+) {
+  const asset = Object.values(snapshot?.assets ?? {}).find((item) =>
+    item.category === "investment" &&
+    item.chartKey === productName &&
+    Object.hasOwn(item.providerValues, providerId)
+  );
+
+  return asset ? asset.providerValues[providerId]?.cents ?? null : undefined;
+}
+
 export function DashboardInvestmentCards({
   providers,
   currentPoint,
+  currentValuationSnapshot,
   valuesKnown,
   livePrices
 }: DashboardInvestmentCardsProps) {
@@ -63,13 +86,20 @@ export function DashboardInvestmentCards({
             <div className="space-y-4">
               {provider.investmentProducts.map((product) => {
               const price = product.isin ? livePrices[product.isin] : null;
-              const liveProductReady = !product.isin || price != null || valuesKnown;
-              const currentValueCents = price == null
-                ? product.investedValue
-                : Math.round(product.quantity * price * 100);
-              const unitPriceCents = price == null
-                ? getFallbackUnitPriceCents(product.investedValue, product.quantity)
-                : Math.round(price * 100);
+              const valuationProductValue = getValuationProductValue(
+                currentValuationSnapshot,
+                provider.sourceInstitution,
+                product.productName
+              );
+              const currentValueCents = valuationProductValue !== undefined
+                ? valuationProductValue
+                : getPointValue(currentPoint, product.productName, valuesKnown);
+              const liveProductReady = currentValueCents !== null;
+              const unitPriceCents = getUnitPriceCentsFromCurrentValue(
+                currentValueCents,
+                product.investedValue,
+                product.quantity
+              );
 
               return (
                 <div key={product.productName}>
@@ -90,10 +120,10 @@ export function DashboardInvestmentCards({
                     />
                     <DashboardMetricRow label="Invested Value" value={formatEuroCents(product.investedValue)} />
                     <DashboardMetricRow
-                      animateValueChanges={price != null}
+                      animateValueChanges={price != null || currentValueCents !== null}
                       label="Current Value"
-                      value={liveProductReady ? formatEuroCents(currentValueCents) : "--"}
-                      valueClassName={price == null
+                      value={currentValueCents !== null ? formatEuroCents(currentValueCents) : "--"}
+                      valueClassName={currentValueCents === null
                         ? "text-[color:var(--text-dim)] underline decoration-dotted decoration-[color:var(--text-dim)]"
                         : "text-[color:var(--text-main)]"}
                     />

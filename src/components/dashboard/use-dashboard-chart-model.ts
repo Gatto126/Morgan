@@ -24,6 +24,7 @@ type UseDashboardChartModelParams = {
   binanceBalances: BinanceBalanceRow[];
   binanceTotalCents: number;
   checkingCount: number;
+  currentValuationPoint?: DashboardChartPoint | null;
   cryptoCount: number;
   data: DashboardData | null;
   hasBinancePortfolio: boolean;
@@ -40,6 +41,7 @@ export function useDashboardChartModel({
   binanceBalances,
   binanceTotalCents,
   checkingCount,
+  currentValuationPoint,
   cryptoCount,
   data,
   hasBinancePortfolio,
@@ -98,6 +100,7 @@ export function useDashboardChartModel({
     activeTab,
     binanceTotalCents,
     checkingProviders,
+    currentValuationPoint,
     cryptoInstitutions,
     cryptoTokens,
     data,
@@ -111,6 +114,7 @@ export function useDashboardChartModel({
     activeTab,
     binanceTotalCents,
     checkingProviders,
+    currentValuationPoint,
     cryptoInstitutions,
     cryptoTokens,
     data,

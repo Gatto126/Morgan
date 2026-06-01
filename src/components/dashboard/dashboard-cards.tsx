@@ -6,6 +6,7 @@ import { cn } from "@/shared/utils";
 import { DashboardCheckingCards } from "./dashboard-checking-cards";
 import { DashboardCryptoCards } from "./dashboard-crypto-cards";
 import { DashboardInvestmentCards } from "./dashboard-investment-cards";
+import type { CurrentValuationSnapshot } from "../finance-shell/current-valuations-store";
 import type { DashboardChartPoint } from "./dashboard-chart-types";
 import type { BinanceBalanceRow, DashboardData, TimeRange } from "./types";
 
@@ -16,6 +17,7 @@ type DashboardCardsProps = {
   data: DashboardData;
   timeRange: TimeRange;
   currentPoint: DashboardChartPoint | null;
+  currentValuationSnapshot?: CurrentValuationSnapshot | null;
   cryptoValuesKnown: boolean;
   investmentValuesKnown: boolean;
   livePrices: Record<string, number | null>;
@@ -33,6 +35,7 @@ export function DashboardCards({
   data,
   timeRange,
   currentPoint,
+  currentValuationSnapshot,
   cryptoValuesKnown,
   investmentValuesKnown,
   livePrices,
@@ -57,9 +60,15 @@ export function DashboardCards({
         transition: contentVisible ? "opacity 0.5s ease-out 0.06s, transform 0.5s ease-out 0.06s" : "none"
       }}
     >
-      <DashboardCheckingCards data={data} timeRange={timeRange} />
+      <DashboardCheckingCards
+        currentPoint={currentPoint}
+        data={data}
+        timeRange={timeRange}
+        valuesKnown={!!currentPoint}
+      />
       <DashboardInvestmentCards
         currentPoint={currentPoint}
+        currentValuationSnapshot={currentValuationSnapshot}
         valuesKnown={investmentValuesKnown}
         livePrices={livePrices}
         providers={data.providerSummaries}
@@ -68,6 +77,7 @@ export function DashboardCards({
         binanceBalances={binanceBalances}
         binanceListRef={binanceListRef}
         currentPoint={currentPoint}
+        currentValuationSnapshot={currentValuationSnapshot}
         filterSmallBinance={filterSmallBinance}
         isBinanceSyncing={isBinanceSyncing}
         livePrices={livePrices}

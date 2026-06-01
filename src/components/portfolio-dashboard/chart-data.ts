@@ -37,6 +37,7 @@ type BuildPortfolioChartDataOptions = {
   timeRange: TimeRange;
   activeProvider: PortfolioProviderSummary | null;
   applyLiveToday?: boolean;
+  currentValuationPoint?: ChartPoint | null;
   livePrices?: Record<string, number | null>;
   todayKey?: string;
 };
@@ -47,6 +48,7 @@ export function buildPortfolioChartData({
   timeRange,
   activeProvider,
   applyLiveToday = true,
+  currentValuationPoint,
   livePrices = {},
   todayKey
 }: BuildPortfolioChartDataOptions) {
@@ -140,6 +142,14 @@ export function buildPortfolioChartData({
     return chartPoints;
   }
 
+  if (currentValuationPoint) {
+    return applyCurrentValuationTodayPoint(chartPoints, {
+      activeTab,
+      currentValuationPoint,
+      todayKey
+    });
+  }
+
   return applyLiveToday
     ? applyLiveTodayPoint(chartPoints, {
         activeProvider,
@@ -154,6 +164,43 @@ export function buildPortfolioChartData({
         data,
         todayKey
       });
+}
+
+function applyCurrentValuationTodayPoint(
+  chartPoints: ChartPoint[],
+  {
+    activeTab,
+    currentValuationPoint,
+    todayKey
+  }: {
+    activeTab: string;
+    currentValuationPoint: ChartPoint;
+    todayKey: string;
+  }
+) {
+  const todayIndex = chartPoints.findIndex((point) => point.rawMonth === todayKey);
+  const basePoint = todayIndex >= 0
+    ? chartPoints[todayIndex]
+    : chartPoints[chartPoints.length - 1] ?? { rawMonth: todayKey };
+  const todayPoint: ChartPoint = {
+    ...basePoint,
+    ...currentValuationPoint,
+    date: todayKey,
+    month: todayKey,
+    rawMonth: todayKey
+  };
+
+  if (activeTab !== "ALL") {
+    todayPoint.balance = currentValuationPoint.balance ?? currentValuationPoint[activeTab] ?? null;
+  }
+
+  if (todayIndex >= 0) {
+    const nextPoints = [...chartPoints];
+    nextPoints[todayIndex] = todayPoint;
+    return nextPoints;
+  }
+
+  return [...chartPoints, todayPoint];
 }
 
 export function getPortfolioXAxisTicks(chartData: ChartPoint[]) {

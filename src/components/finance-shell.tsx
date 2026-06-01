@@ -29,6 +29,7 @@ import { useTransactionImport, type ImportedTransactionCounts } from "./finance-
 import { dashboardStages, getStageTitle } from "./finance-shell/stage-title";
 import { warmImportedProfileData } from "./finance-shell/import-data-warmup";
 import {
+  ensureFinanceCurrentValuation,
   ensureFinanceStageReady,
   preloadFinanceProfileStages
 } from "./finance-shell/finance-session-orchestrator";
@@ -381,14 +382,23 @@ export function FinanceShell({
         ? resolveVisibleDashboardStage(stage, activeUser)
         : "dashboard";
 
-      void ensureFinanceStageReady({
-        binanceRefreshKey,
-        event,
-        livePriceMaxAgeMs: 0,
-        priority: "user",
-        stage: activeStage,
-        user: activeUser
-      }).catch(() => {
+      void Promise.allSettled([
+        ensureFinanceStageReady({
+          binanceRefreshKey,
+          event,
+          livePriceMaxAgeMs: 0,
+          priority: "user",
+          stage: activeStage,
+          user: activeUser
+        }),
+        ensureFinanceCurrentValuation({
+          binanceRefreshKey,
+          event,
+          livePriceMaxAgeMs: 0,
+          priority: "user",
+          user: activeUser
+        })
+      ]).catch(() => {
         // Refresh is opportunistic; existing visible values stay mounted.
       });
     };

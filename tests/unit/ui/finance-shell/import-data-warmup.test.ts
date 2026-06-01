@@ -1,11 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { getCurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
 import {
   applyImportedTransactionCountsToUser,
-  getImportedProfileWarmupStages
+  getImportedProfileWarmupStages,
+  warmImportedProfileData
 } from "@/components/finance-shell/import-data-warmup";
+import { resetFinanceSessionOrchestrator } from "@/components/finance-shell/finance-session-orchestrator";
 import type { UserRecord } from "@/components/finance-shell/types";
 import type { ImportedTransactionCounts } from "@/components/finance-shell/use-transaction-import";
+import {
+  globalLivePricesCache,
+  globalLivePricesCacheUpdatedAt,
+  globalLiveQuotesCache
+} from "@/shared/live-prices";
 
 const baseUser: UserRecord = {
   id: "profile-1",
@@ -18,6 +26,21 @@ const baseUser: UserRecord = {
 };
 
 describe("import data warmup", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    resetFinanceSessionOrchestrator();
+    for (const key of Object.keys(globalLivePricesCache)) {
+      delete globalLivePricesCache[key];
+    }
+    for (const key of Object.keys(globalLivePricesCacheUpdatedAt)) {
+      delete globalLivePricesCacheUpdatedAt[key];
+    }
+    for (const key of Object.keys(globalLiveQuotesCache)) {
+      delete globalLiveQuotesCache[key];
+    }
+  });
+
   it("builds the post-import profile counts used for cache versions", () => {
     const counts: ImportedTransactionCounts = {
       insertedCount: 4,
@@ -61,5 +84,90 @@ describe("import data warmup", () => {
       addedInvestment: 0,
       addedCrypto: 0
     })).toEqual(["dashboard", "checking", "binance"]);
+  });
+
+  it("waits for a post-import current valuation snapshot", async () => {
+    const counts: ImportedTransactionCounts = {
+      addedChecking: 0,
+      addedCrypto: 0,
+      addedInvestment: 1,
+      insertedCount: 1
+    };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/transactions/dashboard?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            accountTotals: { checking: 0, crypto: 0, heritage: 0, investment: 0 },
+            dailyData: [],
+            monthlyData: [],
+            providerSummaries: [{
+              checking: { cashback: 0, expenses: 0, income: 0, interest: 0, tax: 0, total: 0 },
+              cryptoTokens: [],
+              investmentProducts: [{
+                cashback: 0,
+                investedValue: 0,
+                isin: "IE00B4L5Y983",
+                productName: "Core ETF",
+                quantity: 2
+              }],
+              sourceInstitution: "trade_republic",
+              total: 0
+            }]
+          })
+        };
+      }
+
+      if (url.startsWith("/api/transactions/investment?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            dailyData: [{ date: "2026-06-01", month: "2026-06", providers: { trade_republic: 20_000 }, total: 20_000 }],
+            monthlyData: [],
+            providers: [{
+              cashback: 0,
+              expenses: 0,
+              income: 0,
+              interest: 0,
+              products: [{
+                cashback: 0,
+                investedValue: 0,
+                isin: "IE00B4L5Y983",
+                productName: "Core ETF",
+                quantity: 2
+              }],
+              sourceInstitution: "trade_republic",
+              tax: 0,
+              total: 20_000,
+              transactionCount: 1
+            }]
+          })
+        };
+      }
+
+      if (url.startsWith("/api/prices?")) {
+        return {
+          ok: true,
+          json: async () => ({ IE00B4L5Y983: 100 })
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const nextUser = await warmImportedProfileData(baseUser, counts);
+    const snapshot = getCurrentValuationSnapshot(nextUser.id);
+
+    expect(nextUser).toMatchObject({
+      investmentCount: 4,
+      transactionCount: 11
+    });
+    expect(snapshot?.status).toBe("ready");
+    expect(snapshot?.version).toMatchObject({
+      investmentCount: 4,
+      transactionCount: 11
+    });
+    expect(snapshot?.totals.investment.cents).toBe(20_000);
   });
 });

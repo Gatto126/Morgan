@@ -17,6 +17,14 @@ import {
   getDashboardStageCacheDateKey
 } from "./dashboard-stage-data-cache";
 import {
+  ensureCurrentValuation,
+  getCurrentValuationSnapshot,
+  invalidateCurrentValuation,
+  refreshCurrentValuationFromCaches,
+  resetCurrentValuationsStore,
+  type CurrentValuationSnapshot
+} from "./current-valuations-store";
+import {
   getDashboardStageDataVersion,
   getVisibleDashboardStageKeys,
   type DashboardStageKey
@@ -94,6 +102,15 @@ type PreloadFinanceProfileStagesOptions = {
   binanceRefreshKey?: number;
   event?: FinanceSessionEvent;
   force?: boolean;
+  priority?: FinanceSessionPriority;
+  user: UserRecord;
+};
+
+type EnsureFinanceCurrentValuationOptions = {
+  binanceRefreshKey?: number;
+  event?: FinanceSessionEvent;
+  force?: boolean;
+  livePriceMaxAgeMs?: number;
   priority?: FinanceSessionPriority;
   user: UserRecord;
 };
@@ -229,6 +246,20 @@ function publishFinanceSessionDiagnostics() {
   window.dispatchEvent(new CustomEvent("morgan:finance-diagnostics", {
     detail: diagnostics
   }));
+}
+
+function getValuationDiagnostics(snapshot: CurrentValuationSnapshot | null) {
+  return snapshot
+    ? {
+        lastFetchAt: snapshot.diagnostics.lastFetchAt,
+        maxQuoteAgeMs: snapshot.diagnostics.maxQuoteAgeMs,
+        missingKeys: snapshot.diagnostics.missingKeys,
+        status: snapshot.status,
+        unavailableKeys: snapshot.diagnostics.unavailableKeys,
+        updatedAt: snapshot.updatedAt,
+        version: snapshot.version
+      }
+    : null;
 }
 
 function getHigherPriority(
@@ -538,10 +569,42 @@ export async function ensureFinanceStageReady(options: EnsureFinanceStageReadyOp
     publishFinanceSessionDiagnostics();
   }
 
+  const snapshot = refreshCurrentValuationFromCaches(options.user, {
+    binanceRefreshKey: options.binanceRefreshKey ?? 0
+  });
+  if (snapshot) {
+    publishFinanceSessionDiagnostics();
+  }
+
   return {
+    currentValuation: snapshot,
     data,
     stage: options.stage,
     userId: options.user.id
+  };
+}
+
+export async function ensureFinanceCurrentValuation({
+  binanceRefreshKey = 0,
+  event = "dashboard-change",
+  force = false,
+  livePriceMaxAgeMs = 0,
+  priority = "active",
+  user
+}: EnsureFinanceCurrentValuationOptions) {
+  const snapshot = await ensureCurrentValuation(user, {
+    binanceRefreshKey,
+    force,
+    livePriceMaxAgeMs
+  });
+
+  publishFinanceSessionDiagnostics();
+
+  return {
+    event,
+    priority,
+    snapshot,
+    userId: user.id
   };
 }
 
@@ -591,6 +654,15 @@ export async function preloadFinanceProfileStages({
       user
     });
   }
+
+  await ensureFinanceCurrentValuation({
+    binanceRefreshKey,
+    event,
+    force,
+    livePriceMaxAgeMs: activeStage === "dashboard" ? 0 : backgroundLivePriceMaxAgeMs,
+    priority: getHigherPriority(priority, "active"),
+    user
+  });
 }
 
 async function runFinanceSessionWarmup() {
@@ -608,6 +680,11 @@ async function runFinanceSessionWarmup() {
     event: "login",
     priority: "user",
     stage: "dashboard",
+    user: primaryProfile
+  });
+  await ensureFinanceCurrentValuation({
+    event: "login",
+    priority: "user",
     user: primaryProfile
   });
 
@@ -638,11 +715,13 @@ export function invalidateFinanceProfile(userId: string) {
       financeStageRequests.delete(key);
     }
   }
+  invalidateCurrentValuation(userId);
   publishFinanceSessionDiagnostics();
 }
 
 export function resetFinanceSessionOrchestrator() {
   financeStageRequests.clear();
+  resetCurrentValuationsStore();
   publishFinanceSessionDiagnostics();
 }
 
@@ -651,6 +730,7 @@ export function getFinanceSessionDiagnostics() {
     const livePriceDiagnostics = entry.livePriceDiagnostics
       ? getLivePriceDiagnostics(entry.livePriceDiagnostics.requested)
       : null;
+    const valuationDiagnostics = getValuationDiagnostics(getCurrentValuationSnapshot(entry.userId));
 
     return {
       dataFetchedAt: entry.dataFetchedAt,
@@ -676,6 +756,11 @@ export function getFinanceSessionDiagnostics() {
       status: entry.status,
       unavailableKeys: livePriceDiagnostics?.unavailableKeys ?? [],
       userId: entry.userId,
+      valuationDiagnostics,
+      valuationMissingKeys: valuationDiagnostics?.missingKeys ?? [],
+      valuationStatus: valuationDiagnostics?.status ?? null,
+      valuationUnavailableKeys: valuationDiagnostics?.unavailableKeys ?? [],
+      valuationUpdatedAt: valuationDiagnostics?.updatedAt ?? null,
       version: entry.version
     };
   });

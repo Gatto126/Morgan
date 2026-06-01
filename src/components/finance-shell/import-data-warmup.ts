@@ -4,7 +4,10 @@ import {
   getVisibleDashboardStageKeys,
   type DashboardStageKey
 } from "./dashboard-stage-items";
-import { ensureFinanceStageReady } from "./finance-session-orchestrator";
+import {
+  ensureFinanceCurrentValuation,
+  ensureFinanceStageReady
+} from "./finance-session-orchestrator";
 import type { UserRecord } from "./types";
 import type { ImportedTransactionCounts } from "./use-transaction-import";
 
@@ -83,6 +86,14 @@ export async function warmImportedProfileData(
       user: nextUser
     }))
   ]);
+  await ensureFinanceCurrentValuation({
+    binanceRefreshKey,
+    event: "import",
+    force: true,
+    livePriceMaxAgeMs: 0,
+    priority: "user",
+    user: nextUser
+  });
 
   return nextUser;
 }

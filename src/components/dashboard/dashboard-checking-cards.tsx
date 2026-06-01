@@ -1,10 +1,13 @@
 import { DashboardCardShell, DashboardMetricRow } from "./dashboard-card-parts";
+import type { DashboardChartPoint } from "./dashboard-chart-types";
 import { filterData, formatEuroCents, formatProviderLabel } from "./formatters";
 import type { DashboardData, ProviderSummary, TimeRange } from "./types";
 
 type DashboardCheckingCardsProps = {
+  currentPoint: DashboardChartPoint | null;
   data: DashboardData;
   timeRange: TimeRange;
+  valuesKnown: boolean;
 };
 
 function getCheckingMetrics(provider: ProviderSummary, data: DashboardData, timeRange: TimeRange) {
@@ -34,7 +37,21 @@ function getCheckingMetrics(provider: ProviderSummary, data: DashboardData, time
   };
 }
 
-export function DashboardCheckingCards({ data, timeRange }: DashboardCheckingCardsProps) {
+function getPointValue(point: DashboardChartPoint | null, key: string, valuesKnown: boolean) {
+  if (!valuesKnown || !point) {
+    return null;
+  }
+
+  const value = point[key];
+  return typeof value === "number" ? value : null;
+}
+
+export function DashboardCheckingCards({
+  currentPoint,
+  data,
+  timeRange,
+  valuesKnown
+}: DashboardCheckingCardsProps) {
   const checkingProviders = data.providerSummaries.filter((provider) => provider.checking.total !== 0);
 
   if (checkingProviders.length === 0) {
@@ -50,7 +67,9 @@ export function DashboardCheckingCards({ data, timeRange }: DashboardCheckingCar
           <DashboardCardShell
             key={`checking-${provider.sourceInstitution}`}
             title={formatProviderLabel(provider.sourceInstitution)}
-            value={formatEuroCents(provider.checking.total)}
+            value={formatEuroCents(
+              getPointValue(currentPoint, provider.sourceInstitution, valuesKnown) ?? provider.checking.total
+            )}
           >
             <div className="space-y-4">
               <div>

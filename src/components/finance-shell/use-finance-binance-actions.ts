@@ -6,6 +6,7 @@ import type { BinanceBalanceRow } from "@/components/dashboard/types";
 
 import { seedDashboardStageDataCache } from "./dashboard-stage-data-cache";
 import {
+  ensureFinanceCurrentValuation,
   ensureFinanceStageReady,
   invalidateFinanceProfile
 } from "./finance-session-orchestrator";
@@ -151,14 +152,25 @@ export function useFinanceBinanceActions({
       setUsers((prevUsers) =>
         prevUsers.map((user) => (user.id === activeUser.id ? updatedUser : user))
       );
-      void ensureFinanceStageReady({
-        binanceRefreshKey: nextRefreshKey,
-        event: "binance-connect",
-        livePriceMaxAgeMs: 0,
-        priority: "user",
-        stage: "binance",
-        user: updatedUser
-      }).catch(() => {
+      invalidateFinanceProfile(activeUser.id);
+      void Promise.allSettled([
+        ensureFinanceStageReady({
+          binanceRefreshKey: nextRefreshKey,
+          event: "binance-connect",
+          livePriceMaxAgeMs: 0,
+          priority: "user",
+          stage: "binance",
+          user: updatedUser
+        }),
+        ensureFinanceCurrentValuation({
+          binanceRefreshKey: nextRefreshKey,
+          event: "binance-connect",
+          force: true,
+          livePriceMaxAgeMs: 0,
+          priority: "user",
+          user: updatedUser
+        })
+      ]).catch(() => {
         // Binance dashboard keeps the synced balances visible if live quote refresh fails.
       });
     } catch (err) {
@@ -219,6 +231,16 @@ export function useFinanceBinanceActions({
       if (deleteData) {
         setBinanceRefreshKey((key) => key + 1);
       }
+      void ensureFinanceCurrentValuation({
+        binanceRefreshKey: deleteData ? binanceRefreshKey + 1 : binanceRefreshKey,
+        event: "binance-delete",
+        force: true,
+        livePriceMaxAgeMs: 0,
+        priority: "user",
+        user: updatedUser
+      }).catch(() => {
+        // The next stage warmup will retry valuation after API-key deletion.
+      });
       onBinanceCredentialsDeleted();
 
       setNotice(deleteData ? "API keys and data deleted." : "API keys deleted.");
@@ -229,6 +251,7 @@ export function useFinanceBinanceActions({
     }
   }, [
     activeUser,
+    binanceRefreshKey,
     clearApiKeyDraft,
     onBinanceCredentialsDeleted,
     setActiveUser,

@@ -1,5 +1,6 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
+import type { CurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
 
 import { DashboardBinanceCard } from "./dashboard-binance-card";
 import {
@@ -14,6 +15,7 @@ import type { BinanceBalanceRow, ProviderSummary } from "./types";
 type DashboardCryptoCardsProps = {
   providers: ProviderSummary[];
   currentPoint: DashboardChartPoint | null;
+  currentValuationSnapshot?: CurrentValuationSnapshot | null;
   valuesKnown: boolean;
   livePrices: Record<string, number | null>;
   binanceBalances: BinanceBalanceRow[];
@@ -36,9 +38,30 @@ function getPointValue(point: DashboardChartPoint | null, key: string, valuesKno
   return typeof value === "number" ? value : null;
 }
 
+function getUnitPriceCentsFromCurrentValue(currentValueCents: number | null, investedValue: number, quantity: number) {
+  return currentValueCents !== null && Math.abs(quantity) > 0.000001
+    ? Math.round(currentValueCents / quantity)
+    : getFallbackUnitPriceCents(investedValue, quantity);
+}
+
+function getValuationTokenValue(
+  snapshot: CurrentValuationSnapshot | null | undefined,
+  providerId: string,
+  tokenName: string
+) {
+  const asset = Object.values(snapshot?.assets ?? {}).find((item) =>
+    item.category === "crypto" &&
+    item.chartKey === tokenName &&
+    Object.hasOwn(item.providerValues, providerId)
+  );
+
+  return asset ? asset.providerValues[providerId]?.cents ?? null : undefined;
+}
+
 export function DashboardCryptoCards({
   providers,
   currentPoint,
+  currentValuationSnapshot,
   valuesKnown,
   livePrices,
   binanceBalances,
@@ -79,13 +102,20 @@ export function DashboardCryptoCards({
               {provider.cryptoTokens.map((token) => {
               const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
               const price = tokenSymbol ? livePrices[tokenSymbol] : null;
-              const liveTokenReady = !tokenSymbol || price != null || valuesKnown;
-              const currentValueCents = price == null
-                ? token.investedValue
-                : Math.round(token.quantity * price * 100);
-              const unitPriceCents = price == null
-                ? getFallbackUnitPriceCents(token.investedValue, token.quantity)
-                : Math.round(price * 100);
+              const valuationTokenValue = getValuationTokenValue(
+                currentValuationSnapshot,
+                provider.sourceInstitution,
+                token.tokenName
+              );
+              const currentValueCents = valuationTokenValue !== undefined
+                ? valuationTokenValue
+                : getPointValue(currentPoint, token.tokenName, valuesKnown);
+              const liveTokenReady = currentValueCents !== null;
+              const unitPriceCents = getUnitPriceCentsFromCurrentValue(
+                currentValueCents,
+                token.investedValue,
+                token.quantity
+              );
 
               return (
                 <div key={token.tokenName}>
@@ -103,10 +133,10 @@ export function DashboardCryptoCards({
                     />
                     <DashboardMetricRow label="Invested Value" value={formatEuroCents(token.investedValue)} />
                     <DashboardMetricRow
-                      animateValueChanges={price != null}
+                      animateValueChanges={price != null || currentValueCents !== null}
                       label="Current Value"
-                      value={liveTokenReady ? formatEuroCents(currentValueCents) : "--"}
-                      valueClassName={price == null
+                      value={currentValueCents !== null ? formatEuroCents(currentValueCents) : "--"}
+                      valueClassName={currentValueCents === null
                         ? "text-[color:var(--text-dim)] underline decoration-dotted decoration-[color:var(--text-dim)]"
                         : "text-[color:var(--text-main)]"}
                     />

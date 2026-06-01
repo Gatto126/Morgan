@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   collectStageLivePriceKeys,
+  ensureFinanceCurrentValuation,
   ensureFinanceStageReady,
   getFinanceStageRequestKey,
   getFinanceSessionDiagnostics,
   getPrioritizedProfileStageWarmupOrder,
   resetFinanceSessionOrchestrator
 } from "@/components/finance-shell/finance-session-orchestrator";
+import { getCurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
 import type { UserRecord } from "@/components/finance-shell/types";
 import {
   globalLivePricesCache,
@@ -174,6 +176,81 @@ describe("finance session orchestrator", () => {
         version: user.transactionCount
       })
     ]);
+  });
+
+  it("publishes a profile current valuation snapshot with dashboard and Binance data", async () => {
+    const valuationUser: UserRecord = {
+      ...user,
+      id: "profile-current-valuation"
+    };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/transactions/dashboard?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            accountTotals: { checking: 10_000, crypto: 0, heritage: 10_000, investment: 0 },
+            dailyData: [],
+            monthlyData: [],
+            providerSummaries: [{
+              checking: { cashback: 0, expenses: 0, income: 0, interest: 0, tax: 0, total: 10_000 },
+              cryptoTokens: [{ investedValue: 0, quantity: 0.1, tokenName: "Bitcoin", tokenSymbol: "BTC" }],
+              investmentProducts: [{ cashback: 0, investedValue: 0, isin: "IE00B4L5Y983", productName: "ETF", quantity: 2 }],
+              sourceInstitution: "trade_republic",
+              total: 10_000
+            }]
+          })
+        };
+      }
+
+      if (url.startsWith("/api/binance/balances?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            balances: [
+              { eurValue: 1_000, freeAmount: 1, lockedAmount: 0, tokenName: "Ethereum", tokenSymbol: "ETH" }
+            ],
+            hasApiKey: true,
+            isStale: false,
+            syncedAt: "2026-06-01T08:00:00.000Z"
+          })
+        };
+      }
+
+      if (url.startsWith("/api/prices?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            BTC: 60_000,
+            ETH: 2_000,
+            IE00B4L5Y983: 100
+          })
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await ensureFinanceCurrentValuation({
+      binanceRefreshKey: 5,
+      event: "login",
+      priority: "user",
+      user: valuationUser
+    });
+
+    expect(result.snapshot.status).toBe("ready");
+    expect(result.snapshot.version).toMatchObject({
+      binanceRefreshKey: 5,
+      transactionCount: valuationUser.transactionCount
+    });
+    expect(result.snapshot.totals).toMatchObject({
+      binance: { cents: 200_000 },
+      checking: { cents: 10_000 },
+      crypto: { cents: 800_000 },
+      heritage: { cents: 830_000 },
+      investment: { cents: 20_000 }
+    });
+    expect(getCurrentValuationSnapshot(valuationUser.id)).toBe(result.snapshot);
   });
 
   it("reports refreshed live quote diagnostics after a later price update", async () => {

@@ -1,46 +1,709 @@
-# Valuation Refactor Checkpoint
+# Morgan Valuation Refactor Checkpoint
 
-## Objective
+Last updated: 2026-06-02
+Current baseline commit: `0c61c53`
 
-Make every primary value in Morgan come from one coherent valuation pipeline:
+This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
-- historical portfolio series is stable and only recomputed when transactions or stored market history change;
-- today's point is calculated from current quantities and the freshest live quotes available;
-- topbar, chart, cards and previews read the same current valuation state;
-- no current value falls back to historical prices while pretending to be live;
-- refreshes never make already-known live values disappear.
+## Product Goal
 
-## Current Architecture Notes
+Morgan must behave like a trustworthy personal finance and portfolio aggregator:
 
-- Server dashboard payloads are built in `src/server/services/dashboard-data.ts` from all transactions plus `AssetHistory`.
-- Investment and crypto dashboards are built in `src/server/services/portfolio-data.ts` with a similar history walk.
-- Client live values are applied in:
+- show the freshest validated current value for every dashboard;
+- keep topbar, cards and the last chart point coherent;
+- keep historical chart values stable and not recalculate them unnecessarily;
+- never show fake `0,00`, stale values pretending to be live, visible `--` placeholders, or disappearing numbers during refresh;
+- make dashboard navigation feel instant because data is already warm and values are already current.
+
+The key product rule is:
+
+> Navigation should change only the view selector, not trigger the creation of the value.
+
+## Target Architecture
+
+### 1. Provider Adapters
+
+Use one adapter per data source/provider family. Adapters normalize raw imported/API data into a common domain shape.
+
+Planned adapters:
+
+- `trade-republic-adapter`
+  - checking cash balance and cashflow summaries;
+  - investment holdings;
+  - crypto holdings;
+  - provider-level totals and transaction counts.
+- `bbva-adapter`
+  - checking balance and cashflow summaries;
+  - provider-level totals and transaction counts.
+- `binance-adapter`
+  - current balances;
+  - tradable symbols and live quote keys;
+  - current EUR values;
+  - later: historical balance sync when implemented.
+
+Adapters should not own the final app values. They only normalize provider facts.
+
+### 2. Current Valuation Engine
+
+Add a central current valuation engine/store. It should be the single source for current values:
+
+- `heritage`
+- `checking`
+- `investment`
+- `crypto`
+- `binance`
+- provider totals
+- asset totals
+- required live quote keys
+- quote metadata: `value`, `fetchedAt`, `attemptedAt`, `source`, `status`
+- readiness: `ready`, `loading`, `partial`, `error`
+- diagnostics: `missingKeys`, `unavailableKeys`, `quoteAge`, `lastFetch`
+
+This engine should consume:
+
+- cached historical/stage data;
+- provider adapter output;
+- global live quote cache;
+- Binance balances;
+- active profile metadata.
+
+It should publish immutable snapshots by profile/version/date.
+
+### 3. View Selectors
+
+Topbar, cards and charts should not calculate business totals directly. They should consume selectors from the central valuation snapshot.
+
+Selectors needed:
+
+- main dashboard topbar selector;
+- checking topbar selector;
+- investment topbar selector;
+- crypto topbar selector;
+- Binance topbar selector;
+- dashboard cards selector;
+- checking cards selector;
+- investment cards selector;
+- crypto cards selector;
+- Binance card selector;
+- main chart today-point selector;
+- secondary chart today-point selectors.
+
+Dashboard-specific components can still manage visual state, tooltip selection, tab selection and layout, but not the authoritative value.
+
+## Required Behaviors
+
+### Cold Login With Cleared Cookies/Cache
+
+Ideal flow:
+
+1. Login succeeds.
+2. Load profiles.
+3. Pick active profile:
+   - persisted active profile when available;
+   - single profile if only one exists;
+   - otherwise show/prepare multi-profile home.
+4. Load active profile historical/stage data.
+5. Load Binance balances if credentials exist.
+6. Collect all required live quote keys for ETF, stock, Trade Republic crypto and Binance.
+7. Fetch fresh live quotes.
+8. Build the first valid current valuation snapshot.
+9. Render topbar, cards and charts from that same snapshot.
+10. Continue background refresh.
+
+User-facing rule:
+
+- show loader/shell briefly if necessary;
+- do not show current values until the first valid snapshot exists;
+- do not show old values as if they were fresh.
+
+### Dashboard Change
+
+Ideal flow:
+
+```text
+user clicks crypto
+-> active view selector changes to crypto
+-> topbar reads crypto selector from current valuation snapshot
+-> cards and chart today point read the same snapshot
+-> no blocking fetch
+-> no stale crypto topbar flash
+```
+
+The dashboard change should not be responsible for updating the value. It should only select a different view of an already-updating state.
+
+### Profile Change
+
+Ideal flow:
+
+1. Set selected profile.
+2. Promote that profile to high-priority valuation refresh.
+3. Load/reuse stage data for that profile.
+4. Load fresh live quotes for that profile's required keys.
+5. Publish a current valuation snapshot.
+6. Render the selected profile only after its snapshot is valid.
+
+Other profiles should keep only lightweight previews warm unless explicitly selected.
+
+### Import New Transactions
+
+Ideal flow:
+
+```text
+transactions approved
+-> show circular loader
+-> save transactions
+-> invalidate only the imported profile's derived stage/cache data
+-> rebuild historical/stage data until yesterday/today base
+-> recompute current quantities
+-> fetch fresh live quotes
+-> publish new current valuation snapshot
+-> close loader
+-> show all topbar/card/chart values together
+```
+
+User-facing rule:
+
+- no `0,00` flash;
+- no disappearing topbar values;
+- no partially updated dashboards;
+- loader remains until data + quotes + current snapshot are coherent.
+
+### Browser Background/Focus
+
+When the tab is backgrounded, the browser may throttle JS timers. On focus:
+
+1. immediately refresh live quote keys;
+2. refresh Binance balances if stale;
+3. publish a new current valuation snapshot;
+4. update all topbar stage entries before the user navigates.
+
+### F5 / Direct Reload On Any Dashboard
+
+F5 is a first-class bootstrap path, not a special case. It must work on:
+
+- main dashboard;
+- checking;
+- investment;
+- crypto;
+- Binance;
+- home/authenticated profile selection.
+
+Ideal flow:
+
+```text
+F5 on any dashboard
+-> restore session/profile/navigation state
+-> resolve active profile and active dashboard stage
+-> prioritize active stage data
+-> load/reuse stable historical stage data
+-> fetch fresh live quotes required by the active profile
+-> build current valuation snapshot
+-> render topbar/card/chart from the same snapshot
+-> preload the remaining profile stages in background
+```
+
+User-facing rule:
+
+- no cards disappearing after reload;
+- no empty chart caused by stage data not being rehydrated;
+- no stale topbar from session storage;
+- no need to switch dashboard to wake up data.
+
+### Profile Change While Refresh Is In Flight
+
+If profile A is refreshing and the user switches to profile B:
+
+1. profile A promises may finish, but must not publish into profile B's topbar/UI;
+2. every valuation snapshot must be keyed by profile id + stage/data versions + date;
+3. profile B becomes priority immediately;
+4. any visible values must belong only to profile B.
+
+User-facing rule:
+
+- never show the previous profile's values after switching profile;
+- keep previous profile refreshes isolated and harmless.
+
+### Import While User Navigates
+
+The import overlay owns the data transition for the affected profile. If the user imports from one dashboard and navigates before processing finishes:
+
+1. keep the import loader/transition authoritative for that profile;
+2. invalidate old stage data and current valuation only for the imported profile;
+3. do not publish partial new values into any dashboard;
+4. close the loader only after rebuilt stage data + fresh live quote attempt + current valuation snapshot are coherent.
+
+User-facing rule:
+
+- navigation during import must not expose half-updated dashboards;
+- topbar/card/chart update together once import settles.
+
+### Binance Connect / Delete / Sync
+
+Connecting Binance credentials:
+
+```text
+save credentials
+-> sync Binance balances
+-> seed Binance stage data
+-> invalidate current valuation for profile
+-> fetch Binance live quote keys
+-> publish new valuation snapshot including Binance
+```
+
+Deleting Binance credentials:
+
+```text
+delete credentials
+-> optionally delete persisted balances
+-> invalidate Binance stage data and profile valuation
+-> publish snapshot without Binance contribution
+-> remove Binance dashboard/topbar entries if no longer visible
+```
+
+Syncing Binance in the background:
+
+- may update Binance token quantities and fallback EUR values;
+- must refresh live quote keys for any meaningful balances;
+- must not flash crypto/heritage to zero while sync is running.
+
+User-facing rule:
+
+- Binance connect/delete/sync must behave like import: no fake zero, no stale Binance value pretending to be current.
+
+### Daily Rollover
+
+At UTC/local date boundary, the meaning of "today" changes:
+
+1. current stage cache date key changes;
+2. yesterday becomes historical/stable;
+3. today's current point starts from the new date;
+4. valuation snapshots must include a date key;
+5. current valuation should refresh immediately after rollover/focus.
+
+User-facing rule:
+
+- no duplicated today point;
+- no stale yesterday value shown as today's live value;
+- historical series remains stable after rollover.
+
+### Live Quote Unavailable Or Partial
+
+The valuation engine must treat quote readiness centrally.
+
+Cases:
+
+- all required quotes available: publish full ready snapshot;
+- one provider quote missing: provider value is pending/unavailable;
+- aggregate depends on missing quote: aggregate is pending/partial, not fake zero;
+- quote endpoint returns `null`: keep last valid numeric quote with metadata, but mark quote attempt/status;
+- quote endpoint returns zero for a live asset: do not accept it as a valid market quote unless explicitly allowed.
+
+Open policy decision:
+
+- whether aggregate totals should display a partial total with a stale/partial status, or stay pending until all required live quotes settle.
+
+Current preference:
+
+- top-level money values should avoid partial totals unless the UI clearly marks them as partial;
+- diagnostics should always expose which keys are missing.
+
+### Multi-Profile Home / Preview
+
+The authenticated home can mount with multiple profiles. It should not force full valuation work for every profile.
+
+Ideal flow:
+
+1. active profile gets complete current valuation;
+2. inactive profiles get lightweight preview only;
+3. selecting an inactive profile promotes it to complete valuation;
+4. previews never overwrite active profile topbar/state.
+
+User-facing rule:
+
+- home must feel fast with many profiles;
+- profile selection must not leak values between profiles.
+
+### Auth Expiry / 401
+
+If an API request fails because the session expired:
+
+- do not convert missing API data to zero;
+- do not clear the latest validated valuation as if the portfolio were empty;
+- surface auth/session state separately;
+- stop privileged refresh loops until authenticated again.
+
+### Offline / Slow Network
+
+If the network is slow or offline:
+
+- keep the last validated valuation visible when appropriate;
+- mark diagnostics/status as stale or refresh-failed;
+- do not publish pending/zero values over the last valid snapshot;
+- retry on focus/reconnect.
+
+User-facing rule:
+
+- stale-but-known is better than fake current;
+- diagnostics must make quote age and failure reason visible.
+
+### Transaction/Profile Deletion
+
+When transactions or profiles are deleted:
+
+1. invalidate all derived stage data and current valuations for the affected profile;
+2. if no transactions/Binance remain, return to the empty/upload state;
+3. clear topbar entries for stages that are no longer visible;
+4. do not affect unrelated profiles.
+
+## Current State
+
+Implemented so far:
+
+- stage data cache is date/version aware in `src/components/finance-shell/dashboard-stage-data-cache.ts`;
+- live prices have metadata and do not let `null` overwrite the latest numeric quote in `src/shared/live-prices.ts`;
+- dashboard and portfolio current snapshot builders exist:
+  - `src/components/dashboard/dashboard-current-snapshot.ts`
+  - `src/components/portfolio-dashboard/portfolio-current-snapshot.ts`
+- dashboard topbar store guards against fake zero/pending regressions:
+  - `src/components/finance-shell/dashboard-topbar-store.ts`
+- warmed dashboards keep polling live values:
   - `src/components/dashboard/use-dashboard-live-prices.ts`
   - `src/components/portfolio-dashboard/use-portfolio-live-prices.ts`
+  - `src/components/dashboard/use-binance-balances.ts`
+- central current valuation store/snapshot scaffolding exists:
+  - `src/components/finance-shell/current-valuations-store.ts`
+  - `tests/unit/ui/finance-shell/current-valuations-store.test.ts`
+- topbar stage entries are now also seeded from shared live values:
+  - `src/components/finance-shell/dashboard-topbar-current-values.ts`
+  - `src/components/finance-shell/dashboard-topbar-shell.tsx`
+- `dashboard-topbar-current-values.ts` now seeds checking/investment/crypto topbars from current valuation selectors instead of rebuilding its own dashboard current snapshot.
+- orchestration now publishes/refreshes central valuation snapshots:
+  - `src/components/finance-shell/finance-session-orchestrator.ts`
+  - `src/components/finance-shell/import-data-warmup.ts`
+  - `src/components/finance-shell/use-finance-binance-actions.ts`
+- main dashboard today's chart point can now be supplied by the current valuation selector:
   - `src/components/dashboard/dashboard-chart-data-model.ts`
+  - `src/components/dashboard/use-dashboard-chart-model.ts`
+  - `src/components/dashboard.tsx`
+- dashboard cards now prefer current valuation provider/asset values:
+  - `src/components/dashboard/dashboard-cards.tsx`
+  - `src/components/dashboard/dashboard-checking-cards.tsx`
+  - `src/components/dashboard/dashboard-investment-cards.tsx`
+  - `src/components/dashboard/dashboard-crypto-cards.tsx`
+- portfolio/investment/crypto today chart points and cards now prefer current valuation selectors/snapshots:
   - `src/components/portfolio-dashboard/chart-data.ts`
-  - `src/components/dashboard/use-dashboard-live-totals.ts`
-- `/api/prices` already disables historical fallback through `includeHistoricalFallback: false`.
-- Stage data cache is date-versioned in `src/components/finance-shell/dashboard-stage-data-cache.ts`.
+  - `src/components/portfolio-dashboard/portfolio-dashboard.tsx`
+  - `src/components/portfolio-dashboard/portfolio-provider-cards.tsx`
+- Binance dashboard total/topbar/flat current chart line now prefer the Binance total from the central valuation snapshot:
+  - `src/components/binance-dashboard.tsx`
 
-## Implementation Order
+Important limitation:
 
-1. Add live quote metadata: `value`, `fetchedAt`, `source`, `status`.
-2. Keep topbar/chart pending until all required live quote keys are settled.
-3. Make today's point explicit: history until yesterday, live valuation for today.
-4. Deduplicate live quote requests and expose freshness/debug information.
-5. Add materialized historical valuation tables and regenerate them after import/profile reset.
-6. Replace full multi-profile dashboard payloads with lighter previews.
+The app is still hybrid. Several components still calculate fallback values locally. The central valuation store now exists, topbar seed helper consumes it, login/profile/import/Binance orchestration refreshes it, dashboard cards prefer it, and dashboard/portfolio/Binance current chart points can consume it. Remaining local logic mainly acts as fallback while snapshots are not available and in historical/tooltip transformations.
 
-## Progress
+## Gaps To Close
 
-- 2026-06-01: Started refactor. First target is live quote metadata and current-value readiness without historical fallbacks.
-- 2026-06-01: Added live quote metadata cache. A `null` refresh no longer overwrites the latest numeric live quote.
-- 2026-06-01: Current chart points now stay pending for today until required live price values are numeric.
-- 2026-06-01: Added opportunistic DB materialized stage snapshots for `dashboard`, `checking`, `investment` and `crypto`, keyed by profile, stage, version and UTC date.
+### Gap 1: Central Current Valuation Store
+
+Create a store/module, likely under:
+
+- `src/components/finance-shell/current-valuations-store.ts`
+- or `src/domain/valuation/current-valuations.ts`
+
+Current progress:
+
+- `src/components/finance-shell/current-valuations-store.ts` exists.
+- It exposes `ensureCurrentValuation(profile, options)`, `subscribeCurrentValuation(profileId, listener)`, `getCurrentValuationSnapshot(profileId)`, `invalidateCurrentValuation(profileId)`, `refreshCurrentValuationFromCaches(profile, options)` and initial topbar/card/chart selectors.
+- Snapshot values include status metadata and diagnostics for missing/unavailable quote keys.
+- Zero live quotes are treated as unavailable and do not publish fake zero totals.
+- Topbar cache seeding now reads checking/investment/crypto values through valuation selectors.
+- `finance-session-orchestrator` exposes `ensureFinanceCurrentValuation(...)` and includes valuation status/missing/unavailable quote diagnostics in session diagnostics.
+- `warmImportedProfileData(...)` waits for a forced post-import valuation snapshot before returning.
+- Binance connect/delete invalidates the profile valuation and triggers a coherent valuation refresh.
+- Focus/reconnect refresh now asks for a full current valuation refresh, not only the visible stage.
+- Asset valuations now keep provider-specific values, so cards can read a single provider's ETF/token value without accidentally using an aggregate shared asset label.
+- `useCurrentValuationSnapshot(profileId)` is available for React consumers.
+- Portfolio/investment/crypto chart data accepts a valuation current point and uses it for today's point.
+- Main dashboard and portfolio cards prefer valuation values for provider totals and asset current values.
+- Binance dashboard prefers `totals.binance` from the valuation snapshot for its topbar and current flat chart value.
+
+Remaining work:
+
+- replace remaining local current-value builders after consumers are migrated;
+- migrate checking dashboard card/topbar/chart where useful, though checking does not depend on live quotes;
+- remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough;
+- expand tests for orchestration races and UI consistency.
+
+Snapshot shape should include:
+
+```ts
+type CurrentValuationSnapshot = {
+  profileId: string;
+  version: {
+    transactionCount: number;
+    checkingCount: number;
+    investmentCount: number;
+    cryptoCount: number;
+    binanceRefreshKey: number;
+    dateKey: string;
+  };
+  totals: {
+    heritage: ValuationValue;
+    checking: ValuationValue;
+    investment: ValuationValue;
+    crypto: ValuationValue;
+    binance: ValuationValue;
+  };
+  providers: Record<string, ProviderValuation>;
+  assets: Record<string, AssetValuation>;
+  quoteKeys: {
+    isins: string[];
+    cryptos: string[];
+  };
+  diagnostics: {
+    lastFetchAt: number | null;
+    maxQuoteAgeMs: number | null;
+    missingKeys: string[];
+    unavailableKeys: string[];
+  };
+  status: "loading" | "ready" | "partial" | "error";
+  updatedAt: number;
+};
+
+type ValuationValue = {
+  cents: number | null;
+  status: "ready" | "loading" | "missing-live-quote" | "unavailable" | "error";
+  fetchedAt: number | null;
+  source: "checking-balance" | "live-quote" | "binance-sync" | "derived";
+};
+```
+
+### Gap 2: Move UI To Selectors
+
+After the store exists, migrate consumers gradually:
+
+1. topbar shell reads only valuation selectors;
+2. dashboard cards read valuation selectors;
+3. investment/crypto cards read valuation selectors;
+4. chart today point reads valuation selectors;
+5. dashboard-local calculation remains only for tooltip historical reconstruction.
+
+Do not rewrite every component in one commit. Use small verified slices.
+
+### Gap 3: Import Loader Contract
+
+Make import completion wait for the central valuation snapshot:
+
+- stage data rebuilt;
+- Binance state accounted for;
+- fresh live quotes attempted;
+- snapshot status is `ready` or intentional `partial` with clear reason.
+
+Then close the loader.
+
+### Gap 4: Diagnostics UI/Console
+
+`window.morganFinanceDiagnostics()` exists, but should be extended or replaced with valuation diagnostics:
+
+- profileId;
+- active stage;
+- valuation status;
+- last quote fetch;
+- max quote age;
+- missing quote keys;
+- unavailable quote keys;
+- stale stage data keys;
+- pending promises.
+
+The goal is to identify in seconds whether a stale value is caused by:
+
+- DB/stage cache;
+- `/api/prices`;
+- Binance sync;
+- valuation engine readiness;
+- rendering/topbar store.
+
+### Gap 5: Binance History
+
+Current Binance is correct as a live/current value but has no historical line beyond the current point. Later:
+
+- implement Binance historical sync if API allows;
+- store historical Binance balance/value snapshots;
+- merge them into crypto/heritage historical series.
+
+Until then:
+
+- topbar should include Binance current value;
+- crypto dashboard can show Binance current card;
+- graph history for Binance may be flat/current-only.
+
+## Implementation Plan
+
+### Phase 1: Stabilize Central Current Valuation
+
+1. Create domain types for current valuation values and snapshots.
+2. Create provider adapters for current holdings:
+   - Trade Republic from dashboard/stage payload;
+   - BBVA from checking/stage payload;
+   - Binance from balances payload.
+3. Create quote-key collector using normalized symbols/ISINs.
+4. Build valuation snapshot from cached stage data + live quote cache.
+5. Add store subscription and invalidation.
+6. Add tests for:
+   - main totals;
+   - provider totals;
+   - asset totals;
+   - Binance included in crypto/heritage;
+   - missing live quote keeps value pending;
+   - zero quote is not accepted as live;
+   - refresh with newer quote updates all selectors.
+
+### Phase 2: Wire Topbar Fully To Valuation Store
+
+1. Replace `dashboard-topbar-current-values.ts` with selectors from the valuation store.
+2. Keep `dashboard-topbar-store.ts` as UI state/layout bridge only.
+3. Remove direct value calculation from:
+   - `DashboardTabs`
+   - `PortfolioDashboardTabs`
+   - `CheckingDashboardTabs`
+   - `BinanceDashboard` topbar publication where possible.
+4. Tests:
+   - updating BTC while on dashboard updates crypto topbar without visiting crypto;
+   - updating ETF while on crypto updates investment topbar without visiting investment;
+   - no stale topbar on dashboard switch.
+
+### Phase 3: Wire Cards And Current Chart Point
+
+1. Cards read provider/asset values from valuation selectors.
+   - Main dashboard cards prefer valuation values for provider totals and open holdings.
+   - Portfolio/investment/crypto cards prefer valuation provider/asset values when the snapshot version matches the stage.
+2. Last chart point for today reads valuation selectors.
+   - Main dashboard chart data accepts a valuation selector point and uses it for today's point.
+   - Portfolio/investment/crypto chart data accepts a valuation selector point and uses it for today's point.
+   - Binance dashboard prefers valuation `totals.binance` for its current flat chart series.
+3. Tooltip historical values still reconstruct from chart historical data.
+4. Tests:
+   - topbar/card/today point match for main dashboard;
+   - topbar/card/today point match for investment dashboard;
+   - topbar/card/today point match for crypto dashboard;
+   - Binance current value included consistently.
+
+### Phase 4: Login/Profile/Import Orchestration
+
+1. Update orchestrator to call `ensureCurrentValuation`.
+2. On login:
+   - active profile valuation first;
+   - other profiles lightweight preview only.
+3. On F5/direct reload:
+   - active route/stage valuation first;
+   - restore persisted profile safely;
+   - never reuse stale session topbar values as authoritative current values.
+4. On profile change:
+   - promote selected profile valuation.
+5. On import:
+   - invalidate profile stage + valuation;
+   - wait for rebuilt stage data + valuation snapshot;
+   - then close loader.
+6. On Binance connect/delete/sync:
+   - invalidate profile valuation;
+   - refresh Binance balances and live quote keys;
+   - publish one coherent snapshot.
+7. On daily rollover/focus/reconnect:
+   - refresh date-keyed valuation;
+   - preserve last validated snapshot until replacement is valid.
+8. Tests:
+   - cold login produces snapshot before rendering current values;
+   - F5 on investment/crypto/binance produces snapshot before rendering current values;
+   - profile change does not show previous profile values;
+   - profile change while previous refresh is in flight does not leak old values;
+   - import does not publish zero/pending topbar;
+   - navigation during import does not reveal partial values;
+   - Binance connect/delete does not flash crypto/heritage to zero;
+   - daily rollover updates date-keyed snapshot;
+   - offline/401 paths keep last validated values separate from auth/network state.
+
+### Phase 5: Cleanup Distributed Calculations
+
+Remove or reduce duplicated current-value logic from:
+
+- `src/components/dashboard/dashboard-current-snapshot.ts`
+- `src/components/portfolio-dashboard/portfolio-current-snapshot.ts`
+- dashboard/portfolio live price hooks where they become store internals;
+- topbar seed helpers once selectors replace them.
+
+Keep historical chart transformation logic separate.
+
+## Testing Checklist
+
+Run before pushing valuation changes:
+
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm typecheck:test`
+- `pnpm test -- --run tests/unit/shared/live-prices.test.ts`
+- `pnpm test -- --run tests/unit/ui/current-snapshot`
+- `pnpm test -- --run tests/unit/ui/finance-shell`
+- targeted chart-data tests:
+  - `tests/unit/ui/chart-data/dashboard-chart-model.test.ts`
+  - `tests/unit/ui/chart-data/portfolio-chart-data.test.ts`
+
+Manual production smoke after deploy:
+
+1. Clear cookies/cache.
+2. Login.
+3. Wait only until main dashboard is visible.
+4. Navigate:
+   - dashboard
+   - checking
+   - investment
+   - crypto
+   - binance
+   - home
+   - dashboard
+   - crypto
+   - investment
+5. Watch for:
+   - stale topbar flashes;
+   - `0,00` fake values;
+   - visible `--`;
+   - card/topbar mismatch;
+   - today chart point mismatch.
+6. Keep main dashboard open for 20-30 seconds, then enter crypto/investment and confirm values were already updated.
+7. Run direct reload tests:
+   - F5 on dashboard;
+   - F5 on checking;
+   - F5 on investment;
+   - F5 on crypto;
+   - F5 on Binance.
+8. Run state-transition tests:
+   - switch profile while a dashboard is still loading;
+   - import transactions, then navigate before the loader closes;
+   - connect Binance API and watch crypto/heritage/topbar/card;
+   - delete Binance API and confirm Binance values disappear coherently;
+   - background the tab for a few minutes, return to focus, then navigate to crypto/investment.
+9. Run degraded-data checks when possible:
+   - simulate slow/offline network and confirm last validated values do not become zero;
+   - simulate missing quote and confirm diagnostics show `missingKeys`;
+   - confirm session expiry/401 does not look like an empty portfolio.
 
 ## Guardrails
 
-- Do not hardcode the implementation for a single user, even if production currently has one account.
-- Prefer resetting/regenerating derived valuation data over deleting account/profile/transaction source data.
-- Commit and push in small verified slices.
+- Do not hardcode behavior for one user/account.
+- Do not delete source transactions/profile data to fix derived state.
+- Historical/stage data can be regenerated; source data must remain authoritative.
+- Do not show historical fallback as live current value.
+- Do not let unavailable or zero live quotes overwrite the last valid numeric quote.
+- Do not close import loader until the new valuation snapshot is coherent.
+- Keep commits small and verified.
+- After every meaningful slice, push to `main` if requested.
+
+## Resume Instructions For Codex
+
+When resuming after compaction:
+
+1. Read this file first.
+2. Check `git status --short`.
+3. Identify the latest commit and current deployment state if relevant.
+4. Do not restart the whole plan from scratch.
+5. Continue from the smallest unfinished phase.
+6. Preserve user priority: Morgan must feel instant but must never lie about current values.

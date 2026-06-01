@@ -108,6 +108,34 @@ describe("portfolio chart data", () => {
     });
   });
 
+  it("uses the current valuation point for today's portfolio chart point when provided", () => {
+    const points = buildPortfolioChartData({
+      activeProvider: provider,
+      activeTab: "trade_republic",
+      currentValuationPoint: {
+        "iShares Core MSCI World UCITS ETF USD (Acc)": 43_000,
+        balance: 43_000,
+        heritage: 43_000,
+        rawMonth: "2026-03-15",
+        trade_republic: 43_000
+      },
+      data: portfolioData,
+      livePrices: {
+        IE00B4L5Y983: 1
+      },
+      timeRange: "ALL",
+      todayKey: "2026-03-15"
+    });
+    const todayPoint = points.find((point) => point.rawMonth === "2026-03-15");
+
+    expect(todayPoint).toMatchObject({
+      "iShares Core MSCI World UCITS ETF USD (Acc)": 43_000,
+      balance: 43_000,
+      heritage: 43_000,
+      trade_republic: 43_000
+    });
+  });
+
   it("adds Binance balances to the crypto current point and provider series", () => {
     const dataWithBinance = mergePortfolioDataWithBinance(portfolioData, [{
       eurValue: 250.25,

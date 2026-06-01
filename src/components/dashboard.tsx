@@ -11,6 +11,10 @@ import { buildDashboardCurrentSnapshot } from "./dashboard/dashboard-current-sna
 import { DashboardErrorState, DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "./dashboard/dashboard-status";
 import { DashboardTabs } from "./dashboard/dashboard-tabs";
 import {
+  buildCurrentValuationSnapshot,
+  selectCurrentValuationChartPoint
+} from "./finance-shell/current-valuations-store";
+import {
   applyLiveBinanceBalanceValues,
   getBinanceBalancesTotalCents
 } from "./dashboard/binance-live-values";
@@ -113,6 +117,47 @@ export function Dashboard({
     [liveBinanceBalances]
   );
   const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0;
+  const currentValuationSnapshot = useMemo(() => {
+    if (!dataFresh || !data) {
+      return null;
+    }
+
+    return buildCurrentValuationSnapshot({
+      binancePayload: hasBinanceCredentials && binanceBalancesKnown
+        ? { balances: liveBinanceBalances, hasApiKey: true }
+        : null,
+      binanceRefreshKey,
+      dashboardData: data,
+      livePrices,
+      profile: {
+        binanceApiKeyPreview: null,
+        checkingCount,
+        cryptoCount,
+        hasBinanceCredentials,
+        id: userId,
+        investmentCount,
+        name: "",
+        transactionCount
+      }
+    });
+  }, [
+    binanceBalancesKnown,
+    binanceRefreshKey,
+    checkingCount,
+    cryptoCount,
+    data,
+    dataFresh,
+    hasBinanceCredentials,
+    investmentCount,
+    liveBinanceBalances,
+    livePrices,
+    transactionCount,
+    userId
+  ]);
+  const currentValuationChartPoint = useMemo(
+    () => selectCurrentValuationChartPoint(currentValuationSnapshot),
+    [currentValuationSnapshot]
+  );
   const dashboardValuesKnown = !!data && dataFresh;
   const dashboardCryptoValuesKnown = cryptoPricesReady && (!hasBinanceCredentials || binanceBalancesKnown);
   const requiresInitialUpload = transactionCount === 0 && !hasBinancePortfolio;
@@ -147,6 +192,7 @@ export function Dashboard({
     binanceBalances: liveBinanceBalances,
     binanceTotalCents,
     checkingCount,
+    currentValuationPoint: currentValuationChartPoint,
     cryptoCount,
     data,
     hasBinancePortfolio,
@@ -262,9 +308,10 @@ export function Dashboard({
             contentVisible={contentVisible}
             data={data}
             timeRange={timeRange}
-            currentPoint={currentSnapshot}
-            cryptoValuesKnown={dashboardCryptoValuesKnown}
-            investmentValuesKnown={investmentPricesReady}
+            currentPoint={currentValuationChartPoint ?? currentSnapshot}
+            currentValuationSnapshot={currentValuationSnapshot}
+            cryptoValuesKnown={currentValuationChartPoint ? true : dashboardCryptoValuesKnown}
+            investmentValuesKnown={currentValuationChartPoint ? true : investmentPricesReady}
             livePrices={livePrices}
             binanceBalances={liveBinanceBalances}
             isBinanceSyncing={isBinanceSyncing}

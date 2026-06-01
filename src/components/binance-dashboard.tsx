@@ -24,6 +24,7 @@ import {
   fetchDashboardStageData,
   readDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
+import { useCurrentValuationSnapshot } from "./finance-shell/current-valuations-store";
 import { usePublishDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
 import {
   applyLiveBinanceBalanceValues,
@@ -106,6 +107,10 @@ export function BinanceDashboard({
     () => applyLiveBinanceBalanceValues(balances, livePrices),
     [balances, livePrices]
   );
+  const valuationSnapshot = useCurrentValuationSnapshot(userId);
+  const valuationBinanceCents = valuationSnapshot?.version.binanceRefreshKey === binanceRefreshKey
+    ? valuationSnapshot.totals.binance.cents
+    : null;
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -184,8 +189,14 @@ export function BinanceDashboard({
     }
   }
 
-  const totalEur = useMemo(() => getBinanceBalancesTotalCents(liveBalances) / 100, [liveBalances]);
-  const topbarValue = balancesKnown && cryptoPricesReady && freshBinanceRefreshKey === binanceRefreshKey
+  const totalEur = useMemo(
+    () => typeof valuationBinanceCents === "number"
+      ? valuationBinanceCents / 100
+      : getBinanceBalancesTotalCents(liveBalances) / 100,
+    [liveBalances, valuationBinanceCents]
+  );
+  const topbarValue = typeof valuationBinanceCents === "number" ||
+    (balancesKnown && cryptoPricesReady && freshBinanceRefreshKey === binanceRefreshKey)
     ? formatBinanceEuro(totalEur)
     : "--";
 
