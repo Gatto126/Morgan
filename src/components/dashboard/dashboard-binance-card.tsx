@@ -3,6 +3,7 @@ import { Eye, EyeOff } from "lucide-react";
 
 import { SlotValue } from "@/components/finance-shell/slot-value";
 
+import { BINANCE_VISIBLE_VALUE_THRESHOLD_EUR } from "./binance-live-values";
 import {
   DashboardAssetHeader,
   DashboardMetricRow
@@ -17,8 +18,6 @@ type DashboardBinanceCardProps = {
   setFilterSmallBalances: Dispatch<SetStateAction<boolean>>;
   listRef: RefObject<HTMLDivElement | null>;
 };
-
-const BINANCE_VISIBLE_VALUE_THRESHOLD_EUR = 0.49;
 
 export function DashboardBinanceCard({
   balances,

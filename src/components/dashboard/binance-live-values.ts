@@ -3,6 +3,7 @@ import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import type { BinanceBalanceRow } from "./types";
 
 const NON_ZERO_THRESHOLD = 0.000001;
+export const BINANCE_VISIBLE_VALUE_THRESHOLD_EUR = 0.49;
 
 export function getBinanceBalanceQuantity(balance: BinanceBalanceRow) {
   return balance.freeAmount + balance.lockedAmount;
@@ -17,7 +18,7 @@ export function getBinanceLivePriceKeys(balances: BinanceBalanceRow[] | undefine
   const pricedBalances = [...balances ?? []]
     .filter((balance) =>
       Math.abs(getBinanceBalanceQuantity(balance)) > NON_ZERO_THRESHOLD &&
-      balance.eurValue > 0
+      balance.eurValue > BINANCE_VISIBLE_VALUE_THRESHOLD_EUR
     )
     .sort((a, b) => {
       const valueDelta = b.eurValue - a.eurValue;

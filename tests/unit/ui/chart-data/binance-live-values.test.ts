@@ -23,6 +23,13 @@ const balances: BinanceBalanceRow[] = [
     tokenSymbol: "USDC"
   },
   {
+    eurValue: 0.25,
+    freeAmount: 10,
+    lockedAmount: 0,
+    tokenName: "Dust",
+    tokenSymbol: "DOGE"
+  },
+  {
     eurValue: 0,
     freeAmount: 42,
     lockedAmount: 0,
@@ -39,7 +46,7 @@ const balances: BinanceBalanceRow[] = [
 ];
 
 describe("Binance live values", () => {
-  it("collects live price keys only for positive priced balances", () => {
+  it("collects live price keys only for meaningful priced balances", () => {
     expect(getBinanceLivePriceKeys(balances)).toEqual(["BTC", "USDC"]);
   });
 
@@ -51,6 +58,6 @@ describe("Binance live values", () => {
 
     expect(liveBalances[0].eurValue).toBe(612);
     expect(liveBalances[1].eurValue).toBe(100);
-    expect(getBinanceBalancesTotalCents(liveBalances)).toBe(72_400);
+    expect(getBinanceBalancesTotalCents(liveBalances)).toBe(72_425);
   });
 });
