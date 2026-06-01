@@ -87,6 +87,12 @@ describe("dashboard time-series", () => {
       investment: 12000,
       crypto: 600000,
       heritage: 702000,
+      providerInvestment: {
+        [TRADE_REPUBLIC_INSTITUTION]: 12000
+      },
+      providerCrypto: {
+        [TRADE_REPUBLIC_INSTITUTION]: 600000
+      },
       providerExpenses: {
         [BBVA_INSTITUTION]: 10000
       }

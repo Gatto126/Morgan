@@ -86,6 +86,8 @@ const dashboardData: DashboardData = {
       crypto: 5000,
       heritage: 40000,
       providerChecking: { bbva: 10000 },
+      providerInvestment: { trade_republic: 25000 },
+      providerCrypto: { trade_republic: 5000 },
       providerProducts: {
         "Core ETF": 25000,
         "Sold Fund": 0
@@ -102,6 +104,8 @@ const dashboardData: DashboardData = {
       crypto: 0,
       heritage: 0,
       providerChecking: {},
+      providerInvestment: {},
+      providerCrypto: {},
       providerProducts: {},
       providerCryptoTokens: {}
     },
@@ -113,6 +117,8 @@ const dashboardData: DashboardData = {
       crypto: 0,
       heritage: 10000,
       providerChecking: { bbva: 10000 },
+      providerInvestment: {},
+      providerCrypto: {},
       providerProducts: {},
       providerCryptoTokens: {}
     },
@@ -124,6 +130,8 @@ const dashboardData: DashboardData = {
       crypto: 5000,
       heritage: 40000,
       providerChecking: { bbva: 10000 },
+      providerInvestment: { trade_republic: 25000 },
+      providerCrypto: { trade_republic: 5000 },
       providerProducts: { "Core ETF": 25000 },
       providerCryptoTokens: { Bitcoin: 5000 }
     },
@@ -135,6 +143,8 @@ const dashboardData: DashboardData = {
       crypto: 0,
       heritage: 0,
       providerChecking: { bbva: 0 },
+      providerInvestment: { trade_republic: 0 },
+      providerCrypto: { trade_republic: 0 },
       providerProducts: { "Core ETF": 0 },
       providerCryptoTokens: { Bitcoin: 0 }
     }
@@ -185,8 +195,13 @@ describe("dashboard chart data model", () => {
     expect(points[1].bbva).toBe(10000);
     expect(points[0]["Core ETF"]).toBeNull();
     expect(points[2]["Core ETF"]).toBe(25000);
+    expect(points[0]["investment_inst_trade_republic"]).toBeNull();
+    expect(points[2]["investment_inst_trade_republic"]).toBe(25000);
+    expect(points[2]["crypto_inst_trade_republic"]).toBe(5000);
     expect(points[3].bbva).toBe(0);
     expect(points[3]["Core ETF"]).toBe(0);
+    expect(points[3]["investment_inst_trade_republic"]).toBe(0);
+    expect(points[3]["crypto_inst_trade_republic"]).toBe(0);
     expect(points[3].Bitcoin).toBe(0);
   });
 
@@ -282,6 +297,7 @@ describe("dashboard chart data model", () => {
       crypto_inst_trade_republic: 700000,
       heritage: 760000,
       investment: 48000,
+      investment_inst_trade_republic: 48000,
       value: 760000
     });
   });
@@ -318,6 +334,7 @@ describe("dashboard chart data model", () => {
       crypto_inst_trade_republic: null,
       heritage: null,
       investment: null,
+      investment_inst_trade_republic: null,
       value: null
     });
   });

@@ -14,6 +14,7 @@ type DashboardTabsProps = {
   visibleTabs: { key: AccountTab; label: string }[];
   activeTab: AccountTab;
   activePoint: DashboardChartPoint | null;
+  seedPoint: DashboardChartPoint | null;
   data: DashboardData | null;
   cryptoValuesKnown?: boolean;
   investmentValuesKnown?: boolean;
@@ -21,10 +22,6 @@ type DashboardTabsProps = {
   valuesKnown: boolean;
   userId: string;
   onActiveTabChange: (tab: AccountTab) => void;
-  getGlobalInvestmentLiveTotal: () => number;
-  getGlobalCryptoLiveTotal: () => number;
-  getProviderInvestmentLiveTotal: (provider: DashboardData["providerSummaries"][number]) => number;
-  getProviderCryptoLiveTotal: (provider: DashboardData["providerSummaries"][number]) => number;
 };
 
 const TAB_ICONS = {
@@ -45,21 +42,27 @@ function getProviderTabLabel(sourceInstitution: string) {
   return upper;
 }
 
+function formatSeedPointValue(point: DashboardChartPoint | null, key: string, valuesKnown: boolean) {
+  if (!valuesKnown || !point) {
+    return "--";
+  }
+
+  const value = point[key];
+  return typeof value === "number" ? formatEuroCents(value) : "--";
+}
+
 export function DashboardTabs({
   visibleTabs,
   activeTab,
   activePoint,
+  seedPoint,
   data,
   cryptoValuesKnown = true,
   investmentValuesKnown = true,
   isTooltipActive = !!activePoint,
   valuesKnown,
   userId,
-  onActiveTabChange,
-  getGlobalInvestmentLiveTotal,
-  getGlobalCryptoLiveTotal,
-  getProviderInvestmentLiveTotal,
-  getProviderCryptoLiveTotal
+  onActiveTabChange
 }: DashboardTabsProps) {
   const items = useMemo<DashboardTopbarItem[]>(
     () => visibleTabs.map((tab) => {
@@ -110,19 +113,18 @@ export function DashboardTabs({
     }
 
     const checkingProviders = data.providerSummaries.filter((provider) => provider.checking.total !== 0);
-    const checkingTotal = checkingProviders.reduce((sum, provider) => sum + provider.checking.total, 0);
     seedDashboardTopbarLayout("checking", userId, [
       {
         active: true,
         icon: Landmark,
         id: "checking",
-        value: formatEuroCents(checkingTotal)
+        value: formatSeedPointValue(seedPoint, "checking", true)
       },
       ...checkingProviders.map((provider) => ({
         active: false,
         id: `checking:${provider.sourceInstitution}`,
         label: getProviderTabLabel(provider.sourceInstitution),
-        value: formatEuroCents(provider.checking.total)
+        value: formatSeedPointValue(seedPoint, provider.sourceInstitution, true)
       }))
     ]);
 
@@ -135,14 +137,14 @@ export function DashboardTabs({
         animateChanges: true,
         icon: Wallet,
         id: "investment",
-        value: investmentValuesKnown ? formatEuroCents(getGlobalInvestmentLiveTotal()) : "--"
+        value: formatSeedPointValue(seedPoint, "investment", investmentValuesKnown)
       },
       ...investmentProviders.map((provider) => ({
         active: false,
         animateChanges: true,
         id: `investment:${provider.sourceInstitution}`,
         label: getProviderTabLabel(provider.sourceInstitution),
-        value: investmentValuesKnown ? formatEuroCents(getProviderInvestmentLiveTotal(provider)) : "--"
+        value: formatSeedPointValue(seedPoint, `investment_inst_${provider.sourceInstitution}`, investmentValuesKnown)
       }))
     ]);
 
@@ -155,24 +157,21 @@ export function DashboardTabs({
         animateChanges: true,
         icon: Coins,
         id: "crypto",
-        value: cryptoValuesKnown ? formatEuroCents(getGlobalCryptoLiveTotal()) : "--"
+        value: formatSeedPointValue(seedPoint, "crypto", cryptoValuesKnown)
       },
       ...cryptoProviders.map((provider) => ({
         active: false,
         animateChanges: true,
         id: `crypto:${provider.sourceInstitution}`,
         label: getProviderTabLabel(provider.sourceInstitution),
-        value: cryptoValuesKnown ? formatEuroCents(getProviderCryptoLiveTotal(provider)) : "--"
+        value: formatSeedPointValue(seedPoint, `crypto_inst_${provider.sourceInstitution}`, cryptoValuesKnown)
       }))
     ]);
   }, [
     data,
     cryptoValuesKnown,
-    getGlobalCryptoLiveTotal,
-    getGlobalInvestmentLiveTotal,
-    getProviderCryptoLiveTotal,
-    getProviderInvestmentLiveTotal,
     investmentValuesKnown,
+    seedPoint,
     valuesKnown,
     userId
   ]);

@@ -103,6 +103,8 @@ type MonthBucket = {
   crypto: number;
   heritage: number;
   providerChecking?: Record<string, number>;
+  providerInvestment?: Record<string, number>;
+  providerCrypto?: Record<string, number>;
   providerProducts?: Record<string, number>;
   providerCryptoTokens?: Record<string, number>;
   providerIncome?: Record<string, number>;
@@ -296,25 +298,37 @@ function calculateAssetValues(
   let investment = 0;
   let crypto = 0;
   const providerChecking: Record<string, number> = {};
+  const providerInvestment: Record<string, number> = {};
+  const providerCrypto: Record<string, number> = {};
   const providerProducts: Record<string, number> = {};
   const providerCryptoTokens: Record<string, number> = {};
 
   for (const provider of providers) {
     checking += provider.checking.total;
     providerChecking[provider.sourceInstitution] = provider.checking.total;
+    let providerInvestmentTotal = 0;
+    let providerCryptoTotal = 0;
 
     for (const product of provider.investmentProducts) {
       const value = getInvestmentProductValue(product, lastKnownPrice, firstAvailablePrice);
       if (value === 0) continue;
-      investment += value;
+      providerInvestmentTotal += value;
       providerProducts[product.productName] = (providerProducts[product.productName] ?? 0) + value;
+    }
+    investment += providerInvestmentTotal;
+    if (provider.investmentProducts.length > 0) {
+      providerInvestment[provider.sourceInstitution] = providerInvestmentTotal;
     }
 
     for (const token of provider.cryptoTokens) {
       const value = getCryptoTokenValue(token, lastKnownPrice, firstAvailablePrice);
       if (value === 0) continue;
-      crypto += value;
+      providerCryptoTotal += value;
       providerCryptoTokens[token.tokenName] = (providerCryptoTokens[token.tokenName] ?? 0) + value;
+    }
+    crypto += providerCryptoTotal;
+    if (provider.cryptoTokens.length > 0) {
+      providerCrypto[provider.sourceInstitution] = providerCryptoTotal;
     }
   }
 
@@ -323,6 +337,8 @@ function calculateAssetValues(
     investment,
     crypto,
     providerChecking,
+    providerInvestment,
+    providerCrypto,
     providerProducts,
     providerCryptoTokens
   };
@@ -512,6 +528,8 @@ export function buildDashboardData({
         investment: snapshot.investment,
         crypto: snapshot.crypto,
         providerChecking: { ...snapshot.providerChecking },
+        providerInvestment: { ...snapshot.providerInvestment },
+        providerCrypto: { ...snapshot.providerCrypto },
         providerProducts: { ...snapshot.providerProducts },
         providerCryptoTokens: { ...snapshot.providerCryptoTokens }
       };
@@ -527,6 +545,8 @@ export function buildDashboardData({
       crypto: snapshot.crypto,
       heritage: snapshot.checking + snapshot.investment + snapshot.crypto,
       providerChecking: snapshot.providerChecking,
+      providerInvestment: snapshot.providerInvestment,
+      providerCrypto: snapshot.providerCrypto,
       providerProducts: snapshot.providerProducts,
       providerCryptoTokens: snapshot.providerCryptoTokens,
       providerIncome: dailyTotals.income.get(currentDayKey) ?? {},
@@ -544,6 +564,8 @@ export function buildDashboardData({
         crypto: snapshot.crypto,
         heritage: snapshot.checking + snapshot.investment + snapshot.crypto,
         providerChecking: snapshot.providerChecking,
+        providerInvestment: snapshot.providerInvestment,
+        providerCrypto: snapshot.providerCrypto,
         providerProducts: snapshot.providerProducts,
         providerCryptoTokens: snapshot.providerCryptoTokens,
         providerIncome: monthlyTotals.income.get(currentMonthKey) ?? {},

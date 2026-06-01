@@ -39,6 +39,14 @@ export function collectInvestmentProducts(data: DashboardData | null) {
   ]);
 }
 
+function collectInvestmentInstitutions(data: DashboardData | null) {
+  if (!data) return [];
+
+  return data.providerSummaries
+    .filter((provider) => provider.investmentProducts.length > 0)
+    .map((provider) => provider.sourceInstitution);
+}
+
 export function collectCryptoTokens(data: DashboardData | null) {
   return collectUniqueKeys([
     ...collectMonthlyKeys(data, "providerCryptoTokens"),
@@ -53,6 +61,14 @@ export function collectCryptoInstitutions(data: DashboardData | null) {
 
   return data.providerSummaries
     .filter((provider) => provider.cryptoTokens.some((token) => Math.abs(token.quantity) > NON_ZERO_THRESHOLD))
+    .map((provider) => provider.sourceInstitution);
+}
+
+function collectAllCryptoInstitutions(data: DashboardData | null) {
+  if (!data) return [];
+
+  return data.providerSummaries
+    .filter((provider) => provider.cryptoTokens.length > 0)
     .map((provider) => provider.sourceInstitution);
 }
 
@@ -74,8 +90,12 @@ export function buildDashboardChartData({
     return [];
   }
 
+  const investmentInstitutions = collectInvestmentInstitutions(data);
+  const allCryptoInstitutions = collectAllCryptoInstitutions(data);
   const firstAcquisitionDates = getFirstAcquisitionDates({
     activeTab,
+    investmentInstitutions,
+    allCryptoInstitutions,
     cryptoInstitutions,
     data
   });
@@ -128,17 +148,24 @@ export function buildDashboardChartData({
       entry[product] = resolveValue(product, bucket.providerProducts?.[product]);
     });
 
+    investmentInstitutions.forEach((institution) => {
+      const institutionKey = `investment_inst_${institution}`;
+      entry[institutionKey] = resolveValue(
+        institutionKey,
+        getProviderInvestmentBucketValue(bucket, data.providerSummaries, institution)
+      );
+    });
+
     cryptoTokens.forEach((token) => {
       entry[token] = resolveValue(token, bucket.providerCryptoTokens?.[token]);
     });
 
-    cryptoInstitutions.forEach((institution) => {
+    allCryptoInstitutions.forEach((institution) => {
       const institutionKey = `crypto_inst_${institution}`;
-      const rawSum = cryptoTokens.reduce((sum, token) => {
-        const value = bucket.providerCryptoTokens?.[token];
-        return sum + (isMeaningfulValue(value) ? Math.abs(value) : 0);
-      }, 0);
-      entry[institutionKey] = resolveValue(institutionKey, rawSum > 0 ? rawSum : undefined);
+      entry[institutionKey] = resolveValue(
+        institutionKey,
+        getProviderCryptoBucketValue(bucket, data.providerSummaries, institution)
+      );
     });
 
     entry.binance = hasBinancePortfolio ? binanceTotalCents : null;
@@ -184,10 +211,14 @@ function collectUniqueKeys(keys: string[]) {
 
 function getFirstAcquisitionDates({
   activeTab,
+  investmentInstitutions,
+  allCryptoInstitutions,
   cryptoInstitutions,
   data
 }: {
   activeTab: AccountTab;
+  investmentInstitutions: string[];
+  allCryptoInstitutions: string[];
   cryptoInstitutions: string[];
   data: DashboardData;
 }) {
@@ -209,8 +240,26 @@ function getFirstAcquisitionDates({
       setFirstDate(firstAcquisitionDates, product, value, bucketDate);
     });
 
+    investmentInstitutions.forEach((institution) => {
+      setFirstDate(
+        firstAcquisitionDates,
+        `investment_inst_${institution}`,
+        getProviderInvestmentBucketValue(bucket, data.providerSummaries, institution),
+        bucketDate
+      );
+    });
+
     Object.entries(bucket.providerCryptoTokens ?? {}).forEach(([token, value]) => {
       setFirstDate(firstAcquisitionDates, token, value, bucketDate);
+    });
+
+    allCryptoInstitutions.forEach((institution) => {
+      setFirstDate(
+        firstAcquisitionDates,
+        `crypto_inst_${institution}`,
+        getProviderCryptoBucketValue(bucket, data.providerSummaries, institution),
+        bucketDate
+      );
     });
 
     if (isMeaningfulValue(bucket.crypto)) {
@@ -245,6 +294,62 @@ function createValueResolver(firstAcquisitionDates: Map<string, string>, bucketD
     }
     return null;
   };
+}
+
+function getProviderInvestmentBucketValue(
+  bucket: DashboardChartBucket,
+  providerSummaries: ProviderSummary[],
+  sourceInstitution: string
+) {
+  const providerValue = bucket.providerInvestment?.[sourceInstitution];
+  if (providerValue !== undefined) {
+    return providerValue;
+  }
+
+  const provider = providerSummaries.find((summary) => summary.sourceInstitution === sourceInstitution);
+  if (!provider) {
+    return undefined;
+  }
+
+  let hasKnownProduct = false;
+  const total = provider.investmentProducts.reduce((sum, product) => {
+    const value = bucket.providerProducts?.[product.productName];
+    if (value === undefined) {
+      return sum;
+    }
+    hasKnownProduct = true;
+    return sum + value;
+  }, 0);
+
+  return hasKnownProduct ? total : undefined;
+}
+
+function getProviderCryptoBucketValue(
+  bucket: DashboardChartBucket,
+  providerSummaries: ProviderSummary[],
+  sourceInstitution: string
+) {
+  const providerValue = bucket.providerCrypto?.[sourceInstitution];
+  if (providerValue !== undefined) {
+    return providerValue;
+  }
+
+  const provider = providerSummaries.find((summary) => summary.sourceInstitution === sourceInstitution);
+  if (!provider) {
+    return undefined;
+  }
+
+  let hasKnownToken = false;
+  const total = provider.cryptoTokens.reduce((sum, token) => {
+    const value = bucket.providerCryptoTokens?.[token.tokenName];
+    if (value === undefined) {
+      return sum;
+    }
+    hasKnownToken = true;
+    return sum + value;
+  }, 0);
+
+  return hasKnownToken ? total : undefined;
 }
 
 function getTabValueWithBinance({
@@ -389,6 +494,10 @@ function buildLiveTodayValues({
     liveValues[productName] = value;
   }
 
+  for (const [institution, value] of investment.institutions) {
+    liveValues[`investment_inst_${institution}`] = value;
+  }
+
   for (const [tokenName, value] of crypto.tokens) {
     liveValues[tokenName] = value;
   }
@@ -404,10 +513,13 @@ function getLiveInvestmentValues(
   providerSummaries: ProviderSummary[],
   livePrices: Record<string, number | null>
 ) {
+  const institutions = new Map<string, number | null>();
   const products = new Map<string, number | null>();
   let total = 0;
 
   providerSummaries.forEach((provider) => {
+    let providerTotal = 0;
+
     provider.investmentProducts.forEach((product) => {
       if (Math.abs(product.quantity) <= NON_ZERO_THRESHOLD) {
         return;
@@ -418,25 +530,38 @@ function getLiveInvestmentValues(
         ? Math.round(product.quantity * livePrice * 100)
         : product.investedValue;
 
+      providerTotal += value;
       total += value;
       products.set(product.productName, (products.get(product.productName) ?? 0) + value);
     });
+
+    if (provider.investmentProducts.length > 0) {
+      institutions.set(provider.sourceInstitution, providerTotal);
+    }
   });
 
-  return { products, total };
+  return { institutions, products, total };
 }
 
 function getPendingInvestmentValues(providerSummaries: ProviderSummary[]) {
+  const institutions = new Map<string, number | null>();
   const products = new Map<string, number | null>();
   providerSummaries.forEach((provider) => {
+    let hasProviderHoldings = false;
+
     provider.investmentProducts.forEach((product) => {
       if (Math.abs(product.quantity) > NON_ZERO_THRESHOLD) {
+        hasProviderHoldings = true;
         products.set(product.productName, null);
       }
     });
+
+    if (hasProviderHoldings) {
+      institutions.set(provider.sourceInstitution, null);
+    }
   });
 
-  return { products, total: 0 };
+  return { institutions, products, total: 0 };
 }
 
 function getLiveCryptoValues(
@@ -466,7 +591,7 @@ function getLiveCryptoValues(
       tokens.set(token.tokenName, (tokens.get(token.tokenName) ?? 0) + value);
     });
 
-    if (providerTotal > 0) {
+    if (provider.cryptoTokens.length > 0) {
       institutions.set(provider.sourceInstitution, providerTotal);
     }
   });

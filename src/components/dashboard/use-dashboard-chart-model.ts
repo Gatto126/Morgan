@@ -185,6 +185,7 @@ export function useDashboardChartModel({
     setShowSoldAssets,
     setTimeRange,
     showSoldAssets,
+    todayChartPoint,
     timeRange,
     toggleSeries,
     visibleTabs,

@@ -8,6 +8,8 @@ export type MonthlyBucket = {
   crypto: number;
   heritage: number;
   providerChecking?: Record<string, number>;
+  providerInvestment?: Record<string, number>;
+  providerCrypto?: Record<string, number>;
   providerProducts?: Record<string, number>;
   providerCryptoTokens?: Record<string, number>;
   providerIncome?: Record<string, number>;

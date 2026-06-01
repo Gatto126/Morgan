@@ -139,6 +139,7 @@ export function Dashboard({
     setShowSoldAssets,
     setTimeRange,
     showSoldAssets,
+    todayChartPoint,
     timeRange,
     toggleSeries,
     visibleTabs,
@@ -156,8 +157,6 @@ export function Dashboard({
     transactionCount
   });
   const {
-    getGlobalCryptoLiveTotal,
-    getGlobalInvestmentLiveTotal,
     getProviderCryptoLiveTotal,
     getProviderInvestmentLiveTotal
   } = useDashboardLiveTotals({
@@ -194,6 +193,7 @@ export function Dashboard({
         visibleTabs={visibleTabs}
         activeTab={activeTab}
         activePoint={data ? currentDisplayPoint : null}
+        seedPoint={data ? todayChartPoint : null}
         data={data}
         isTooltipActive={!!activeChartPoint}
         cryptoValuesKnown={cryptoPricesReady}
@@ -201,10 +201,6 @@ export function Dashboard({
         valuesKnown={dashboardValuesKnown}
         userId={userId}
         onActiveTabChange={setActiveTab}
-        getGlobalInvestmentLiveTotal={getGlobalInvestmentLiveTotal}
-        getGlobalCryptoLiveTotal={getGlobalCryptoLiveTotal}
-        getProviderInvestmentLiveTotal={getProviderInvestmentLiveTotal}
-        getProviderCryptoLiveTotal={getProviderCryptoLiveTotal}
       />
       {data ? (
         <>
