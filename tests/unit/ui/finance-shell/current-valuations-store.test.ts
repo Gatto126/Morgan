@@ -277,6 +277,62 @@ describe("current valuations store", () => {
     });
   });
 
+  it("uses Binance synced values when Binance live quotes are missing", () => {
+    const now = 1_000;
+    const snapshot = buildCurrentValuationSnapshot({
+      binancePayload: {
+        balances: [{
+          eurValue: 12.34,
+          freeAmount: 3,
+          lockedAmount: 0,
+          tokenName: "Polygon",
+          tokenSymbol: "MATIC"
+        }]
+      },
+      dashboardData,
+      dateKey: "2026-06-01",
+      livePrices: {
+        BTC: 20_000,
+        IE00B4L5Y983: 100
+      },
+      liveQuotes: {
+        BTC: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 20_000
+        },
+        IE00B4L5Y983: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 100
+        }
+      },
+      now,
+      profile: {
+        ...profile,
+        hasBinanceCredentials: true
+      }
+    });
+
+    expect(snapshot.status).toBe("ready");
+    expect(snapshot.totals).toMatchObject({
+      binance: { cents: 1_234, source: "binance-sync", status: "ready" },
+      crypto: { cents: 1_001_234, status: "ready" },
+      heritage: { cents: 1_031_234, status: "ready" }
+    });
+    expect(snapshot.diagnostics.missingKeys).toEqual(["MATIC"]);
+    expect(selectCurrentValuationChartPoint(snapshot)).toMatchObject({
+      binance: 1_234,
+      crypto: 1_001_234,
+      heritage: 1_031_234,
+      rawMonth: "2026-06-01"
+    });
+  });
+
   it("publishes cached snapshots to subscribers and invalidates by profile", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));

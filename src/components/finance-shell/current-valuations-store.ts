@@ -365,9 +365,12 @@ function getBinanceBalanceValue(
 ): ValuationValue {
   const quantity = getBinanceBalanceQuantity(balance);
   const priceKey = getBinanceBalanceLivePriceKey(balance);
+  const syncedValueCents = Number.isFinite(balance.eurValue)
+    ? Math.round(balance.eurValue * 100)
+    : 0;
 
   if (!priceKey) {
-    return createReadyValue(Math.round(balance.eurValue * 100), "binance-sync");
+    return createReadyValue(syncedValueCents, "binance-sync");
   }
 
   const { quote, value } = getQuoteValue(priceKey, livePrices, liveQuotes);
@@ -376,11 +379,7 @@ function getBinanceBalanceValue(
     return createReadyValue(Math.round(quantity * value * 100), "live-quote", quote?.fetchedAt ?? null);
   }
 
-  if (quote || Object.hasOwn(livePrices, priceKey)) {
-    return createValuationValue(null, "unavailable", "live-quote", quote?.fetchedAt ?? null);
-  }
-
-  return createValuationValue(null, "missing-live-quote", "live-quote");
+  return createReadyValue(syncedValueCents, "binance-sync", quote?.fetchedAt ?? null);
 }
 
 function mergeAssetValue(
