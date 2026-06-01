@@ -25,6 +25,11 @@ import {
   readDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
 import { usePublishDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
+import {
+  applyLiveBinanceBalanceValues,
+  getBinanceBalancesTotalCents
+} from "./dashboard/binance-live-values";
+import { useDashboardLivePrices } from "./dashboard/use-dashboard-live-prices";
 import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
 import { cn } from "@/shared/utils";
 import type { ActiveDotProps } from "@/types/chart";
@@ -95,6 +100,15 @@ export function BinanceDashboard({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const { cryptoPricesReady, livePrices } = useDashboardLivePrices(undefined, {
+    binanceBalances: balances,
+    isActive,
+    shouldLoad: shouldLoad && balancesKnown
+  });
+  const liveBalances = useMemo(
+    () => applyLiveBinanceBalanceValues(balances, livePrices),
+    [balances, livePrices]
+  );
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -156,8 +170,8 @@ export function BinanceDashboard({
     }
   }
 
-  const totalEur = useMemo(() => balances.reduce((sum, b) => sum + b.eurValue, 0), [balances]);
-  const topbarValue = balancesKnown && freshBinanceRefreshKey === binanceRefreshKey
+  const totalEur = useMemo(() => getBinanceBalancesTotalCents(liveBalances) / 100, [liveBalances]);
+  const topbarValue = balancesKnown && cryptoPricesReady && freshBinanceRefreshKey === binanceRefreshKey
     ? formatBinanceEuro(totalEur)
     : "--";
 

@@ -1,6 +1,7 @@
 "use client";
 
-import type { DashboardData } from "@/components/dashboard/types";
+import { getBinanceLivePriceKeys } from "@/components/dashboard/binance-live-values";
+import type { BinanceBalanceRow, DashboardData } from "@/components/dashboard/types";
 import type { PortfolioData } from "@/components/portfolio-dashboard/types";
 import { fetchAndCacheLivePrices } from "@/shared/live-prices";
 
@@ -78,6 +79,12 @@ function isPortfolioData(data: unknown): data is PortfolioData {
     && Array.isArray((data as Partial<PortfolioData>).providers);
 }
 
+function isBinanceData(data: unknown): data is { balances?: BinanceBalanceRow[] } {
+  return !!data
+    && typeof data === "object"
+    && Array.isArray((data as { balances?: unknown }).balances);
+}
+
 function addDashboardLivePriceKeys(keys: LivePriceKeySets, dashboardData: DashboardData | null) {
   const dashboardKeys = collectDashboardLivePriceKeys(dashboardData?.providerSummaries);
 
@@ -103,6 +110,14 @@ function addPortfolioLivePriceKeys(
       }
     }
   }
+}
+
+function addBinanceLivePriceKeys(keys: LivePriceKeySets, data: unknown) {
+  if (!isBinanceData(data)) {
+    return;
+  }
+
+  getBinanceLivePriceKeys(data.balances).forEach((key) => keys.cryptos.add(key));
 }
 
 async function warmLivePrices(keys: LivePriceKeySets) {
@@ -170,6 +185,7 @@ export async function warmImportedProfileData(
 
   for (const { data, stage } of stageResults) {
     addPortfolioLivePriceKeys(portfolioPriceKeys, stage, data);
+    addBinanceLivePriceKeys(portfolioPriceKeys, data);
   }
 
   await Promise.allSettled([

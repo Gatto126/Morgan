@@ -3,9 +3,11 @@ import {
   fetchAndCacheLivePrices,
   globalLivePricesCache
 } from "@/shared/live-prices";
-import type { ProviderSummary } from "./types";
+import { getBinanceLivePriceKeys } from "./binance-live-values";
+import type { BinanceBalanceRow, ProviderSummary } from "./types";
 
 type UseDashboardLivePricesOptions = {
+  binanceBalances?: BinanceBalanceRow[];
   isActive: boolean;
   shouldLoad: boolean;
 };
@@ -13,15 +15,14 @@ type UseDashboardLivePricesOptions = {
 const livePriceValueMaxAgeMs = 10_000;
 const livePriceRefreshIntervalMs = 15_000;
 
-function getPriceRequestKey(summaries: ProviderSummary[] | undefined) {
-  if (!summaries) {
-    return "";
-  }
-
+function getPriceRequestKey(
+  summaries: ProviderSummary[] | undefined,
+  binanceBalances: BinanceBalanceRow[] | undefined
+) {
   const isins = new Set<string>();
-  const cryptos = new Set<string>();
+  const cryptos = new Set(getBinanceLivePriceKeys(binanceBalances));
 
-  for (const provider of summaries) {
+  for (const provider of summaries ?? []) {
     for (const product of provider.investmentProducts) {
       if (product.isin && Math.abs(product.quantity) > 0.000001) {
         isins.add(product.isin);
@@ -34,13 +35,21 @@ function getPriceRequestKey(summaries: ProviderSummary[] | undefined) {
     }
   }
 
-  return `${[...isins].sort().join(",")}|${[...cryptos].sort().join(",")}`;
+  const sortedIsins = [...isins].sort();
+  const sortedCryptos = [...cryptos].sort();
+
+  return sortedIsins.length > 0 || sortedCryptos.length > 0
+    ? `${sortedIsins.join(",")}|${sortedCryptos.join(",")}`
+    : "";
 }
 
-function getRequiredPriceKeys(summaries: ProviderSummary[] | undefined) {
+function getRequiredPriceKeys(
+  summaries: ProviderSummary[] | undefined,
+  binanceBalances: BinanceBalanceRow[] | undefined
+) {
   return [
     ...getRequiredInvestmentPriceKeys(summaries),
-    ...getRequiredCryptoPriceKeys(summaries)
+    ...getRequiredCryptoPriceKeys(summaries, binanceBalances)
   ];
 }
 
@@ -62,14 +71,15 @@ function getRequiredInvestmentPriceKeys(summaries: ProviderSummary[] | undefined
   return [...keys].sort();
 }
 
-function getRequiredCryptoPriceKeys(summaries: ProviderSummary[] | undefined) {
-  if (!summaries) {
-    return [];
-  }
-
+function getRequiredCryptoPriceKeys(
+  summaries: ProviderSummary[] | undefined,
+  binanceBalances: BinanceBalanceRow[] | undefined
+) {
   const keys = new Set<string>();
 
-  for (const provider of summaries) {
+  getBinanceLivePriceKeys(binanceBalances).forEach((key) => keys.add(key));
+
+  for (const provider of summaries ?? []) {
     for (const token of provider.cryptoTokens) {
       if (token.tokenSymbol && Math.abs(token.quantity) > 0.000001) {
         keys.add(token.tokenSymbol);
@@ -90,7 +100,7 @@ function areLivePricesReady(keys: string[], livePrices: Record<string, number | 
 
 export function useDashboardLivePrices(
   providerSummaries: ProviderSummary[] | undefined,
-  { isActive, shouldLoad }: UseDashboardLivePricesOptions
+  { binanceBalances = [], isActive, shouldLoad }: UseDashboardLivePricesOptions
 ) {
   const [livePrices, setLivePrices] = useState<Record<string, number | null>>(globalLivePricesCache);
   const [readyRequestKey, setReadyRequestKey] = useState("");
@@ -99,11 +109,14 @@ export function useDashboardLivePrices(
   const [pricesReady, setPricesReady] = useState(false);
   const lastPreloadKeyRef = useRef("");
 
-  const fetchLivePrices = useCallback(async (summaries: ProviderSummary[]) => {
+  const fetchLivePrices = useCallback(async (
+    summaries: ProviderSummary[] | undefined,
+    balances: BinanceBalanceRow[]
+  ) => {
     const allIsins = new Set<string>();
-    const allCryptos = new Set<string>();
+    const allCryptos = new Set(getBinanceLivePriceKeys(balances));
 
-    for (const provider of summaries) {
+    for (const provider of summaries ?? []) {
       for (const product of provider.investmentProducts) {
         if (product.isin && Math.abs(product.quantity) > 0.000001) {
           allIsins.add(product.isin);
@@ -125,9 +138,9 @@ export function useDashboardLivePrices(
       isins: [...allIsins]
     }, { maxAgeMs: livePriceValueMaxAgeMs });
     const investmentKeys = getRequiredInvestmentPriceKeys(summaries);
-    const cryptoKeys = getRequiredCryptoPriceKeys(summaries);
-    const requiredKeys = getRequiredPriceKeys(summaries);
-    const requestKey = getPriceRequestKey(summaries);
+    const cryptoKeys = getRequiredCryptoPriceKeys(summaries, balances);
+    const requiredKeys = getRequiredPriceKeys(summaries, balances);
+    const requestKey = getPriceRequestKey(summaries, balances);
     const investmentReady = areLivePricesReady(investmentKeys, prices);
     const cryptoReady = areLivePricesReady(cryptoKeys, prices);
     const allReady = areLivePricesReady(requiredKeys, prices);
@@ -140,32 +153,37 @@ export function useDashboardLivePrices(
   }, []);
 
   useEffect(() => {
-    if (!shouldLoad || !providerSummaries) {
+    if (!shouldLoad) {
       return;
     }
 
-    const requestKey = getPriceRequestKey(providerSummaries);
+    const requestKey = getPriceRequestKey(providerSummaries, binanceBalances);
     if (!requestKey || lastPreloadKeyRef.current === requestKey) {
       return;
     }
 
     lastPreloadKeyRef.current = requestKey;
-    void fetchLivePrices(providerSummaries);
-  }, [providerSummaries, fetchLivePrices, shouldLoad]);
+    void fetchLivePrices(providerSummaries, binanceBalances);
+  }, [binanceBalances, providerSummaries, fetchLivePrices, shouldLoad]);
 
   useEffect(() => {
-    if (!isActive || !providerSummaries) {
+    if (!isActive) {
+      return;
+    }
+
+    const requestKey = getPriceRequestKey(providerSummaries, binanceBalances);
+    if (!requestKey) {
       return;
     }
 
     const initialLoad = window.setTimeout(() => {
-      void fetchLivePrices(providerSummaries);
+      void fetchLivePrices(providerSummaries, binanceBalances);
     }, 0);
     const interval = window.setInterval(() => {
-      void fetchLivePrices(providerSummaries);
+      void fetchLivePrices(providerSummaries, binanceBalances);
     }, livePriceRefreshIntervalMs);
     const handleFocus = () => {
-      void fetchLivePrices(providerSummaries);
+      void fetchLivePrices(providerSummaries, binanceBalances);
     };
 
     window.addEventListener("focus", handleFocus);
@@ -174,9 +192,9 @@ export function useDashboardLivePrices(
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [providerSummaries, fetchLivePrices, isActive]);
+  }, [binanceBalances, providerSummaries, fetchLivePrices, isActive]);
 
-  const requestKey = getPriceRequestKey(providerSummaries);
+  const requestKey = getPriceRequestKey(providerSummaries, binanceBalances);
   const readyForRequest = requestKey === "" || readyRequestKey === requestKey;
 
   return {

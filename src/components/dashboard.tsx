@@ -9,6 +9,10 @@ import { DashboardCards } from "./dashboard/dashboard-cards";
 import { DashboardChart } from "./dashboard/dashboard-chart";
 import { DashboardErrorState, DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "./dashboard/dashboard-status";
 import { DashboardTabs } from "./dashboard/dashboard-tabs";
+import {
+  applyLiveBinanceBalanceValues,
+  getBinanceBalancesTotalCents
+} from "./dashboard/binance-live-values";
 import { useBinanceBalances } from "./dashboard/use-binance-balances";
 import { useDashboardChartModel } from "./dashboard/use-dashboard-chart-model";
 import { useDashboardData } from "./dashboard/use-dashboard-data";
@@ -92,16 +96,21 @@ export function Dashboard({
     transactionCount
   });
   const { cryptoPricesReady, investmentPricesReady, livePrices } = useDashboardLivePrices(data?.providerSummaries, {
+    binanceBalances,
     isActive,
     shouldLoad: shouldLoad && !!data
   });
+  const liveBinanceBalances = useMemo(
+    () => applyLiveBinanceBalanceValues(binanceBalances, livePrices),
+    [binanceBalances, livePrices]
+  );
   const livePriceReadiness = useMemo(() => ({
     crypto: cryptoPricesReady,
     investment: investmentPricesReady
   }), [cryptoPricesReady, investmentPricesReady]);
   const binanceTotalCents = useMemo(
-    () => Math.round(binanceBalances.reduce((sum, balance) => sum + balance.eurValue, 0) * 100),
-    [binanceBalances]
+    () => getBinanceBalancesTotalCents(liveBinanceBalances),
+    [liveBinanceBalances]
   );
   const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0;
   const dashboardValuesKnown = !!data && (!hasBinanceCredentials || binanceBalancesKnown);
@@ -135,7 +144,7 @@ export function Dashboard({
     visibleTabs,
     xAxisTicks
   } = useDashboardChartModel({
-    binanceBalances,
+    binanceBalances: liveBinanceBalances,
     binanceTotalCents,
     checkingCount,
     cryptoCount,
@@ -152,7 +161,7 @@ export function Dashboard({
     getProviderCryptoLiveTotal,
     getProviderInvestmentLiveTotal
   } = useDashboardLiveTotals({
-    binanceBalances,
+    binanceBalances: liveBinanceBalances,
     data,
     livePrices
   });
@@ -243,7 +252,7 @@ export function Dashboard({
             data={data}
             timeRange={timeRange}
             livePrices={livePrices}
-            binanceBalances={binanceBalances}
+            binanceBalances={liveBinanceBalances}
             isBinanceSyncing={isBinanceSyncing}
             filterSmallBinance={filterSmallBinance}
             setFilterSmallBinance={setFilterSmallBinance}

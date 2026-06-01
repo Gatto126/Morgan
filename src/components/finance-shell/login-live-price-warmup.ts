@@ -1,6 +1,7 @@
 "use client";
 
-import type { DashboardData, ProviderSummary } from "@/components/dashboard/types";
+import { getBinanceLivePriceKeys } from "@/components/dashboard/binance-live-values";
+import type { BinanceBalanceRow, DashboardData, ProviderSummary } from "@/components/dashboard/types";
 import { fetchAndCacheLivePrices, globalLivePricesCache } from "@/shared/live-prices";
 
 import { fetchDashboardStageData } from "./dashboard-stage-data-cache";
@@ -126,8 +127,12 @@ export function collectDashboardLivePriceKeys(providerSummaries: ProviderSummary
   };
 }
 
-async function warmLivePricesForDashboardData(dashboardData: DashboardData | null) {
+async function warmLivePricesForDashboardData(
+  dashboardData: DashboardData | null,
+  binanceBalances: BinanceBalanceRow[] = []
+) {
   const keys = collectDashboardLivePriceKeys(dashboardData?.providerSummaries);
+  keys.cryptos = [...new Set([...keys.cryptos, ...getBinanceLivePriceKeys(binanceBalances)])].sort();
   const priceWarmup = keys.isins.length > 0 || keys.cryptos.length > 0
     ? fetchAndCacheLivePrices(keys, { maxAgeMs: 0 })
     : Promise.resolve(globalLivePricesCache);
@@ -142,11 +147,13 @@ async function warmProfilePreview(user: UserRecord) {
   const binanceWarmup = user.hasBinanceCredentials
     ? fetchDashboardStageData("binance", user.id).catch(() => null)
     : Promise.resolve(null);
-  const dashboardData = await dashboardPromise;
+  const [dashboardData, binancePayload] = await Promise.all([dashboardPromise, binanceWarmup]);
+  const binanceBalances = Array.isArray(binancePayload?.balances)
+    ? binancePayload.balances
+    : [];
 
   await Promise.allSettled([
-    warmLivePricesForDashboardData(dashboardData as DashboardData | null),
-    binanceWarmup
+    warmLivePricesForDashboardData(dashboardData as DashboardData | null, binanceBalances)
   ]);
 
   return dashboardData as DashboardData | null;
