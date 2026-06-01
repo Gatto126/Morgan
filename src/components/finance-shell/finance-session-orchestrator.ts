@@ -151,16 +151,35 @@ function publishFinanceSessionDiagnostics() {
   }
 
   const diagnostics = getFinanceSessionDiagnostics();
+  const diagnosticsPayload = JSON.stringify({
+    stages: diagnostics,
+    updatedAt: Date.now()
+  });
   window.morganFinanceDiagnostics = () => getFinanceSessionDiagnostics();
   window.__MORGAN_FINANCE_DIAGNOSTICS__ = diagnostics;
 
   try {
-    window.sessionStorage.setItem("morgan:finance-session-diagnostics:v1", JSON.stringify({
-      stages: diagnostics,
-      updatedAt: Date.now()
-    }));
+    window.sessionStorage.setItem("morgan:finance-session-diagnostics:v1", diagnosticsPayload);
   } catch {
     // Diagnostics are best-effort and must never affect app rendering.
+  }
+
+  try {
+    const elementId = "morgan-finance-diagnostics";
+    let diagnosticsElement = document.getElementById(elementId);
+
+    if (!diagnosticsElement) {
+      diagnosticsElement = document.createElement("script");
+      diagnosticsElement.id = elementId;
+      diagnosticsElement.setAttribute("type", "application/json");
+      diagnosticsElement.setAttribute("data-diagnostics", "finance-session");
+      diagnosticsElement.hidden = true;
+      document.head.appendChild(diagnosticsElement);
+    }
+
+    diagnosticsElement.textContent = diagnosticsPayload;
+  } catch {
+    // The browser console/window hook is enough when DOM publishing is unavailable.
   }
 
   window.dispatchEvent(new CustomEvent("morgan:finance-diagnostics", {

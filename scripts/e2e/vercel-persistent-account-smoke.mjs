@@ -273,6 +273,8 @@ async function createSmokeProfile(page) {
   await page.evaluate((profileId) => {
     window.localStorage.setItem("morgan_active_user", profileId);
     window.localStorage.setItem("morgan_stage", "dashboard");
+    document.cookie = `morgan_active_user=${encodeURIComponent(profileId)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    document.cookie = "morgan_stage=dashboard; Path=/; Max-Age=31536000; SameSite=Lax";
   }, payload.user.id);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator('main[data-finance-shell-ready="true"]').waitFor({ state: "attached", timeout: 30_000 });
