@@ -26,16 +26,13 @@ export function useBinanceBalances({
   shouldLoad,
   binanceRefreshKey
 }: UseBinanceBalancesOptions) {
-  const initialPayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey);
-  const [binanceBalances, setBinanceBalances] = useState<BinanceBalanceRow[]>(
-    Array.isArray(initialPayload?.balances) ? initialPayload.balances : []
-  );
-  const [hasFreshBinanceBalances, setHasFreshBinanceBalances] = useState(!!initialPayload);
+  const [binanceBalances, setBinanceBalances] = useState<BinanceBalanceRow[]>([]);
+  const [hasFreshBinanceBalances, setHasFreshBinanceBalances] = useState(false);
   const [freshBinanceRefreshKey, setFreshBinanceRefreshKey] = useState(binanceRefreshKey);
   const [isBinanceNew, setIsBinanceNew] = useState(false);
   const [isBinanceSyncing, setIsBinanceSyncing] = useState(false);
   const [filterSmallBinance, setFilterSmallBinance] = useState(true);
-  const prevBinanceCountRef = useRef(Array.isArray(initialPayload?.balances) ? initialPayload.balances.length : 0);
+  const prevBinanceCountRef = useRef(0);
   const binanceListRef = useRef<HTMLDivElement>(null);
   const lastPreloadKeyRef = useRef("");
 

@@ -46,19 +46,18 @@ export function useDashboardData({
   shouldLoad,
   transactionCount
 }: UseDashboardDataOptions) {
-  const initialData = readDashboardStageDataCache("dashboard", userId, transactionCount);
-  const [data, setData] = useState<DashboardData | null>(initialData);
-  const [loading, setLoading] = useState(!initialData);
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
-  const [hasFreshData, setHasFreshData] = useState(!!initialData);
+  const [hasFreshData, setHasFreshData] = useState(false);
   const [freshDataVersion, setFreshDataVersion] = useState(transactionCount);
   const [importRefreshVersion, setImportRefreshVersion] = useState(0);
   const [newProviderKeys, setNewProviderKeys] = useState<Set<string>>(new Set());
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
   const pendingImportRefreshRef = useRef(false);
   const lastRefreshTransactionCountRef = useRef(transactionCount);
-  const hasLoadedRef = useRef(!!initialData);
+  const hasLoadedRef = useRef(false);
 
   const applyDashboardPayload = useCallback((payload: DashboardData) => {
     const currentKeys = getProviderKeys(payload.providerSummaries);
