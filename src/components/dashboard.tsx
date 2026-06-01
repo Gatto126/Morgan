@@ -17,7 +17,6 @@ import { useBinanceBalances } from "./dashboard/use-binance-balances";
 import { useDashboardChartModel } from "./dashboard/use-dashboard-chart-model";
 import { useDashboardData } from "./dashboard/use-dashboard-data";
 import { useDashboardLivePrices } from "./dashboard/use-dashboard-live-prices";
-import { useDashboardLiveTotals } from "./dashboard/use-dashboard-live-totals";
 import { useDashboardResponsiveLayout } from "./dashboard/use-dashboard-responsive-layout";
 import { useDashboardVisualState } from "./dashboard/use-dashboard-visual-state";
 
@@ -157,14 +156,6 @@ export function Dashboard({
     transactionCount
   });
   const {
-    getProviderCryptoLiveTotal,
-    getProviderInvestmentLiveTotal
-  } = useDashboardLiveTotals({
-    binanceBalances: liveBinanceBalances,
-    data,
-    livePrices
-  });
-  const {
     contentVisible,
     setChartReady,
     showLoadingOverlay
@@ -247,14 +238,15 @@ export function Dashboard({
             contentVisible={contentVisible}
             data={data}
             timeRange={timeRange}
+            currentPoint={todayChartPoint}
+            cryptoValuesKnown={cryptoPricesReady}
+            investmentValuesKnown={investmentPricesReady}
             livePrices={livePrices}
             binanceBalances={liveBinanceBalances}
             isBinanceSyncing={isBinanceSyncing}
             filterSmallBinance={filterSmallBinance}
             setFilterSmallBinance={setFilterSmallBinance}
             binanceListRef={binanceListRef}
-            getProviderInvestmentLiveTotal={getProviderInvestmentLiveTotal}
-            getProviderCryptoLiveTotal={getProviderCryptoLiveTotal}
           />
         </>
       ) : null}

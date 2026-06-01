@@ -6,6 +6,7 @@ import { SlotValue } from "@/components/finance-shell/slot-value";
 import { scheduleIdleTask, useDeferredTransactionRows } from "@/hooks/use-deferred-transaction-rows";
 import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transaction-rows";
 import { cn } from "@/shared/utils";
+import type { ChartPoint } from "@/types/chart";
 
 import { formatEuroCents, formatProviderLabel, formatSignedEuroCents } from "./formatters";
 import type { CheckingProviderSummary, CheckingTransaction } from "./types";
@@ -13,6 +14,8 @@ import type { CheckingProviderSummary, CheckingTransaction } from "./types";
 type CheckingProviderCardsProps = {
   portalNode: HTMLElement | null;
   providers: CheckingProviderSummary[];
+  currentPoint: ChartPoint | null;
+  valuesKnown: boolean;
   userId: string;
   isActive: boolean;
 };
@@ -24,6 +27,8 @@ const LOAD_MORE_SCROLL_THRESHOLD_PX = 160;
 export function CheckingProviderCards({
   portalNode,
   providers,
+  currentPoint,
+  valuesKnown,
   userId,
   isActive
 }: CheckingProviderCardsProps) {
@@ -60,7 +65,7 @@ export function CheckingProviderCards({
                   {formatProviderLabel(provider.sourceInstitution)}
                 </span>
                 <span className="text-sm font-bold text-[color:var(--text-main)]">
-                  <SlotValue value={formatEuroCents(provider.total)} />
+                  <SlotValue value={formatPointValue(currentPoint, provider.sourceInstitution, valuesKnown)} />
                 </span>
               </div>
               <div className="mt-4 space-y-1.5 text-sm">
@@ -114,6 +119,15 @@ export function CheckingProviderCards({
     </div>,
     portalNode
   );
+}
+
+function formatPointValue(point: ChartPoint | null, key: string, valuesKnown: boolean) {
+  if (!valuesKnown || !point) {
+    return "--";
+  }
+
+  const value = point[key];
+  return typeof value === "number" ? formatEuroCents(value) : "--";
 }
 
 function CheckingTransactionTable({

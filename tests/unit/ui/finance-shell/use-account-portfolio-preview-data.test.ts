@@ -28,6 +28,14 @@ function createMemoryStorage(): Storage {
   };
 }
 
+function jsonResponse(body: unknown, init: ResponseInit = {}) {
+  return new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json" },
+    status: 200,
+    ...init
+  });
+}
+
 const baseUser: UserRecord = {
   binanceApiKeyPreview: null,
   checkingCount: 2,
@@ -107,6 +115,23 @@ describe("account portfolio preview cache", () => {
       data: dashboardData,
       user: expect.objectContaining({ id: baseUser.id })
     });
+  });
+
+  it("fetches and caches the lightweight dashboard preview payload", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(dashboardData));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { preview } = await loadModules();
+    await expect(preview.fetchDashboardPreviewData(baseUser)).resolves.toEqual(dashboardData);
+    await expect(preview.fetchDashboardPreviewData(baseUser)).resolves.toEqual(dashboardData);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/transactions/dashboard/preview?"),
+      expect.objectContaining({ cache: "default" })
+    );
+    expect(preview.readAccountPortfolioPreviewCache([baseUser])[0].data).toEqual(dashboardData);
   });
 
   it("does not build a partial aggregate when a profile version is missing from cache", async () => {

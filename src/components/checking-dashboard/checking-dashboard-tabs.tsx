@@ -11,6 +11,7 @@ type CheckingDashboardTabsProps = {
   tabs: CheckingDashboardTab[];
   activeTab: string;
   activePoint: ChartPoint | null;
+  isTooltipActive?: boolean;
   valuesKnown?: boolean;
   userId: string;
   onSelectTab: (tabKey: string) => void;
@@ -20,6 +21,7 @@ export function CheckingDashboardTabs({
   tabs,
   activeTab,
   activePoint,
+  isTooltipActive = !!activePoint,
   valuesKnown = true,
   userId,
   onSelectTab
@@ -37,16 +39,16 @@ export function CheckingDashboardTabs({
 
         return {
           active: isSelected,
-          animateChanges: !!activePoint,
+          animateChanges: isTooltipActive,
           icon: tab.key === "ALL" ? Landmark : undefined,
           id: tab.key === "ALL" ? "checking" : `checking:${tab.key}`,
           label: tab.key === "ALL" ? undefined : getAbbreviatedLabel(tab.label),
           onClick: () => onSelectTab(tab.key),
-          suppressInitialChanges: !activePoint,
+          suppressInitialChanges: !isTooltipActive,
           value
         };
       }),
-    [activePoint, activeTab, onSelectTab, tabs, valuesKnown]
+    [activePoint, activeTab, isTooltipActive, onSelectTab, tabs, valuesKnown]
   );
 
   usePublishDashboardTopbar("checking", userId, items);

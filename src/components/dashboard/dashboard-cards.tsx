@@ -6,7 +6,8 @@ import { cn } from "@/shared/utils";
 import { DashboardCheckingCards } from "./dashboard-checking-cards";
 import { DashboardCryptoCards } from "./dashboard-crypto-cards";
 import { DashboardInvestmentCards } from "./dashboard-investment-cards";
-import type { BinanceBalanceRow, DashboardData, ProviderSummary, TimeRange } from "./types";
+import type { DashboardChartPoint } from "./dashboard-chart-types";
+import type { BinanceBalanceRow, DashboardData, TimeRange } from "./types";
 
 type DashboardCardsProps = {
   cardsPortalNode: HTMLElement | null;
@@ -14,14 +15,15 @@ type DashboardCardsProps = {
   contentVisible: boolean;
   data: DashboardData;
   timeRange: TimeRange;
+  currentPoint: DashboardChartPoint | null;
+  cryptoValuesKnown: boolean;
+  investmentValuesKnown: boolean;
   livePrices: Record<string, number | null>;
   binanceBalances: BinanceBalanceRow[];
   isBinanceSyncing: boolean;
   filterSmallBinance: boolean;
   setFilterSmallBinance: Dispatch<SetStateAction<boolean>>;
   binanceListRef: RefObject<HTMLDivElement | null>;
-  getProviderInvestmentLiveTotal: (provider: ProviderSummary) => number;
-  getProviderCryptoLiveTotal: (provider: ProviderSummary) => number;
 };
 
 export function DashboardCards({
@@ -30,14 +32,15 @@ export function DashboardCards({
   contentVisible,
   data,
   timeRange,
+  currentPoint,
+  cryptoValuesKnown,
+  investmentValuesKnown,
   livePrices,
   binanceBalances,
   isBinanceSyncing,
   filterSmallBinance,
   setFilterSmallBinance,
-  binanceListRef,
-  getProviderInvestmentLiveTotal,
-  getProviderCryptoLiveTotal
+  binanceListRef
 }: DashboardCardsProps) {
   if (!cardsPortalNode) {
     return null;
@@ -56,19 +59,21 @@ export function DashboardCards({
     >
       <DashboardCheckingCards data={data} timeRange={timeRange} />
       <DashboardInvestmentCards
-        getProviderInvestmentLiveTotal={getProviderInvestmentLiveTotal}
+        currentPoint={currentPoint}
+        valuesKnown={investmentValuesKnown}
         livePrices={livePrices}
         providers={data.providerSummaries}
       />
       <DashboardCryptoCards
         binanceBalances={binanceBalances}
         binanceListRef={binanceListRef}
+        currentPoint={currentPoint}
         filterSmallBinance={filterSmallBinance}
-        getProviderCryptoLiveTotal={getProviderCryptoLiveTotal}
         isBinanceSyncing={isBinanceSyncing}
         livePrices={livePrices}
         providers={data.providerSummaries}
         setFilterSmallBinance={setFilterSmallBinance}
+        valuesKnown={cryptoValuesKnown}
       />
     </div>,
     cardsPortalNode

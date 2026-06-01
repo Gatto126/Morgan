@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { cn } from "@/shared/utils";
 import type { ChartPoint } from "@/types/chart";
 import { DashboardPanelHost } from "@/components/dashboard-panel-host";
@@ -9,12 +8,12 @@ import { DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "@/com
 import { buildPortfolioChartData, getPortfolioXAxisTicks } from "./chart-data";
 import { formatProviderLabel } from "./formatters";
 import { PortfolioChart } from "./portfolio-chart";
+import { getPortfolioPointValue } from "./portfolio-current-point";
 import { PortfolioDashboardTabs } from "./portfolio-dashboard-tabs";
 import { PortfolioProviderCards } from "./portfolio-provider-cards";
 import type {
   PortfolioDashboardTab,
   PortfolioDashboardProps,
-  PortfolioProviderSummary,
   PortfolioSelectedPoint,
   TimeRange
 } from "./types";
@@ -132,31 +131,14 @@ export function PortfolioDashboard({
     );
   }, [activeProvider, activeTab, chartData, data]);
 
-  const getProviderLiveTotal = (provider: PortfolioProviderSummary) => {
-    let liveTotal = 0;
-    let hasHoldings = false;
-    for (const prod of provider.products) {
-      if (Math.abs(prod.quantity) > 0.000001) {
-        hasHoldings = true;
-        const priceKey = normalizeCryptoSymbol(prod.isin);
-        const livePrice = priceKey ? livePrices[priceKey] : null;
-        if (livePrice != null) {
-          liveTotal += Math.round(prod.quantity * livePrice * 100);
-        } else {
-          liveTotal += prod.investedValue;
-        }
-      }
-    }
-    return hasHoldings ? liveTotal : provider.total;
-  };
-  const allTotal = data?.providers.reduce((sum, p) => sum + getProviderLiveTotal(p), 0) ?? 0;
+  const allTotal = getPortfolioPointValue(todayChartPoint, "ALL") ?? 0;
   const tabs: PortfolioDashboardTab[] = data
     ? [
         { key: "ALL", label: config.rootLabel, total: allTotal },
         ...data.providers.map(p => ({
           key: p.sourceInstitution,
           label: formatProviderLabel(p.sourceInstitution),
-          total: getProviderLiveTotal(p)
+          total: getPortfolioPointValue(todayChartPoint, p.sourceInstitution) ?? 0
         }))
       ]
     : [{ key: "ALL", label: config.rootLabel, total: 0 }];
@@ -282,11 +264,12 @@ export function PortfolioDashboard({
         portalNode={cardsPortalNode}
         providers={data.providers}
         config={config}
+        currentPoint={todayChartPoint}
+        valuesKnown={pricesReady}
         livePrices={livePrices}
         isActive={isActive}
         transactionRowsEndpoint={`${config.endpoint}/rows`}
         userId={userId}
-        getProviderLiveTotal={getProviderLiveTotal}
       />
     </div>
   );

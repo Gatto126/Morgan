@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   collectDashboardLivePriceKeys,
+  getActiveProfileStageWarmupOrder,
   selectLoginWarmupProfiles,
   selectPrimaryLoginWarmupProfile
 } from "@/components/finance-shell/login-live-price-warmup";
@@ -40,6 +41,14 @@ describe("login live price warmup", () => {
     expect(selectLoginWarmupProfiles(users, "profile-2")).toEqual([users[1], users[0]]);
     expect(selectLoginWarmupProfiles([users[0]], null)).toEqual([users[0]]);
     expect(selectLoginWarmupProfiles(users, null)).toEqual(users);
+  });
+
+  it("preloads active profile sections after the main dashboard in a stable order", () => {
+    expect(getActiveProfileStageWarmupOrder({
+      ...users[0],
+      hasBinanceCredentials: true
+    })).toEqual(["checking", "investment", "crypto", "binance"]);
+    expect(getActiveProfileStageWarmupOrder(users[1])).toEqual(["investment", "binance"]);
   });
 
   it("collects ETF, stock and crypto live price keys from dashboard providers", () => {

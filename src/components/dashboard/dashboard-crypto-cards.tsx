@@ -7,33 +7,45 @@ import {
   DashboardCardShell,
   DashboardMetricRow
 } from "./dashboard-card-parts";
+import type { DashboardChartPoint } from "./dashboard-chart-types";
 import { formatEuroCents, formatProviderLabel } from "./formatters";
 import type { BinanceBalanceRow, ProviderSummary } from "./types";
 
 type DashboardCryptoCardsProps = {
   providers: ProviderSummary[];
+  currentPoint: DashboardChartPoint | null;
+  valuesKnown: boolean;
   livePrices: Record<string, number | null>;
   binanceBalances: BinanceBalanceRow[];
   isBinanceSyncing: boolean;
   filterSmallBinance: boolean;
   setFilterSmallBinance: Dispatch<SetStateAction<boolean>>;
   binanceListRef: RefObject<HTMLDivElement | null>;
-  getProviderCryptoLiveTotal: (provider: ProviderSummary) => number;
 };
 
 function getFallbackUnitPriceCents(investedValue: number, quantity: number) {
   return Math.abs(quantity) > 0.000001 ? Math.round(investedValue / quantity) : investedValue;
 }
 
+function getPointValue(point: DashboardChartPoint | null, key: string, valuesKnown: boolean) {
+  if (!valuesKnown || !point) {
+    return null;
+  }
+
+  const value = point[key];
+  return typeof value === "number" ? value : null;
+}
+
 export function DashboardCryptoCards({
   providers,
+  currentPoint,
+  valuesKnown,
   livePrices,
   binanceBalances,
   isBinanceSyncing,
   filterSmallBinance,
   setFilterSmallBinance,
-  binanceListRef,
-  getProviderCryptoLiveTotal
+  binanceListRef
 }: DashboardCryptoCardsProps) {
   const providersWithTokens = providers
     .map((provider) => ({
@@ -59,12 +71,15 @@ export function DashboardCryptoCards({
             animateValueChanges={providerHasLivePrice}
             key={`crypto-${provider.sourceInstitution}`}
             title={formatProviderLabel(provider.sourceInstitution)}
-            value={formatEuroCents(getProviderCryptoLiveTotal(provider))}
+            value={formatCurrentValue(
+              getPointValue(currentPoint, `crypto_inst_${provider.sourceInstitution}`, valuesKnown)
+            )}
           >
             <div className="space-y-4">
               {provider.cryptoTokens.map((token) => {
               const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
               const price = tokenSymbol ? livePrices[tokenSymbol] : null;
+              const liveTokenReady = !tokenSymbol || price != null || valuesKnown;
               const currentValueCents = price == null
                 ? token.investedValue
                 : Math.round(token.quantity * price * 100);
@@ -79,7 +94,7 @@ export function DashboardCryptoCards({
                     align="center"
                     animateValueChanges={price != null}
                     name={token.tokenName}
-                    value={formatEuroCents(unitPriceCents)}
+                    value={liveTokenReady ? formatEuroCents(unitPriceCents) : "--"}
                   />
                   <div className="space-y-1.5 text-sm">
                     <DashboardMetricRow
@@ -90,7 +105,7 @@ export function DashboardCryptoCards({
                     <DashboardMetricRow
                       animateValueChanges={price != null}
                       label="Current Value"
-                      value={formatEuroCents(currentValueCents)}
+                      value={liveTokenReady ? formatEuroCents(currentValueCents) : "--"}
                       valueClassName={price == null
                         ? "text-[color:var(--text-dim)] underline decoration-dotted decoration-[color:var(--text-dim)]"
                         : "text-[color:var(--text-main)]"}
@@ -113,4 +128,8 @@ export function DashboardCryptoCards({
       />
     </div>
   );
+}
+
+function formatCurrentValue(value: number | null) {
+  return value === null ? "--" : formatEuroCents(value);
 }

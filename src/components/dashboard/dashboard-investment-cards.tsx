@@ -3,23 +3,35 @@ import {
   DashboardCardShell,
   DashboardMetricRow
 } from "./dashboard-card-parts";
+import type { DashboardChartPoint } from "./dashboard-chart-types";
 import { formatEuroCents, formatProviderLabel } from "./formatters";
 import type { ProviderSummary } from "./types";
 
 type DashboardInvestmentCardsProps = {
   providers: ProviderSummary[];
+  currentPoint: DashboardChartPoint | null;
+  valuesKnown: boolean;
   livePrices: Record<string, number | null>;
-  getProviderInvestmentLiveTotal: (provider: ProviderSummary) => number;
 };
 
 function getFallbackUnitPriceCents(investedValue: number, quantity: number) {
   return Math.abs(quantity) > 0.000001 ? Math.round(investedValue / quantity) : investedValue;
 }
 
+function getPointValue(point: DashboardChartPoint | null, key: string, valuesKnown: boolean) {
+  if (!valuesKnown || !point) {
+    return null;
+  }
+
+  const value = point[key];
+  return typeof value === "number" ? value : null;
+}
+
 export function DashboardInvestmentCards({
   providers,
-  livePrices,
-  getProviderInvestmentLiveTotal
+  currentPoint,
+  valuesKnown,
+  livePrices
 }: DashboardInvestmentCardsProps) {
   const providersWithProducts = providers
     .map((provider) => ({
@@ -44,11 +56,14 @@ export function DashboardInvestmentCards({
             animateValueChanges={providerHasLivePrice}
             key={`investment-${provider.sourceInstitution}`}
             title={formatProviderLabel(provider.sourceInstitution)}
-            value={formatEuroCents(getProviderInvestmentLiveTotal(provider))}
+            value={formatCurrentValue(
+              getPointValue(currentPoint, `investment_inst_${provider.sourceInstitution}`, valuesKnown)
+            )}
           >
             <div className="space-y-4">
               {provider.investmentProducts.map((product) => {
               const price = product.isin ? livePrices[product.isin] : null;
+              const liveProductReady = !product.isin || price != null || valuesKnown;
               const currentValueCents = price == null
                 ? product.investedValue
                 : Math.round(product.quantity * price * 100);
@@ -62,7 +77,7 @@ export function DashboardInvestmentCards({
                   <DashboardAssetHeader
                     animateValueChanges={price != null}
                     name={product.productName}
-                    value={formatEuroCents(unitPriceCents)}
+                    value={liveProductReady ? formatEuroCents(unitPriceCents) : "--"}
                   />
 
                   <div className="space-y-1.5 text-sm">
@@ -77,7 +92,7 @@ export function DashboardInvestmentCards({
                     <DashboardMetricRow
                       animateValueChanges={price != null}
                       label="Current Value"
-                      value={formatEuroCents(currentValueCents)}
+                      value={liveProductReady ? formatEuroCents(currentValueCents) : "--"}
                       valueClassName={price == null
                         ? "text-[color:var(--text-dim)] underline decoration-dotted decoration-[color:var(--text-dim)]"
                         : "text-[color:var(--text-main)]"}
@@ -95,4 +110,8 @@ export function DashboardInvestmentCards({
       })}
     </div>
   );
+}
+
+function formatCurrentValue(value: number | null) {
+  return value === null ? "--" : formatEuroCents(value);
 }

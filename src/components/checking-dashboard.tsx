@@ -64,6 +64,7 @@ export function CheckingDashboard({
   const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
   const isMobile = useIsMobile();
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
+  const todayKey = useMemo(() => getTodayKey(), []);
 
   useEffect(() => {
     onImportRefreshCompleteRef.current = onImportRefreshComplete;
@@ -89,14 +90,19 @@ export function CheckingDashboard({
   const xAxisTicks = useMemo(() => {
     return getCheckingXAxisTicks(chartData);
   }, [chartData]);
-  const allTotal = data?.providers.reduce((sum, provider) => sum + provider.total, 0) ?? 0;
+  const todayChartPoint = useMemo(
+    () => chartData.find((point) => point.rawMonth === todayKey) ?? chartData[chartData.length - 1] ?? null,
+    [chartData, todayKey]
+  );
+  const currentDisplayPoint = activeChartPoint ?? todayChartPoint;
+  const allTotal = typeof todayChartPoint?.heritage === "number" ? todayChartPoint.heritage : 0;
   const tabs: CheckingDashboardTab[] = data
     ? [
         { key: "ALL", label: "CHECKING", total: allTotal },
         ...data.providers.map(provider => ({
           key: provider.sourceInstitution,
           label: formatProviderLabel(provider.sourceInstitution),
-          total: provider.total
+          total: getChartPointNumber(todayChartPoint, provider.sourceInstitution) ?? 0
         }))
       ]
     : [{ key: "ALL", label: "CHECKING", total: 0 }];
@@ -183,7 +189,8 @@ export function CheckingDashboard({
       <CheckingDashboardTabs
         tabs={tabs}
         activeTab={activeTab}
-        activePoint={activeChartPoint}
+        activePoint={currentDisplayPoint}
+        isTooltipActive={!!activeChartPoint}
         valuesKnown={!!data}
         userId={userId}
         onSelectTab={setActiveTab}
@@ -235,9 +242,25 @@ export function CheckingDashboard({
       <CheckingProviderCards
         portalNode={cardsPortalNode}
         providers={data.providers}
+        currentPoint={todayChartPoint}
+        valuesKnown={!!data}
         userId={userId}
         isActive={isActive}
       />
     </div>
   );
+}
+
+function getTodayKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getChartPointNumber(point: ChartPoint | null, key: string) {
+  const value = point?.[key];
+  return typeof value === "number" ? value : null;
 }

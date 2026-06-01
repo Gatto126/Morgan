@@ -12,6 +12,7 @@ import {
 } from "./dashboard-stage-items";
 import { ACTIVE_PROFILE_PERSISTENCE_KEY } from "./persistence-state";
 import type { UserRecord } from "./types";
+import { fetchDashboardPreviewData } from "./use-account-portfolio-preview-data";
 
 type WarmFinanceSessionOptions = {
   maxWaitMs?: number;
@@ -140,9 +141,11 @@ async function warmLivePricesForDashboardData(
   await priceWarmup;
 }
 
-async function warmProfilePreview(user: UserRecord) {
+async function warmProfilePreview(user: UserRecord, { fullDashboard = false }: { fullDashboard?: boolean } = {}) {
   const dashboardPromise = user.transactionCount > 0
-    ? fetchDashboardStageData("dashboard", user.id, { version: user.transactionCount }).catch(() => null)
+    ? fullDashboard
+      ? fetchDashboardStageData("dashboard", user.id, { version: user.transactionCount }).catch(() => null)
+      : fetchDashboardPreviewData(user).catch(() => null)
     : Promise.resolve(null);
   const binanceWarmup = user.hasBinanceCredentials
     ? fetchDashboardStageData("binance", user.id).catch(() => null)
@@ -159,7 +162,7 @@ async function warmProfilePreview(user: UserRecord) {
   return dashboardData as DashboardData | null;
 }
 
-function getActiveProfileStageWarmupOrder(user: UserRecord) {
+export function getActiveProfileStageWarmupOrder(user: UserRecord) {
   const visibleStages = new Set(getVisibleDashboardStageKeys(user));
   const stageOrder: DashboardStageKey[] = ["checking", "investment", "crypto", "binance"];
 
@@ -167,10 +170,12 @@ function getActiveProfileStageWarmupOrder(user: UserRecord) {
 }
 
 async function warmActiveProfileStages(user: UserRecord) {
-  for (const stage of getActiveProfileStageWarmupOrder(user)) {
+  const stageRequests = getActiveProfileStageWarmupOrder(user).map((stage) => {
     const version = getDashboardStageDataVersion(stage, user);
-    await fetchDashboardStageData(stage, user.id, { version }).catch(() => null);
-  }
+    return fetchDashboardStageData(stage, user.id, { version }).catch(() => null);
+  });
+
+  await Promise.allSettled(stageRequests);
 }
 
 async function runFinanceSessionWarmup() {
@@ -184,7 +189,7 @@ async function runFinanceSessionWarmup() {
     return;
   }
 
-  await warmProfilePreview(primaryProfile);
+  await warmProfilePreview(primaryProfile, { fullDashboard: true });
   await Promise.allSettled([
     warmActiveProfileStages(primaryProfile),
     ...warmupProfiles

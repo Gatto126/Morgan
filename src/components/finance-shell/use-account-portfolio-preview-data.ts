@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { BinanceBalanceRow, DashboardData } from "@/components/dashboard/types";
+import { getUtcDateKey } from "@/shared/date-keys";
+import { toDashboardPreviewData } from "@/shared/dashboard-preview-data";
 
 import {
+  dashboardStageDataFreshTtlMs,
   fetchDashboardStageData,
   isDashboardStageDataCacheFresh,
   readDashboardStageDataCache
@@ -35,14 +38,136 @@ const loadingPreviewState: AccountPortfolioPreviewState = {
   records: []
 };
 
+const previewCachePrefix = "morgan:account-portfolio-preview:v1:";
+const previewCacheTtlMs = dashboardStageDataFreshTtlMs;
+const previewStaleCacheTtlMs = 6 * 60 * 60 * 1_000;
+const previewMemoryCache = new Map<string, { data: DashboardData; fetchedAt: number }>();
+
+function getPreviewCacheKey(user: UserRecord) {
+  return `${user.id}:${user.transactionCount}:${getUtcDateKey()}`;
+}
+
+function getSessionStorage() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredPreviewData(
+  cacheKey: string,
+  maxAgeMs: number
+): { data: DashboardData; fetchedAt: number } | null {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const storageKey = `${previewCachePrefix}${cacheKey}`;
+  const rawEntry = storage.getItem(storageKey);
+  if (!rawEntry) {
+    return null;
+  }
+
+  try {
+    const entry = JSON.parse(rawEntry) as { data?: DashboardData; fetchedAt?: number };
+    if (!entry.data || typeof entry.fetchedAt !== "number") {
+      storage.removeItem(storageKey);
+      return null;
+    }
+
+    if (Date.now() - entry.fetchedAt >= previewStaleCacheTtlMs) {
+      storage.removeItem(storageKey);
+      return null;
+    }
+
+    return Date.now() - entry.fetchedAt < maxAgeMs
+      ? { data: entry.data, fetchedAt: entry.fetchedAt }
+      : null;
+  } catch {
+    storage.removeItem(storageKey);
+    return null;
+  }
+}
+
+function writeStoredPreviewData(cacheKey: string, data: DashboardData, fetchedAt: number) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(`${previewCachePrefix}${cacheKey}`, JSON.stringify({ data, fetchedAt }));
+  } catch {
+    // Session storage is best-effort. The in-memory cache still covers the current page.
+  }
+}
+
+function readDashboardPreviewDataCache(user: UserRecord, maxAgeMs = previewStaleCacheTtlMs): DashboardData | null {
+  const cacheKey = getPreviewCacheKey(user);
+  const memoryEntry = previewMemoryCache.get(cacheKey);
+  if (memoryEntry && Date.now() - memoryEntry.fetchedAt < maxAgeMs) {
+    return memoryEntry.data;
+  }
+
+  const storedEntry = readStoredPreviewData(cacheKey, maxAgeMs);
+  if (storedEntry) {
+    previewMemoryCache.set(cacheKey, storedEntry);
+    return storedEntry.data;
+  }
+
+  const fullDashboardData = readDashboardStageDataCache("dashboard", user.id, user.transactionCount, { maxAgeMs });
+  return fullDashboardData ? toDashboardPreviewData(fullDashboardData) : null;
+}
+
+function seedDashboardPreviewDataCache(user: UserRecord, data: DashboardData, fetchedAt = Date.now()) {
+  const cacheKey = getPreviewCacheKey(user);
+  previewMemoryCache.set(cacheKey, { data, fetchedAt });
+  writeStoredPreviewData(cacheKey, data, fetchedAt);
+}
+
+function isDashboardPreviewDataCacheFresh(user: UserRecord) {
+  if (isDashboardStageDataCacheFresh("dashboard", user.id, user.transactionCount)) {
+    return true;
+  }
+
+  return readDashboardPreviewDataCache(user, previewCacheTtlMs) !== null;
+}
+
+export async function fetchDashboardPreviewData(user: UserRecord, signal?: AbortSignal) {
+  const cachedPreview = readDashboardPreviewDataCache(user, previewCacheTtlMs);
+  if (cachedPreview) {
+    return cachedPreview;
+  }
+
+  const params = new URLSearchParams({
+    d: getUtcDateKey(),
+    userId: user.id,
+    v: String(user.transactionCount)
+  });
+  const response = await fetch(`/api/transactions/dashboard/preview?${params.toString()}`, {
+    cache: "default",
+    signal
+  });
+  const payload = await response.json().catch(() => ({})) as DashboardData & { error?: string };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Could not load portfolio preview.");
+  }
+
+  seedDashboardPreviewDataCache(user, payload);
+  return payload;
+}
+
 async function fetchProfilePreviewRecord(user: UserRecord, signal?: AbortSignal): Promise<AccountPortfolioPreviewRecord> {
   const shouldLoadDashboard = user.transactionCount > 0;
   const dashboardPromise = shouldLoadDashboard
-    ? fetchDashboardStageData("dashboard", user.id, {
-        fallbackErrorMessage: "Could not load portfolio preview.",
-        signal,
-        version: user.transactionCount
-      })
+    ? fetchDashboardPreviewData(user, signal)
     : Promise.resolve(null);
   const binancePromise = user.hasBinanceCredentials
     ? fetchDashboardStageData("binance", user.id, {
@@ -72,7 +197,7 @@ export function readAccountPortfolioPreviewCache(users: UserRecord[]): AccountPo
 
   for (const user of users) {
     const data = shouldRequireCachedDashboard(user)
-      ? readDashboardStageDataCache("dashboard", user.id, user.transactionCount)
+      ? readDashboardPreviewDataCache(user)
       : null;
 
     if (shouldRequireCachedDashboard(user) && !data) {
@@ -100,7 +225,7 @@ export function readAccountPortfolioPreviewCache(users: UserRecord[]): AccountPo
 function isAccountPortfolioPreviewCacheFresh(users: UserRecord[]) {
   return users.every((user) => {
     const isDashboardFresh = !shouldRequireCachedDashboard(user)
-      || isDashboardStageDataCacheFresh("dashboard", user.id, user.transactionCount);
+      || isDashboardPreviewDataCacheFresh(user);
     const isBinanceFresh = !shouldRequireCachedBinance(user)
       || isDashboardStageDataCacheFresh("binance", user.id);
 

@@ -9,17 +9,20 @@ import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transac
 import { cn } from "@/shared/utils";
 
 import { formatEuroCents, formatProviderLabel } from "./formatters";
+import { getPortfolioPointValue } from "./portfolio-current-point";
 import type { PortfolioDashboardConfig, PortfolioProviderSummary, PortfolioTransaction } from "./types";
+import type { ChartPoint } from "@/types/chart";
 
 type PortfolioProviderCardsProps = {
   portalNode: HTMLElement | null;
   providers: PortfolioProviderSummary[];
   config: Pick<PortfolioDashboardConfig, "identifierLabel" | "priceQueryParam" | "showCashback" | "transactionFilter">;
+  currentPoint: ChartPoint | null;
+  valuesKnown: boolean;
   livePrices: Record<string, number | null>;
   isActive: boolean;
   transactionRowsEndpoint: string;
   userId: string;
-  getProviderLiveTotal: (provider: PortfolioProviderSummary) => number;
 };
 
 const INITIAL_TRANSACTION_ROWS = 20;
@@ -41,11 +44,12 @@ export function PortfolioProviderCards({
   portalNode,
   providers,
   config,
+  currentPoint,
+  valuesKnown,
   livePrices,
   isActive,
   transactionRowsEndpoint,
-  userId,
-  getProviderLiveTotal
+  userId
 }: PortfolioProviderCardsProps) {
   useEffect(() => {
     if (!isActive || providers.length === 0) {
@@ -86,7 +90,10 @@ export function PortfolioProviderCards({
                   {formatProviderLabel(provider.sourceInstitution)}
                 </span>
                 <span className="text-sm font-bold text-[color:var(--text-main)]">
-                  <SlotValue animateChanges={providerHasLivePrice} value={formatEuroCents(getProviderLiveTotal(provider))} />
+                  <SlotValue
+                    animateChanges={providerHasLivePrice}
+                    value={formatPointValue(getPortfolioPointValue(currentPoint, provider.sourceInstitution), valuesKnown)}
+                  />
                 </span>
               </div>
 
@@ -102,6 +109,7 @@ export function PortfolioProviderCards({
                         {(() => {
                           const priceKey = getProductPriceKey(product, config);
                           const price = priceKey ? livePrices[priceKey] : null;
+                          const productReady = !priceKey || price != null || valuesKnown;
                           const priceCents = price != null
                             ? Math.round(price * 100)
                             : getFallbackUnitPriceCents(product.investedValue, product.quantity);
@@ -109,7 +117,7 @@ export function PortfolioProviderCards({
                           return (
                             <SlotValue
                               animateChanges={price != null}
-                              value={formatEuroCents(priceCents)}
+                              value={productReady ? formatEuroCents(priceCents) : "--"}
                             />
                           );
                         })()}
@@ -140,6 +148,13 @@ export function PortfolioProviderCards({
                         {(() => {
                           const priceKey = getProductPriceKey(product, config);
                           const price = priceKey ? livePrices[priceKey] : null;
+                          if (price == null && !valuesKnown && priceKey) {
+                            return (
+                              <span className="font-semibold text-[color:var(--text-dim)]">
+                                <SlotValue value="--" />
+                              </span>
+                            );
+                          }
                           if (price == null) {
                             return (
                               <span className="font-semibold text-[color:var(--text-dim)] underline decoration-dotted decoration-[color:var(--text-dim)]">
@@ -184,6 +199,10 @@ export function PortfolioProviderCards({
     </div>,
     portalNode
   );
+}
+
+function formatPointValue(value: number | null, valuesKnown: boolean) {
+  return valuesKnown && value !== null ? formatEuroCents(value) : "--";
 }
 
 function PortfolioTransactionTable({
