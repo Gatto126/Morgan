@@ -137,6 +137,70 @@ describe("dashboard topbar store", () => {
     expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
   });
 
+  it("delays an initial all-zero publish during bootstrap", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [
+      {
+        active: true,
+        id: "heritage",
+        value: "0,00"
+      },
+      {
+        active: false,
+        id: "checking",
+        value: "0,00"
+      }
+    ]);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+
+    store.publishDashboardTopbar("dashboard", "user-1", [
+      {
+        active: true,
+        id: "heritage",
+        value: "123,45 \u20ac"
+      },
+      {
+        active: false,
+        id: "checking",
+        value: "67,89 \u20ac"
+      }
+    ]);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1").map((item) => item.value)).toEqual([
+      "123,45 \u20ac",
+      "67,89 \u20ac"
+    ]);
+
+    vi.advanceTimersByTime(3_000);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1").map((item) => item.value)).toEqual([
+      "123,45 \u20ac",
+      "67,89 \u20ac"
+    ]);
+  });
+
+  it("publishes a real initial all-zero topbar after the bootstrap guard expires", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "0,00"
+    }]);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+
+    vi.advanceTimersByTime(3_000);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
+  });
+
   it("clears persisted topbar layout when publishing an empty topbar", async () => {
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     const store = await loadTopbarStoreModule();

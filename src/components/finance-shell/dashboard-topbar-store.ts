@@ -147,6 +147,15 @@ function shouldDelayUnreadyTopbarPublish(
   });
 }
 
+function shouldDelayInitialZeroTopbarPublish(
+  previousItems: DashboardTopbarItem[],
+  nextItems: DashboardTopbarItem[]
+) {
+  return previousItems.length === 0
+    && nextItems.length > 0
+    && nextItems.every((item) => isZeroOnlyTopbarValue(item.value));
+}
+
 function clearDelayedTopbarPublish(cacheKey: string) {
   const delayedPublish = delayedTopbarPublishes.get(cacheKey);
   if (delayedPublish) {
@@ -229,7 +238,10 @@ export function publishDashboardTopbar(
   }
 
   const previousItems = entries.get(cacheKey)?.items ?? readStoredDashboardTopbarItems(stage, userId);
-  if (shouldDelayUnreadyTopbarPublish(previousItems, items)) {
+  if (
+    shouldDelayUnreadyTopbarPublish(previousItems, items)
+    || shouldDelayInitialZeroTopbarPublish(previousItems, items)
+  ) {
     clearDelayedTopbarPublish(cacheKey);
     delayedTopbarPublishes.set(cacheKey, globalThis.setTimeout(() => {
       delayedTopbarPublishes.delete(cacheKey);
