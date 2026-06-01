@@ -7,6 +7,7 @@ import { cn } from "@/shared/utils";
 
 import { DashboardCards } from "./dashboard/dashboard-cards";
 import { DashboardChart } from "./dashboard/dashboard-chart";
+import { buildDashboardCurrentSnapshot } from "./dashboard/dashboard-current-snapshot";
 import { DashboardErrorState, DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "./dashboard/dashboard-status";
 import { DashboardTabs } from "./dashboard/dashboard-tabs";
 import {
@@ -112,7 +113,8 @@ export function Dashboard({
     [liveBinanceBalances]
   );
   const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0;
-  const dashboardValuesKnown = !!data && dataFresh && (!hasBinanceCredentials || binanceBalancesKnown);
+  const dashboardValuesKnown = !!data && dataFresh;
+  const dashboardCryptoValuesKnown = cryptoPricesReady && (!hasBinanceCredentials || binanceBalancesKnown);
   const requiresInitialUpload = transactionCount === 0 && !hasBinancePortfolio;
   const shouldShowUploadPanel = showUploadView && !showSettingsView && !showUserSelectView;
   const cardsPortalNode = usePortalNode("dashboard-cards-portal");
@@ -126,7 +128,6 @@ export function Dashboard({
     activeChartPoint,
     activeTab,
     chartConfig,
-    currentDisplayPoint,
     hasRenderableChartData,
     hiddenSeries,
     processedChartData,
@@ -138,7 +139,6 @@ export function Dashboard({
     setShowSoldAssets,
     setTimeRange,
     showSoldAssets,
-    todayChartPoint,
     timeRange,
     toggleSeries,
     visibleTabs,
@@ -155,6 +155,30 @@ export function Dashboard({
     livePrices,
     transactionCount
   });
+  const currentSnapshot = useMemo(
+    () => dataFresh
+      ? buildDashboardCurrentSnapshot({
+          binanceBalancesKnown,
+          binanceTotalCents,
+          cryptoPricesReady,
+          data,
+          hasBinancePortfolio,
+          investmentPricesReady,
+          livePrices
+        })
+      : null,
+    [
+      binanceBalancesKnown,
+      binanceTotalCents,
+      cryptoPricesReady,
+      data,
+      dataFresh,
+      hasBinancePortfolio,
+      investmentPricesReady,
+      livePrices
+    ]
+  );
+  const topbarPoint = activeChartPoint ?? currentSnapshot;
   const {
     contentVisible,
     setChartReady,
@@ -183,11 +207,11 @@ export function Dashboard({
       <DashboardTabs
         visibleTabs={visibleTabs}
         activeTab={activeTab}
-        activePoint={data ? currentDisplayPoint : null}
-        seedPoint={data ? todayChartPoint : null}
+        activePoint={data ? topbarPoint : null}
+        seedPoint={data ? currentSnapshot : null}
         data={data}
         isTooltipActive={!!activeChartPoint}
-        cryptoValuesKnown={cryptoPricesReady}
+        cryptoValuesKnown={dashboardCryptoValuesKnown}
         investmentValuesKnown={investmentPricesReady}
         valuesKnown={dashboardValuesKnown}
         userId={userId}
@@ -238,8 +262,8 @@ export function Dashboard({
             contentVisible={contentVisible}
             data={data}
             timeRange={timeRange}
-            currentPoint={todayChartPoint}
-            cryptoValuesKnown={cryptoPricesReady}
+            currentPoint={currentSnapshot}
+            cryptoValuesKnown={dashboardCryptoValuesKnown}
             investmentValuesKnown={investmentPricesReady}
             livePrices={livePrices}
             binanceBalances={liveBinanceBalances}

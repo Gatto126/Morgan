@@ -12,6 +12,7 @@ import { formatProviderLabel } from "./formatters";
 import { mergePortfolioDataWithBinance } from "./binance-portfolio-provider";
 import { PortfolioChart } from "./portfolio-chart";
 import { getPortfolioPointValue } from "./portfolio-current-point";
+import { buildPortfolioCurrentSnapshot } from "./portfolio-current-snapshot";
 import { PortfolioDashboardTabs } from "./portfolio-dashboard-tabs";
 import { PortfolioProviderCards } from "./portfolio-provider-cards";
 import type {
@@ -138,11 +139,32 @@ export function PortfolioDashboard({
       todayKey
     });
   }, [activeProvider, activeTab, cryptoValuesKnown, dataForDisplay, isCryptoDashboard, livePrices, pricesReady, timeRange, todayKey]);
-  const todayChartPoint = useMemo(
-    () => chartData.find((point) => point.rawMonth === todayKey) ?? chartData[chartData.length - 1] ?? null,
-    [chartData, todayKey]
+  const currentSnapshot = useMemo(
+    () => dataFresh
+      ? buildPortfolioCurrentSnapshot({
+          activeProvider,
+          activeTab,
+          blockRootTotal: isCryptoDashboard && hasBinancePortfolio && !binanceBalancesKnown,
+          data: dataForDisplay,
+          livePrices,
+          priceQueryParam: config.priceQueryParam,
+          pricesReady
+        })
+      : null,
+    [
+      activeProvider,
+      activeTab,
+      binanceBalancesKnown,
+      config.priceQueryParam,
+      dataForDisplay,
+      dataFresh,
+      hasBinancePortfolio,
+      isCryptoDashboard,
+      livePrices,
+      pricesReady
+    ]
   );
-  const currentDisplayPoint = activeChartPoint ?? todayChartPoint;
+  const currentDisplayPoint = activeChartPoint ?? currentSnapshot;
 
   const xAxisTicks = useMemo(() => {
     return getPortfolioXAxisTicks(chartData);
@@ -165,14 +187,14 @@ export function PortfolioDashboard({
     );
   }, [activeProvider, activeTab, chartData, dataForDisplay]);
 
-  const allTotal = getPortfolioPointValue(todayChartPoint, "ALL") ?? 0;
+  const allTotal = getPortfolioPointValue(currentSnapshot, "ALL") ?? 0;
   const tabs: PortfolioDashboardTab[] = dataForDisplay
     ? [
         { key: "ALL", label: config.rootLabel, total: allTotal },
         ...dataForDisplay.providers.map(p => ({
           key: p.sourceInstitution,
           label: formatProviderLabel(p.sourceInstitution),
-          total: getPortfolioPointValue(todayChartPoint, p.sourceInstitution) ?? 0
+          total: getPortfolioPointValue(currentSnapshot, p.sourceInstitution) ?? 0
         }))
       ]
     : [{ key: "ALL", label: config.rootLabel, total: 0 }];
@@ -242,7 +264,7 @@ export function PortfolioDashboard({
         activePoint={currentDisplayPoint}
         isTooltipActive={!!activeChartPoint}
         rootIcon={config.rootIcon}
-        valuesKnown={!!dataForDisplay && dataFresh && (!!activeChartPoint || (isCryptoDashboard ? cryptoValuesKnown : pricesReady))}
+        valuesKnown={!!dataForDisplay && dataFresh}
         stage={dashboardStage}
         userId={userId}
         onSelectTab={setActiveTab}
@@ -298,8 +320,8 @@ export function PortfolioDashboard({
         portalNode={cardsPortalNode}
         providers={data?.providers ?? []}
         config={config}
-        currentPoint={todayChartPoint}
-        valuesKnown={dataFresh && (isCryptoDashboard ? cryptoValuesKnown : pricesReady)}
+        currentPoint={currentSnapshot}
+        valuesKnown={dataFresh}
         livePrices={livePrices}
         isActive={isActive}
         transactionRowsEndpoint={`${config.endpoint}/rows`}

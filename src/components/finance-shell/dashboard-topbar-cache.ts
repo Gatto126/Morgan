@@ -31,7 +31,7 @@ export function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: D
   if (activeStage === "checking") {
     const data = readDashboardStageDataCache("checking", activeUser.id, activeUser.checkingCount);
     const providers = getCachedProviders(data);
-    if (!providers) {
+    if (!providers || providers.length === 0) {
       return [];
     }
 
@@ -57,7 +57,7 @@ export function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: D
     const version = activeStage === "investment" ? activeUser.investmentCount : activeUser.cryptoCount;
     const data = readDashboardStageDataCache(activeStage, activeUser.id, version);
     const providers = getCachedProviders(data);
-    if (!providers) {
+    if (!providers || providers.length === 0) {
       return [];
     }
 
