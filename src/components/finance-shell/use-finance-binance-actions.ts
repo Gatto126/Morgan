@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
+import type { BinanceBalanceRow } from "@/components/dashboard/types";
+
+import { seedDashboardStageDataCache } from "./dashboard-stage-data-cache";
 import type { SettingsSection } from "./settings-panel-types";
 import type { UserRecord } from "./types";
 
@@ -11,8 +14,11 @@ type UpdateProfileBinancePayload = {
 };
 
 type BinanceSyncPayload = {
-  balances?: unknown[];
+  balances?: BinanceBalanceRow[];
   error?: string;
+  hasApiKey?: boolean;
+  isStale?: boolean;
+  syncedAt?: string | null;
 };
 
 type UseFinanceBinanceActionsParams = {
@@ -118,14 +124,30 @@ export function useFinanceBinanceActions({
         throw new Error(syncPayload.error ?? "Binance connection failed.");
       }
 
-      const tokenCount = syncPayload.balances?.length ?? 0;
+      const balances = Array.isArray(syncPayload.balances) ? syncPayload.balances : [];
+      const tokenCount = balances.length;
+      const syncedAt = syncPayload.syncedAt ?? new Date().toISOString();
       setNotice(
         tokenCount > 0
           ? `Connected! ${tokenCount} token${tokenCount !== 1 ? "s" : ""} found.`
           : "Connected! Empty wallet."
       );
       keepApiSettingsOpen();
-      setBinanceRefreshKey((key) => key + 1);
+      setBinanceRefreshKey((key) => {
+        const nextKey = key + 1;
+        const fetchedAt = Date.now();
+        const cachePayload = {
+          balances,
+          hasApiKey: syncPayload.hasApiKey ?? true,
+          isStale: syncPayload.isStale ?? false,
+          syncedAt
+        };
+
+        seedDashboardStageDataCache("binance", activeUser.id, key, cachePayload, fetchedAt);
+        seedDashboardStageDataCache("binance", activeUser.id, nextKey, cachePayload, fetchedAt);
+
+        return nextKey;
+      });
     } catch (err) {
       keepApiSettingsOpen();
       setError(err instanceof Error ? err.message : "Error saving API keys.");

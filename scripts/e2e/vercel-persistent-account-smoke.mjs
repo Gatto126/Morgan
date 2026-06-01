@@ -328,6 +328,7 @@ async function connectBinance(page) {
   await panel.getByPlaceholder("Enter API Key", { exact: true }).fill(binanceApiKey);
   await panel.getByPlaceholder("Enter Secret Key", { exact: true }).fill(binanceApiSecret);
   await panel.locator('button[title="Save API Keys"]').click();
+  await panel.getByText("Connected!", { exact: false }).waitFor({ state: "visible", timeout: 120_000 });
   await panel.locator('button[title="Delete Saved API Keys"]').waitFor({ state: "visible", timeout: 90_000 });
   await saveScreenshot(page, "02-binance-connected-settings.png");
 
