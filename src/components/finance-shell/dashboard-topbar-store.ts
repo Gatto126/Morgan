@@ -151,7 +151,7 @@ function shouldDelayInitialZeroTopbarPublish(
   previousItems: DashboardTopbarItem[],
   nextItems: DashboardTopbarItem[]
 ) {
-  return previousItems.length === 0
+  return !previousItems.some((item) => hasNonZeroTopbarValue(item.value))
     && nextItems.length > 0
     && nextItems.every((item) => isZeroOnlyTopbarValue(item.value));
 }
@@ -208,7 +208,7 @@ export function readStoredDashboardTopbarItems(
           id: item.id,
           label: item.label,
           suppressInitialChanges: true,
-          value: placeholderValues ? pendingTopbarValue : storedValue
+          value: placeholderValues ? "" : storedValue
         };
       });
   } catch {

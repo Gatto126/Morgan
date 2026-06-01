@@ -54,7 +54,7 @@ describe("dashboard topbar store", () => {
       id: "heritage",
       label: undefined,
       suppressInitialChanges: true,
-      value: "--"
+      value: ""
     }]);
   });
 
@@ -199,6 +199,40 @@ describe("dashboard topbar store", () => {
     vi.advanceTimersByTime(3_000);
 
     expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
+  });
+
+  it("delays all-zero publish when the only stored values are zero", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    let store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "0,00"
+    }]);
+    vi.advanceTimersByTime(3_000);
+
+    store = await loadTopbarStoreModule();
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "0,00"
+    }]);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "123,45 \u20ac"
+    }]);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+
+    vi.advanceTimersByTime(3_000);
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
   });
 
   it("clears persisted topbar layout when publishing an empty topbar", async () => {

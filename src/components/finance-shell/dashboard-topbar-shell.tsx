@@ -1,5 +1,5 @@
 import { Bitcoin, ChartPie, Coins, Landmark, Wallet } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { DashboardTopbarTab } from "./dashboard-topbar-tab";
 import {
@@ -29,7 +29,7 @@ const fallbackIcons = {
   dashboard: ChartPie,
   investment: Wallet
 } satisfies Record<DashboardStageKey, typeof ChartPie>;
-const fallbackValue = "--";
+const fallbackValue = "";
 
 function getDashboardFallbackItems(activeUser: UserRecord, activeStage: DashboardStageKey): DashboardTopbarItem[] {
   if (activeStage === "dashboard") {
@@ -100,12 +100,11 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
 
 function preferStableTopbarItems(
   entryItems: DashboardTopbarItem[],
-  storedItems: DashboardTopbarItem[],
-  cachedItems: DashboardTopbarItem[],
+  hydratedItems: DashboardTopbarItem[],
   fallbackItems: DashboardTopbarItem[]
 ) {
-  const stableFallbackItems = cachedItems.length > fallbackItems.length
-    ? cachedItems
+  const stableFallbackItems = hydratedItems.length > fallbackItems.length
+    ? hydratedItems
     : fallbackItems;
 
   if (
@@ -113,13 +112,6 @@ function preferStableTopbarItems(
     && entryItems.length > 0
   ) {
     return entryItems;
-  }
-
-  if (
-    storedItems.length >= stableFallbackItems.length
-    && storedItems.length > 0
-  ) {
-    return storedItems;
   }
 
   return stableFallbackItems;
@@ -157,18 +149,42 @@ export function DashboardTopbarShell({
     () => activeUser && activeStage && hasTopbarData ? getDashboardFallbackItems(activeUser, activeStage) : [],
     [activeStage, activeUser, hasTopbarData]
   );
-  const cachedItems = useMemo(
-    () => activeUser && activeStage && hasTopbarData ? getCachedStageTopbarItems(activeUser, activeStage) : [],
-    [activeStage, activeUser, hasTopbarData]
-  );
-  const storedItems = useMemo(
-    () => activeUser && activeStage && hasTopbarData
-      ? readStoredDashboardTopbarItems(activeStage, activeUser.id, { placeholderValues: true })
-      : [],
-    [activeStage, activeUser, hasTopbarData]
-  );
+  const [hydratedItems, setHydratedItems] = useState<DashboardTopbarItem[]>([]);
 
-  const rawItems = preferStableTopbarItems(entry.items, storedItems, cachedItems, fallbackItems);
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!activeUser || !activeStage || !hasTopbarData) {
+      const resetTimer = window.setTimeout(() => {
+        if (!cancelled) {
+          setHydratedItems([]);
+        }
+      }, 0);
+
+      return () => {
+        cancelled = true;
+        window.clearTimeout(resetTimer);
+      };
+    }
+
+    const hydrateTimer = window.setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+
+      const storedItems = readStoredDashboardTopbarItems(activeStage, activeUser.id, { placeholderValues: true });
+      const cachedItems = getCachedStageTopbarItems(activeUser, activeStage);
+
+      setHydratedItems(cachedItems.length > storedItems.length ? cachedItems : storedItems);
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(hydrateTimer);
+    };
+  }, [activeStage, activeUser, hasTopbarData]);
+
+  const rawItems = preferStableTopbarItems(entry.items, hydratedItems, fallbackItems);
   const items = useMemo(
     () => activeStage
       ? rawItems.map((item) => ({
