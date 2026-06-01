@@ -2,11 +2,11 @@ import { Bitcoin, ChartPie, Coins, Landmark, Wallet } from "lucide-react";
 import { useMemo } from "react";
 
 import { DashboardTopbarTab } from "./dashboard-topbar-tab";
-import { readDashboardStageDataCache } from "./dashboard-stage-data-cache";
 import {
   resolveVisibleDashboardStage,
   type DashboardStageKey
 } from "./dashboard-stage-items";
+import { getCachedStageTopbarItems } from "./dashboard-topbar-cache";
 import {
   readStoredDashboardTopbarItems,
   useDashboardTopbarEntry,
@@ -30,22 +30,6 @@ const fallbackIcons = {
   investment: Wallet
 } satisfies Record<DashboardStageKey, typeof ChartPie>;
 const fallbackValue = "--";
-const euroFormatter = new Intl.NumberFormat("it-IT", {
-  currency: "EUR",
-  minimumFractionDigits: 2,
-  style: "currency"
-});
-
-function formatEuroCents(cents: number) {
-  return euroFormatter.format(cents / 100);
-}
-
-function getAbbreviatedLabel(label: string) {
-  const upper = label.replace(/_/g, " ").trim().toUpperCase();
-  const words = upper.split(/\s+/).filter(Boolean);
-
-  return words.length > 1 ? words.map((word) => word[0]).join("") : upper;
-}
 
 function getDashboardFallbackItems(activeUser: UserRecord, activeStage: DashboardStageKey): DashboardTopbarItem[] {
   if (activeStage === "dashboard") {
@@ -112,59 +96,6 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
     id: activeStage,
     value: fallbackValue
   }];
-}
-
-function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: DashboardStageKey): DashboardTopbarItem[] {
-  if (activeStage === "checking") {
-    const data = readDashboardStageDataCache("checking", activeUser.id, activeUser.checkingCount);
-    if (!data) {
-      return [];
-    }
-
-    const total = data.providers.reduce((sum, provider) => sum + provider.total, 0);
-
-    return [
-      {
-        active: true,
-        icon: Landmark,
-        id: "checking",
-        value: formatEuroCents(total)
-      },
-      ...data.providers.map((provider) => ({
-        active: false,
-        id: `checking:${provider.sourceInstitution}`,
-        label: getAbbreviatedLabel(provider.sourceInstitution),
-        value: formatEuroCents(provider.total)
-      }))
-    ];
-  }
-
-  if (activeStage === "investment" || activeStage === "crypto") {
-    const version = activeStage === "investment" ? activeUser.investmentCount : activeUser.cryptoCount;
-    const data = readDashboardStageDataCache(activeStage, activeUser.id, version);
-    if (!data) {
-      return [];
-    }
-
-    const RootIcon = activeStage === "investment" ? Wallet : Coins;
-
-    return [
-      {
-        active: true,
-        icon: RootIcon,
-        id: activeStage,
-        value: fallbackValue
-      },
-      ...data.providers.map((provider) => ({
-        active: false,
-        id: `${activeStage}:${provider.sourceInstitution}`,
-        label: getAbbreviatedLabel(provider.sourceInstitution),
-        value: fallbackValue
-      }))
-    ];
-  }
-
-  return [];
 }
 
 function preferStableTopbarItems(

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { seedDashboardStageDataCache } from "@/components/finance-shell/dashboard-stage-data-cache";
+import { getCachedStageTopbarItems } from "@/components/finance-shell/dashboard-topbar-cache";
 import { hasDashboardStageTopbarData } from "@/components/finance-shell/dashboard-topbar-visibility";
 import type { UserRecord } from "@/components/finance-shell/types";
 
@@ -27,5 +29,24 @@ describe("dashboard topbar shell", () => {
       ...emptyUser,
       hasBinanceCredentials: true
     }, "dashboard")).toBe(true);
+  });
+
+  it("ignores cached stage payloads without providers", () => {
+    const user: UserRecord = {
+      ...emptyUser,
+      id: "malformed-stage-cache",
+      checkingCount: 1,
+      cryptoCount: 1,
+      investmentCount: 1,
+      transactionCount: 3
+    };
+
+    seedDashboardStageDataCache("checking", user.id, user.checkingCount, {} as never);
+    seedDashboardStageDataCache("investment", user.id, user.investmentCount, { dailyData: [], monthlyData: [] } as never);
+    seedDashboardStageDataCache("crypto", user.id, user.cryptoCount, { dailyData: [], monthlyData: [] } as never);
+
+    expect(getCachedStageTopbarItems(user, "checking")).toEqual([]);
+    expect(getCachedStageTopbarItems(user, "investment")).toEqual([]);
+    expect(getCachedStageTopbarItems(user, "crypto")).toEqual([]);
   });
 });
