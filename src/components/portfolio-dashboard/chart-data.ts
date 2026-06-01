@@ -4,6 +4,7 @@ import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import type { MonthBucket, PortfolioBucket, PortfolioData, PortfolioProviderSummary, TimeRange } from "./types";
 
 const OPEN_HOLDING_THRESHOLD = 0.000001;
+const BINANCE_PROVIDER_KEY = "BINANCE";
 
 export function filterData(data: { monthly: MonthBucket[], daily: PortfolioBucket[] }, range: TimeRange): PortfolioBucket[] {
   if (range === "ALL") {
@@ -219,7 +220,9 @@ function applyLiveTodayPoint(
     todayPoint.balance = providerTotals.get(activeTab) ?? null;
 
     activeProvider?.products.forEach((product) => {
-      const productValue = getProductLiveValue(product, livePrices);
+      const productValue = getProductLiveValue(product, livePrices, {
+        allowInvestedValueFallback: activeProvider.sourceInstitution === BINANCE_PROVIDER_KEY
+      });
       if (Math.abs(product.quantity) > OPEN_HOLDING_THRESHOLD) {
         todayPoint[product.productName] = productValue;
       }
@@ -300,7 +303,9 @@ function getProviderLiveTotal(
       return;
     }
 
-    const productValue = getProductLiveValue(product, livePrices);
+    const productValue = getProductLiveValue(product, livePrices, {
+      allowInvestedValueFallback: provider.sourceInstitution === BINANCE_PROVIDER_KEY
+    });
     if (productValue === null) {
       hasHoldings = true;
       hasPendingPrice = true;
@@ -320,7 +325,8 @@ function getProviderLiveTotal(
 
 function getProductLiveValue(
   product: PortfolioProviderSummary["products"][number],
-  livePrices: Record<string, number | null>
+  livePrices: Record<string, number | null>,
+  { allowInvestedValueFallback = false }: { allowInvestedValueFallback?: boolean } = {}
 ) {
   if (Math.abs(product.quantity) <= OPEN_HOLDING_THRESHOLD) {
     return null;
@@ -331,5 +337,7 @@ function getProductLiveValue(
 
   return typeof livePrice === "number" && Number.isFinite(livePrice) && livePrice > 0
     ? Math.round(product.quantity * livePrice * 100)
-    : null;
+    : allowInvestedValueFallback && product.investedValue > 0
+      ? product.investedValue
+      : null;
 }

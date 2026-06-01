@@ -140,6 +140,44 @@ describe("portfolio chart data", () => {
     });
   });
 
+  it("uses synced Binance balance values when a Binance token has no live ticker", () => {
+    const dataWithBinance = mergePortfolioDataWithBinance(portfolioData, [
+      {
+        eurValue: 250.25,
+        freeAmount: 0.003,
+        lockedAmount: 0.001,
+        tokenName: "Bitcoin",
+        tokenSymbol: "BTC"
+      },
+      {
+        eurValue: 2.29,
+        freeAmount: 52.95,
+        lockedAmount: 0,
+        tokenName: "HOME",
+        tokenSymbol: "HOME"
+      }
+    ]);
+    const binanceProvider = dataWithBinance.providers.find((item) => item.sourceInstitution === "BINANCE");
+    const points = buildPortfolioChartData({
+      activeProvider: binanceProvider ?? null,
+      activeTab: "BINANCE",
+      data: dataWithBinance,
+      livePrices: {
+        BTC: 70000
+      },
+      timeRange: "ALL",
+      todayKey: "2026-03-15"
+    });
+    const todayPoint = points.find((point) => point.rawMonth === "2026-03-15");
+
+    expect(todayPoint).toMatchObject({
+      "Bitcoin (BTC)": 28000,
+      "HOME (HOME)": 229,
+      balance: 28229,
+      BINANCE: 28229
+    });
+  });
+
   it("keeps the current provider point pending until live prices are ready", () => {
     const points = buildPortfolioChartData({
       data: portfolioData,

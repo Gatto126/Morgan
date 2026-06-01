@@ -48,13 +48,10 @@ function getPriceRequestKey(
     : "";
 }
 
-function getRequiredPriceKeys(
-  summaries: ProviderSummary[] | undefined,
-  binanceBalances: BinanceBalanceRow[] | undefined
-) {
+function getRequiredPriceKeys(summaries: ProviderSummary[] | undefined) {
   return [
     ...getRequiredInvestmentPriceKeys(summaries),
-    ...getRequiredCryptoPriceKeys(summaries, binanceBalances)
+    ...getRequiredCryptoPriceKeys(summaries)
   ];
 }
 
@@ -76,11 +73,8 @@ function getRequiredInvestmentPriceKeys(summaries: ProviderSummary[] | undefined
   return [...keys].sort();
 }
 
-function getRequiredCryptoPriceKeys(
-  summaries: ProviderSummary[] | undefined,
-  binanceBalances: BinanceBalanceRow[] | undefined
-) {
-  const keys = new Set<string>(getBinanceLivePriceKeys(binanceBalances));
+function getRequiredCryptoPriceKeys(summaries: ProviderSummary[] | undefined) {
+  const keys = new Set<string>();
 
   for (const provider of summaries ?? []) {
     for (const token of provider.cryptoTokens) {
@@ -136,8 +130,8 @@ export function useDashboardLivePrices(
       isins: [...allIsins]
     }, { maxAgeMs: livePriceValueMaxAgeMs });
     const investmentKeys = getRequiredInvestmentPriceKeys(summaries);
-    const cryptoKeys = getRequiredCryptoPriceKeys(summaries, balances);
-    const requiredKeys = getRequiredPriceKeys(summaries, balances);
+    const cryptoKeys = getRequiredCryptoPriceKeys(summaries);
+    const requiredKeys = getRequiredPriceKeys(summaries);
     const requestKey = getPriceRequestKey(summaries, balances);
     const investmentReady = areLivePriceKeysValued(investmentKeys, prices);
     const cryptoReady = areLivePriceKeysValued(cryptoKeys, prices);
@@ -195,8 +189,8 @@ export function useDashboardLivePrices(
 
   const requestKey = getPriceRequestKey(providerSummaries, binanceBalances);
   const investmentKeys = getRequiredInvestmentPriceKeys(providerSummaries);
-  const cryptoKeys = getRequiredCryptoPriceKeys(providerSummaries, binanceBalances);
-  const requiredKeys = getRequiredPriceKeys(providerSummaries, binanceBalances);
+  const cryptoKeys = getRequiredCryptoPriceKeys(providerSummaries);
+  const requiredKeys = getRequiredPriceKeys(providerSummaries);
   const readyForRequest = requestKey === "" || readyRequestKey === requestKey;
   const cachedInvestmentReady = areLivePriceKeysValued(investmentKeys, livePrices);
   const cachedCryptoReady = areLivePriceKeysValued(cryptoKeys, livePrices);
