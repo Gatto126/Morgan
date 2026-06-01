@@ -92,6 +92,7 @@ export function DashboardStageStack({
     stages: new Set(),
     userId: null
   });
+  const [hasMountedClientDashboard, setHasMountedClientDashboard] = useState(false);
   const visibleStageKeys = useMemo(() => new Set(getVisibleDashboardStageKeys(activeUser)), [activeUser]);
   const visibleStageKey = useMemo(() => [...visibleStageKeys].join("|"), [visibleStageKeys]);
   const activeDashboardStage = resolveVisibleDashboardStage(stage, activeUser);
@@ -109,6 +110,12 @@ export function DashboardStageStack({
     nextKeys.add(activeDashboardStage);
     return nextKeys;
   }, [activeDashboardStage, activeUserId, visitedState]);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => setHasMountedClientDashboard(true));
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
 
   useEffect(() => {
     if (!activeUserId) {
@@ -172,6 +179,15 @@ export function DashboardStageStack({
 
   if (!activeUser) {
     return null;
+  }
+
+  if (!hasMountedClientDashboard) {
+    return (
+      <div
+        aria-hidden={!isDashboardStage ? "true" : undefined}
+        className={cn("absolute inset-0 z-10", !isDashboardStage && "pointer-events-none")}
+      />
+    );
   }
 
   return (
