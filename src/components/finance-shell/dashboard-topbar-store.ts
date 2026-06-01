@@ -126,7 +126,7 @@ function hasSameTopbarIdentity(previousItems: DashboardTopbarItem[], nextItems: 
     && previousItems.every((item, index) => item.id === nextItems[index]?.id);
 }
 
-function shouldDelayUnreadyTopbarPublish(
+function shouldDropUnreadyTopbarPublish(
   previousItems: DashboardTopbarItem[],
   nextItems: DashboardTopbarItem[]
 ) {
@@ -139,12 +139,8 @@ function shouldDelayUnreadyTopbarPublish(
     return false;
   }
 
-  return nextItems.some((nextItem, index) => {
-    const previousItem = previousItems[index];
-
-    return hasNonZeroTopbarValue(previousItem.value)
-      && (isPendingTopbarValue(nextItem.value) || isZeroOnlyTopbarValue(nextItem.value));
-  });
+  return !nextItems.some((item) => hasNonZeroTopbarValue(item.value))
+    && nextItems.every((item) => isPendingTopbarValue(item.value) || isZeroOnlyTopbarValue(item.value));
 }
 
 function shouldDropInitialZeroTopbarPublish(
@@ -253,14 +249,8 @@ export function publishDashboardTopbar(
     return;
   }
 
-  if (
-    shouldDelayUnreadyTopbarPublish(previousItems, items)
-  ) {
+  if (shouldDropUnreadyTopbarPublish(previousItems, items)) {
     clearDelayedTopbarPublish(cacheKey);
-    delayedTopbarPublishes.set(cacheKey, globalThis.setTimeout(() => {
-      delayedTopbarPublishes.delete(cacheKey);
-      commitDashboardTopbar(cacheKey, items);
-    }, 3_000));
     return;
   }
 

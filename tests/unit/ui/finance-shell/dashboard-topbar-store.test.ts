@@ -114,7 +114,7 @@ describe("dashboard topbar store", () => {
     }]);
   });
 
-  it("delays a zero downgrade so a transient refresh cannot overwrite live values", async () => {
+  it("keeps previous live values when a transient refresh publishes only zeroes", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     const store = await loadTopbarStoreModule();
@@ -134,7 +134,7 @@ describe("dashboard topbar store", () => {
 
     vi.advanceTimersByTime(3_000);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
   });
 
   it("drops an initial all-zero publish during bootstrap", async () => {
@@ -242,7 +242,7 @@ describe("dashboard topbar store", () => {
     expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
   });
 
-  it("clears stale all-zero stored values on the next bootstrap", async () => {
+  it("keeps persisted live values when a reload publishes only zeroes", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     let store = await loadTopbarStoreModule();
@@ -255,11 +255,8 @@ describe("dashboard topbar store", () => {
     store.publishDashboardTopbar("dashboard", "user-1", [{
       active: true,
       id: "heritage",
-      value: "0,00"
+      value: "123,45 \u20ac"
     }]);
-    vi.advanceTimersByTime(3_000);
-
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("0,00");
 
     store = await loadTopbarStoreModule();
     store.publishDashboardTopbar("dashboard", "user-1", [{
@@ -268,7 +265,7 @@ describe("dashboard topbar store", () => {
       value: "0,00"
     }]);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
   });
 
   it("clears persisted topbar layout when publishing an empty topbar", async () => {
