@@ -7,7 +7,7 @@ export const PRICE_REQUEST_LIMITS = {
 } as const;
 
 const ISIN_PATTERN = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
-const CRYPTO_SYMBOL_PATTERN = /^[A-Z0-9]{2,15}$/;
+const CRYPTO_SYMBOL_PATTERN = /^[A-Z0-9]{1,15}$/;
 
 export class PriceRequestValidationError extends Error {
   constructor(

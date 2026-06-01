@@ -23,6 +23,13 @@ const balances: BinanceBalanceRow[] = [
     tokenSymbol: "USDC"
   },
   {
+    eurValue: 0,
+    freeAmount: 42,
+    lockedAmount: 0,
+    tokenName: "Unpriced",
+    tokenSymbol: "UNPRICED"
+  },
+  {
     eurValue: 12,
     freeAmount: 0,
     lockedAmount: 0,
@@ -32,7 +39,7 @@ const balances: BinanceBalanceRow[] = [
 ];
 
 describe("Binance live values", () => {
-  it("collects live price keys only for positive balances", () => {
+  it("collects live price keys only for positive priced balances", () => {
     expect(getBinanceLivePriceKeys(balances)).toEqual(["BTC", "USDC"]);
   });
 

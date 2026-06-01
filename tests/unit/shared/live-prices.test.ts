@@ -7,6 +7,7 @@ import {
   globalLivePricesCacheUpdatedAt,
   saveLivePricesToCache
 } from "@/shared/live-prices";
+import { PRICE_REQUEST_LIMITS } from "@/domain/pricing/price-request";
 
 function clearLivePriceCache() {
   for (const key of Object.keys(globalLivePricesCache)) {
@@ -171,5 +172,33 @@ describe("live price client cache", () => {
         IE00B4L5Y983: 123
       }
     ]);
+  });
+
+  it("splits large live price refreshes into API-sized batches", async () => {
+    const cryptos = Array.from(
+      { length: PRICE_REQUEST_LIMITS.maxCryptos + 3 },
+      (_, index) => `C${index.toString().padStart(2, "0")}`
+    );
+    const fetchMock = vi.fn(async (url: string) => {
+      const requestUrl = new URL(url, "http://localhost");
+      const requestedCryptos = requestUrl.searchParams.get("cryptos")?.split(",") ?? [];
+      return {
+        ok: true,
+        json: async () => Object.fromEntries(requestedCryptos.map((symbol) => [symbol, 1]))
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchAndCacheLivePrices({ cryptos })).resolves.toEqual(
+      Object.fromEntries(cryptos.map((symbol) => [symbol, 1]))
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      `/api/prices?cryptos=${cryptos.slice(0, PRICE_REQUEST_LIMITS.maxCryptos).join("%2C")}`
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      `/api/prices?cryptos=${cryptos.slice(PRICE_REQUEST_LIMITS.maxCryptos).join("%2C")}`
+    );
   });
 });

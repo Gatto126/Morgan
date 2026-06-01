@@ -14,12 +14,19 @@ export function getBinanceBalanceLivePriceKey(balance: BinanceBalanceRow) {
 
 export function getBinanceLivePriceKeys(balances: BinanceBalanceRow[] | undefined) {
   const keys = new Set<string>();
+  const pricedBalances = [...balances ?? []]
+    .filter((balance) =>
+      Math.abs(getBinanceBalanceQuantity(balance)) > NON_ZERO_THRESHOLD &&
+      balance.eurValue > 0
+    )
+    .sort((a, b) => {
+      const valueDelta = b.eurValue - a.eurValue;
+      return valueDelta !== 0
+        ? valueDelta
+        : (getBinanceBalanceLivePriceKey(a) ?? "").localeCompare(getBinanceBalanceLivePriceKey(b) ?? "");
+    });
 
-  for (const balance of balances ?? []) {
-    if (Math.abs(getBinanceBalanceQuantity(balance)) <= NON_ZERO_THRESHOLD) {
-      continue;
-    }
-
+  for (const balance of pricedBalances) {
     const key = getBinanceBalanceLivePriceKey(balance);
     if (key) {
       keys.add(key);

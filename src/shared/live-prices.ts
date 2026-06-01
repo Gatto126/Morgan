@@ -1,4 +1,5 @@
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
+import { PRICE_REQUEST_LIMITS } from "@/domain/pricing/price-request";
 
 export const globalLivePricesCache: Record<string, number | null> = {};
 export const globalLivePricesCacheUpdatedAt: Record<string, number> = {};
@@ -29,6 +30,8 @@ type LivePriceRequest = {
 type LivePriceRequestOptions = {
   maxAgeMs?: number;
 };
+
+type NormalizedLivePriceRequest = Required<LivePriceRequest>;
 
 function normalizeKeys(keys: string[] | undefined, kind: "isin" | "crypto") {
   return [
@@ -86,7 +89,7 @@ function collectPendingAndMissingKeys(
 }
 
 function trackInFlightRequest(
-  request: Required<LivePriceRequest>,
+  request: NormalizedLivePriceRequest,
   requestPromise: Promise<Record<string, number | null>>
 ) {
   const trackingKeys = [
@@ -105,6 +108,53 @@ function trackInFlightRequest(
       }
     }
   });
+}
+
+function buildPriceRequestUrl({ isins, cryptos }: NormalizedLivePriceRequest) {
+  const params = new URLSearchParams();
+  if (isins.length > 0) {
+    params.set("isins", isins.join(","));
+  }
+  if (cryptos.length > 0) {
+    params.set("cryptos", cryptos.join(","));
+  }
+
+  return `/api/prices?${params.toString()}`;
+}
+
+function makeLivePriceRequestBatches(
+  isins: string[],
+  cryptos: string[]
+): NormalizedLivePriceRequest[] {
+  const batches: NormalizedLivePriceRequest[] = [];
+  let isinIndex = 0;
+  let cryptoIndex = 0;
+
+  while (isinIndex < isins.length || cryptoIndex < cryptos.length) {
+    const batchIsins = isins.slice(
+      isinIndex,
+      isinIndex + Math.min(PRICE_REQUEST_LIMITS.maxIsins, PRICE_REQUEST_LIMITS.maxTotalKeys)
+    );
+    isinIndex += batchIsins.length;
+
+    const remainingTotalSlots = PRICE_REQUEST_LIMITS.maxTotalKeys - batchIsins.length;
+    const batchCryptos = cryptos.slice(
+      cryptoIndex,
+      cryptoIndex + Math.min(PRICE_REQUEST_LIMITS.maxCryptos, remainingTotalSlots)
+    );
+    cryptoIndex += batchCryptos.length;
+
+    if (batchIsins.length === 0 && batchCryptos.length === 0) {
+      break;
+    }
+
+    batches.push({
+      cryptos: batchCryptos,
+      isins: batchIsins
+    });
+  }
+
+  return batches;
 }
 
 export function getLivePriceRequestKey({ isins, cryptos }: LivePriceRequest) {
@@ -141,25 +191,14 @@ export async function fetchAndCacheLivePrices(
     "crypto",
     pendingRequests
   );
-  const requestKey = getLivePriceRequestKey({
-    isins: missingIsins,
-    cryptos: missingCryptos
-  });
+  const requestBatches = makeLivePriceRequestBatches(missingIsins, missingCryptos);
 
-  if (!requestKey && pendingRequests.size === 0) {
+  if (requestBatches.length === 0 && pendingRequests.size === 0) {
     return cachedPrices;
   }
 
-  if (requestKey) {
-    const params = new URLSearchParams();
-    if (missingIsins.length > 0) {
-      params.set("isins", missingIsins.join(","));
-    }
-    if (missingCryptos.length > 0) {
-      params.set("cryptos", missingCryptos.join(","));
-    }
-
-    const requestPromise = fetch(`/api/prices?${params.toString()}`, livePriceFetchOptions)
+  for (const batch of requestBatches) {
+    const requestPromise = fetch(buildPriceRequestUrl(batch), livePriceFetchOptions)
       .then(async (response) => {
         if (!response.ok) {
           return {};
@@ -171,7 +210,7 @@ export async function fetchAndCacheLivePrices(
       })
       .catch(() => ({}));
 
-    trackInFlightRequest({ cryptos: missingCryptos, isins: missingIsins }, requestPromise);
+    trackInFlightRequest(batch, requestPromise);
     pendingRequests.add(requestPromise);
   }
 

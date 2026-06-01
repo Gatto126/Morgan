@@ -25,12 +25,12 @@ describe("price request validation", () => {
   it("normalizes and deduplicates ISINs and crypto symbols", () => {
     expect(
       parsePriceRequestParams(
-        params("isins=ie00b4l5y983, IE00B4L5Y983&cryptos=btc,BTC,eth,XF000BTC0017")
+        params("isins=ie00b4l5y983, IE00B4L5Y983&cryptos=btc,BTC,eth,s,t,XF000BTC0017")
       )
     ).toEqual({
       isins: ["IE00B4L5Y983"],
-      cryptos: ["BTC", "ETH"],
-      keys: ["IE00B4L5Y983", "BTC", "ETH"]
+      cryptos: ["BTC", "ETH", "S", "T"],
+      keys: ["IE00B4L5Y983", "BTC", "ETH", "S", "T"]
     });
   });
 
