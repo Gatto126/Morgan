@@ -75,6 +75,9 @@ export async function importPreviewTransactions(
   const transactionsToCreate = uniqueTransactions.filter(
     (transaction) => !existingFingerprints.has(transaction.fingerprint)
   );
+  let insertedCheckingCount = 0;
+  let insertedCryptoCount = 0;
+  let insertedInvestmentCount = 0;
 
   if (transactionsToCreate.length > 0) {
     const checkingData: CheckingTransactionCreateManyInput[] = [];
@@ -192,6 +195,9 @@ export async function importPreviewTransactions(
       investmentData,
       cryptoData
     });
+    insertedCheckingCount = checkingData.length;
+    insertedCryptoCount = cryptoData.length;
+    insertedInvestmentCount = investmentData.length;
 
     // Extract unique ISINs from transactions to create
     const isinsToProcess = new Set<string>();
@@ -309,7 +315,11 @@ export async function importPreviewTransactions(
 
   return {
     insertedCount: transactionsToCreate.length,
+    insertedCheckingCount,
+    insertedCryptoCount,
+    insertedFingerprints: transactionsToCreate.map((transaction) => transaction.fingerprint),
+    insertedInvestmentCount,
+    insertedRecordCount: insertedCheckingCount + insertedCryptoCount + insertedInvestmentCount,
     skippedCount: uniqueTransactions.length - transactionsToCreate.length,
-    insertedFingerprints: transactionsToCreate.map((transaction) => transaction.fingerprint)
   };
 }

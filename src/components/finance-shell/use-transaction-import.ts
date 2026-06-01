@@ -39,9 +39,15 @@ export function countImportedTransactionsByAccountType(
     }
 
     const accountType = getPreviewAccountType(transaction);
-    if (accountType === "checking") addedChecking++;
-    else if (accountType === "investment") addedInvestment++;
-    else if (accountType === "crypto") addedCrypto++;
+    if (accountType === "checking") {
+      addedChecking++;
+    } else if (accountType === "investment") {
+      addedChecking++;
+      addedInvestment++;
+    } else if (accountType === "crypto") {
+      addedChecking++;
+      addedCrypto++;
+    }
   });
 
   return {
@@ -218,7 +224,11 @@ export function useTransactionImport({
 
       const payload = (await response.json()) as {
         insertedCount?: number;
+        insertedCheckingCount?: number;
+        insertedCryptoCount?: number;
         skippedCount?: number;
+        insertedInvestmentCount?: number;
+        insertedRecordCount?: number;
         insertedFingerprints?: string[];
         error?: string;
       };
@@ -263,14 +273,16 @@ export function useTransactionImport({
           addedCrypto,
           addedInvestment
         } = countImportedTransactionsByAccountType(previewTransactions, insertedFingerprintSet);
+        const recordCount = payload.insertedRecordCount
+          ?? (addedChecking + addedInvestment + addedCrypto);
 
         importOverlayCloseLockedRef.current = true;
         importOverlayCloseRequestedRef.current = false;
         await Promise.resolve(onImportedTransactions({
-          insertedCount,
-          addedChecking,
-          addedInvestment,
-          addedCrypto
+          insertedCount: recordCount,
+          addedChecking: payload.insertedCheckingCount ?? addedChecking,
+          addedInvestment: payload.insertedInvestmentCount ?? addedInvestment,
+          addedCrypto: payload.insertedCryptoCount ?? addedCrypto
         })).catch(() => undefined);
         await waitForImportRefreshVisualRequest();
         importOverlayCloseLockedRef.current = false;

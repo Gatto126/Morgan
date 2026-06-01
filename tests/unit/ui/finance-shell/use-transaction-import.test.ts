@@ -56,7 +56,7 @@ describe("transaction import count helpers", () => {
       transactions,
       new Set(["bbva-1", "tr-investment", "tr-crypto", "tr-checking"])
     )).toEqual({
-      addedChecking: 2,
+      addedChecking: 4,
       addedCrypto: 1,
       addedInvestment: 1
     });

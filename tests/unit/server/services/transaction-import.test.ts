@@ -138,4 +138,34 @@ describe("transaction import service", () => {
     expect(mocks.fetchCryptoHistory).toHaveBeenCalledTimes(8);
     expect(historyTracker.getMaxActive()).toBeLessThanOrEqual(3);
   });
+
+  it("returns persisted record counts including cash-side rows", async () => {
+    const repository = createRepository();
+    mocks.fetchAssetMetadata.mockResolvedValue({ isin: "DE0000000001" });
+    const transactions = [
+      createTransaction({
+        accountType: "checking",
+        fingerprint: "checking-1"
+      }),
+      createTransaction({
+        accountType: "investment",
+        fingerprint: "investment-1"
+      }),
+      createTransaction({
+        accountType: "crypto",
+        fingerprint: "crypto-1",
+        isin: "BTC",
+        productName: "Bitcoin",
+        tradeType: null
+      })
+    ];
+
+    await expect(importPreviewTransactions("profile-1", transactions, "statement.csv", repository)).resolves.toMatchObject({
+      insertedCheckingCount: 3,
+      insertedCount: 3,
+      insertedCryptoCount: 1,
+      insertedInvestmentCount: 1,
+      insertedRecordCount: 5
+    });
+  });
 });

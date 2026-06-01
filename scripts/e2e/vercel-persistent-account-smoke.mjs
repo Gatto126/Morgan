@@ -68,6 +68,7 @@ const browserErrors = [];
 const httpErrors = [];
 const steps = [];
 const screenshots = [];
+const diagnosticsSnapshots = [];
 
 if (!testEmail || !testPassword) {
   throw new Error("Set MORGAN_TEST_EMAIL and MORGAN_TEST_PASSWORD, or create .env.e2e.local, to run the persistent-account smoke test.");
@@ -139,6 +140,59 @@ async function saveScreenshot(page, name) {
   return saveE2eScreenshot(page, outDir, name, { screenshots });
 }
 
+function summarizeDiagnostics(records) {
+  return (Array.isArray(records) ? records : []).map((record) => ({
+    dataFetchDurationMs: record.dataFetchDurationMs ?? null,
+    event: record.event ?? null,
+    key: record.key ?? null,
+    livePriceFetchDurationMs: record.livePriceFetchDurationMs ?? null,
+    livePriceStatus: record.livePriceStatus ?? null,
+    maxQuoteAgeMs: record.maxQuoteAgeMs ?? null,
+    missingKeys: record.missingKeys ?? [],
+    priority: record.priority ?? null,
+    quoteCount: record.quoteCount ?? 0,
+    requestedLiveKeys: record.requestedLiveKeys ?? [],
+    stage: record.stage ?? null,
+    status: record.status ?? null,
+    unavailableKeys: record.unavailableKeys ?? [],
+    userId: record.userId ?? null,
+    version: record.version ?? null
+  }));
+}
+
+async function collectFinanceDiagnostics(page, label) {
+  const diagnostics = await page.evaluate(() => {
+    if (typeof window.morganFinanceDiagnostics !== "function") {
+      return { available: false, records: [] };
+    }
+
+    return {
+      available: true,
+      records: window.morganFinanceDiagnostics()
+    };
+  });
+  const snapshot = {
+    available: diagnostics.available,
+    label,
+    records: summarizeDiagnostics(diagnostics.records)
+  };
+
+  diagnosticsSnapshots.push(snapshot);
+  return snapshot;
+}
+
+function expectDiagnosticStageVersion(snapshot, stage, version) {
+  const matchingRecord = snapshot.records.find((record) =>
+    record.stage === stage &&
+    record.version === version
+  );
+
+  assert(
+    matchingRecord,
+    `${snapshot.label}: missing ${stage} diagnostics for version ${version}: ${JSON.stringify(snapshot.records)}`
+  );
+}
+
 async function waitForServer() {
   await waitForHealthCheck(baseUrl, { timeoutMs: 60_000 });
 }
@@ -169,6 +223,7 @@ async function login(page) {
   await page.locator('button[aria-label="Log in"]').click();
   await page.locator('main[data-finance-shell-ready="true"]').waitFor({ state: "attached", timeout: 45_000 });
   await expectNoOverlay(page, "after login");
+  await collectFinanceDiagnostics(page, "after login");
   steps.push("logged_in_persistent_account");
 }
 
@@ -222,6 +277,7 @@ async function createSmokeProfile(page) {
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator('main[data-finance-shell-ready="true"]').waitFor({ state: "attached", timeout: 30_000 });
   await page.getByRole("heading", { name: "Upload", exact: true }).waitFor({ state: "visible", timeout: 30_000 });
+  await collectFinanceDiagnostics(page, "after profile create");
   steps.push("created_smoke_profile");
 
   return payload.user;
@@ -288,19 +344,23 @@ async function exerciseDashboards(page) {
   await clickStage(page, "Dashboard");
   await waitForAny(page.getByText("TRADE REPUBLIC", { exact: true }), "dashboard Trade Republic provider", 45_000);
   const dashboardTopbar = await expectStableTopbarValues(page, "dashboard topbar", { minimumNumeric: 3 });
+  await collectFinanceDiagnostics(page, "dashboard ready");
   await saveScreenshot(page, "01-dashboard-after-import.png");
 
   await clickStage(page, "Investments");
   await waitForAny(page.getByText("Core MSCI World", { exact: false }), "investment product", 45_000);
   const investmentTopbar = await expectStableTopbarValues(page, "investment topbar");
+  await collectFinanceDiagnostics(page, "investment ready");
 
   await clickStage(page, "Crypto");
   await waitForAny(page.getByText("Bitcoin", { exact: false }), "crypto product", 45_000);
   const cryptoTopbar = await expectStableTopbarValues(page, "crypto topbar");
+  await collectFinanceDiagnostics(page, "crypto ready");
 
   await clickStage(page, "Checking");
   await waitForAny(page.getByText("CHECKING", { exact: true }), "checking title", 45_000);
   const checkingTopbar = await expectStableTopbarValues(page, "checking topbar");
+  await collectFinanceDiagnostics(page, "checking ready");
   steps.push("verified_dashboard_investment_crypto_checking_topbars");
 
   return {
@@ -338,10 +398,12 @@ async function connectBinance(page) {
   await clickStage(page, "Binance");
   await waitForAny(page.getByText("BINANCE", { exact: true }), "Binance dashboard", 45_000);
   const binanceTopbar = await expectStableTopbarValues(page, "binance topbar");
+  await collectFinanceDiagnostics(page, "binance ready");
 
   await clickStage(page, "Crypto");
   await waitForAny(page.getByText("BINANCE", { exact: true }), "Binance card in crypto dashboard", 45_000);
   const cryptoWithBinanceTopbar = await expectStableTopbarValues(page, "crypto topbar with Binance");
+  await collectFinanceDiagnostics(page, "crypto with binance ready");
   steps.push("connected_binance_and_verified_topbars");
 
   return {
@@ -383,6 +445,11 @@ try {
   const profile = await createSmokeProfile(page);
   createdProfileId = profile.id;
   const profileAfterImport = await importSmokeTransactions(page);
+  const importDiagnostics = await collectFinanceDiagnostics(page, "after import");
+  expectDiagnosticStageVersion(importDiagnostics, "dashboard", profileAfterImport.transactionCount);
+  expectDiagnosticStageVersion(importDiagnostics, "checking", profileAfterImport.checkingCount);
+  expectDiagnosticStageVersion(importDiagnostics, "investment", profileAfterImport.investmentCount);
+  expectDiagnosticStageVersion(importDiagnostics, "crypto", profileAfterImport.cryptoCount);
   const topbarChecks = await exerciseDashboards(page);
   const binanceResult = await connectBinance(page);
 
@@ -409,6 +476,7 @@ try {
     profileAfterImport,
     topbarChecks,
     binanceResult,
+    diagnosticsSnapshots,
     steps,
     screenshots,
     browserErrors,
@@ -434,6 +502,7 @@ try {
     cleanupBeforeRun,
     cleanupAfterRun,
     steps,
+    diagnosticsSnapshots,
     error: error instanceof Error ? error.message : String(error),
     screenshots,
     browserErrors,
