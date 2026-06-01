@@ -146,7 +146,7 @@ export function usePortfolioLivePrices({
   }, [binanceBalances, providers, fetchLivePrices, priceQueryParam, shouldLoad]);
 
   useEffect(() => {
-    if (!isActive || !providers) return;
+    if ((!isActive && !shouldLoad) || !providers) return;
 
     const initialLoad = window.setTimeout(() => {
       void fetchLivePrices(providers, binanceBalances);
@@ -166,7 +166,7 @@ export function usePortfolioLivePrices({
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [binanceBalances, providers, fetchLivePrices, isActive]);
+  }, [binanceBalances, providers, fetchLivePrices, isActive, shouldLoad]);
 
   const requestKey = getPriceRequestKey(providers, priceQueryParam, binanceBalances);
   const requiredKeys = getRequiredPriceKeys(providers, priceQueryParam);

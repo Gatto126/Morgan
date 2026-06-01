@@ -177,7 +177,7 @@ export function useDashboardLivePrices(
   }, [binanceBalances, providerSummaries, fetchLivePrices, shouldLoad]);
 
   useEffect(() => {
-    if (!isActive) {
+    if (!isActive && !shouldLoad) {
       return;
     }
 
@@ -202,7 +202,7 @@ export function useDashboardLivePrices(
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [binanceBalances, providerSummaries, fetchLivePrices, isActive]);
+  }, [binanceBalances, providerSummaries, fetchLivePrices, isActive, shouldLoad]);
 
   const requestKey = getPriceRequestKey(providerSummaries, binanceBalances);
   const investmentKeys = getRequiredInvestmentPriceKeys(providerSummaries);

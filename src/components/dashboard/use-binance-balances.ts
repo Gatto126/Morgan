@@ -117,16 +117,20 @@ export function useBinanceBalances({
   }, [fetchBinanceBalances, binanceRefreshKey, shouldLoad, userId]);
 
   useEffect(() => {
-    if (!isActive) {
+    if (!isActive && !shouldLoad) {
       return;
     }
 
     const interval = window.setInterval(() => void fetchBinanceBalances(true), 600_000);
+    const handleFocus = () => void fetchBinanceBalances(true);
+
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
     };
-  }, [fetchBinanceBalances, binanceRefreshKey, isActive]);
+  }, [fetchBinanceBalances, binanceRefreshKey, isActive, shouldLoad]);
 
   return {
     binanceBalances,
