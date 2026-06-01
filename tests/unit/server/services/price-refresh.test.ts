@@ -31,6 +31,16 @@ describe("price refresh service", () => {
     expect(limiter.getRetryAfterMs("user-1")).toBeNull();
   });
 
+  it("allows the default login and dashboard warmup burst", () => {
+    let now = 0;
+    const limiter = new InMemoryPriceRateLimiter({ now: () => now });
+
+    for (let index = 0; index < 30; index += 1) {
+      expect(limiter.getRetryAfterMs("user-1")).toBeNull();
+      now += 250;
+    }
+  });
+
   it("combines live prices with historical fallbacks", async () => {
     const repository = {
       listLatestHistoricalPrices: vi.fn(async () => new Map([
