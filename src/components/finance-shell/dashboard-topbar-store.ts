@@ -325,6 +325,10 @@ export function clearDashboardTopbar(stage: DashboardStageKey, userId: string) {
   emitTopbarChange();
 }
 
+export function readDashboardTopbarItems(stage: DashboardStageKey, userId: string) {
+  return entries.get(getEntryKey(userId, stage))?.items ?? [];
+}
+
 export function useDashboardTopbarEntry(userId: string | null, stage: DashboardStageKey | null) {
   return useSyncExternalStore(
     subscribeTopbar,

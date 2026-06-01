@@ -1,11 +1,12 @@
 import { Bitcoin, ChartPie, Coins, Landmark, Wallet } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 
 import { DashboardTopbarTab } from "./dashboard-topbar-tab";
 import {
   resolveVisibleDashboardStage,
   type DashboardStageKey
 } from "./dashboard-stage-items";
+import { seedCurrentDashboardStageTopbars } from "./dashboard-topbar-current-values";
 import { getCachedStageTopbarItems } from "./dashboard-topbar-cache";
 import {
   readStoredDashboardTopbarItems,
@@ -15,9 +16,11 @@ import {
 import { hasDashboardStageTopbarData } from "./dashboard-topbar-visibility";
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
+import { LIVE_PRICES_UPDATED_EVENT } from "@/shared/live-prices";
 
 type DashboardTopbarShellProps = {
   activeUser: UserRecord | null;
+  binanceRefreshKey?: number;
   isDashboardStage: boolean;
   stage: Stage;
 };
@@ -135,6 +138,7 @@ function getFallbackIcon(activeStage: DashboardStageKey, item: DashboardTopbarIt
 
 export function DashboardTopbarShell({
   activeUser,
+  binanceRefreshKey = 0,
   isDashboardStage,
   stage
 }: DashboardTopbarShellProps) {
@@ -150,6 +154,27 @@ export function DashboardTopbarShell({
     [activeStage, activeUser, hasTopbarData]
   );
   const [hydratedItems, setHydratedItems] = useState<DashboardTopbarItem[]>([]);
+
+  useLayoutEffect(() => {
+    if (!activeUser) {
+      return;
+    }
+
+    seedCurrentDashboardStageTopbars(activeUser, binanceRefreshKey);
+  }, [activeStage, activeUser, binanceRefreshKey]);
+
+  useEffect(() => {
+    if (!activeUser) {
+      return;
+    }
+
+    const handleLivePricesUpdated = () => {
+      seedCurrentDashboardStageTopbars(activeUser, binanceRefreshKey);
+    };
+
+    window.addEventListener(LIVE_PRICES_UPDATED_EVENT, handleLivePricesUpdated);
+    return () => window.removeEventListener(LIVE_PRICES_UPDATED_EVENT, handleLivePricesUpdated);
+  }, [activeUser, binanceRefreshKey]);
 
   useEffect(() => {
     let cancelled = false;

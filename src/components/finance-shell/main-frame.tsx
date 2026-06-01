@@ -98,6 +98,7 @@ export function FinanceShellMainFrame({
               <div ref={dashboardTabsPortalRef} id="dashboard-tabs-portal" className="flex h-full min-w-0 flex-1 items-center overflow-x-auto hide-scrollbar mr-2">
                 <DashboardTopbarShell
                   activeUser={activeUser}
+                  binanceRefreshKey={binanceRefreshKey}
                   isDashboardStage={isDashboardStage}
                   stage={stage}
                 />
