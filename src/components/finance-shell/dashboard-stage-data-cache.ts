@@ -16,6 +16,7 @@ type DashboardStageDataMap = {
 type DashboardStageDataEntry<TData> = {
   data?: TData;
   fetchedAt: number;
+  force?: boolean;
   promise?: Promise<TData>;
 };
 
@@ -225,7 +226,7 @@ export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
   const cacheKey = getDashboardStageCacheKey(stage, userId, version);
   const existingEntry = dashboardStageDataCache.get(cacheKey);
 
-  if (force && existingEntry?.promise) {
+  if (force && existingEntry?.promise && existingEntry.force) {
     return existingEntry.promise as Promise<DashboardStageDataMap[TStage]>;
   }
 
@@ -261,22 +262,26 @@ export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
       }
 
       const fetchedAt = Date.now();
-      dashboardStageDataCache.set(cacheKey, {
-        data: payload,
-        fetchedAt
-      });
-      writeStoredDashboardStageData(cacheKey, stage, userId, version, payload, fetchedAt);
+      if (dashboardStageDataCache.get(cacheKey)?.promise === promise) {
+        dashboardStageDataCache.set(cacheKey, {
+          data: payload,
+          fetchedAt
+        });
+        writeStoredDashboardStageData(cacheKey, stage, userId, version, payload, fetchedAt);
+      }
 
       return payload;
     })
     .catch((error: unknown) => {
-      if (existingEntry?.data !== undefined) {
-        dashboardStageDataCache.set(cacheKey, {
-          data: existingEntry.data,
-          fetchedAt: existingEntry.fetchedAt
-        });
-      } else {
-        dashboardStageDataCache.delete(cacheKey);
+      if (dashboardStageDataCache.get(cacheKey)?.promise === promise) {
+        if (existingEntry?.data !== undefined) {
+          dashboardStageDataCache.set(cacheKey, {
+            data: existingEntry.data,
+            fetchedAt: existingEntry.fetchedAt
+          });
+        } else {
+          dashboardStageDataCache.delete(cacheKey);
+        }
       }
       throw error;
     });
@@ -284,6 +289,7 @@ export async function fetchDashboardStageData<TStage extends DashboardStageKey>(
   dashboardStageDataCache.set(cacheKey, {
     data: force ? undefined : existingEntry?.data,
     fetchedAt: existingEntry?.fetchedAt ?? 0,
+    force,
     promise
   });
 

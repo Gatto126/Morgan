@@ -102,6 +102,34 @@ describe("dashboard stage data cache", () => {
     await expect(secondRequest).resolves.toEqual(payload);
   });
 
+  it("does not reuse a normal in-flight request for a force refresh", async () => {
+    const normalPayload = { balances: [{ eurValue: 0, tokenSymbol: "BTC" }] };
+    const forcePayload = { balances: [{ eurValue: 100, tokenSymbol: "BTC" }] };
+    let resolveNormalFetch: (response: Response) => void = () => undefined;
+    let resolveForceFetch: (response: Response) => void = () => undefined;
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(new Promise<Response>((resolve) => {
+        resolveNormalFetch = resolve;
+      }))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => {
+        resolveForceFetch = resolve;
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cache = await loadCacheModule();
+    const normalRequest = cache.fetchDashboardStageData("binance", "user-1", { version: 3 });
+    const forceRequest = cache.fetchDashboardStageData("binance", "user-1", { force: true, version: 3 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    resolveForceFetch(jsonResponse(forcePayload));
+    resolveNormalFetch(jsonResponse(normalPayload));
+
+    await expect(forceRequest).resolves.toEqual(forcePayload);
+    await expect(normalRequest).resolves.toEqual(normalPayload);
+    expect(cache.readDashboardStageDataCache("binance", "user-1", 3)).toEqual(forcePayload);
+  });
+
   it("force refresh bypasses cached data", async () => {
     const fetchMock = vi
       .fn()
