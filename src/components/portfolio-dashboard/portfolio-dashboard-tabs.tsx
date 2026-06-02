@@ -53,7 +53,10 @@ export function PortfolioDashboardTabs({
     [RootIcon, activePoint, activeTab, isTooltipActive, onSelectTab, stage, tabs, valuesKnown]
   );
 
-  usePublishDashboardTopbar(stage, userId, items, { transient: isTooltipActive });
+  usePublishDashboardTopbar(stage, userId, items, {
+    transient: isTooltipActive,
+    uiOnly: !isTooltipActive
+  });
 
   return null;
 }

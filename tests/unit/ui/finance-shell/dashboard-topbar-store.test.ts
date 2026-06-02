@@ -511,4 +511,77 @@ describe("dashboard topbar store", () => {
 
     expect(store.readDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
   });
+
+  it("updates topbar UI state without overwriting committed values", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("checking", "user-1", [
+      {
+        active: true,
+        id: "checking",
+        value: "4.485,13 \u20ac"
+      },
+      {
+        active: false,
+        id: "checking:bbva",
+        label: "BBVA",
+        value: "3.396,74 \u20ac"
+      },
+      {
+        active: false,
+        id: "checking:trade_republic",
+        label: "TR",
+        value: "1.088,39 \u20ac"
+      }
+    ]);
+    store.publishDashboardTopbar("checking", "user-1", [
+      {
+        active: false,
+        id: "checking",
+        value: "999,99 \u20ac"
+      },
+      {
+        active: false,
+        id: "checking:bbva",
+        label: "BBVA",
+        value: "999,99 \u20ac"
+      },
+      {
+        active: true,
+        id: "checking:trade_republic",
+        label: "TR",
+        value: "999,99 \u20ac"
+      }
+    ], { uiOnly: true });
+
+    expect(store.readDashboardTopbarItems("checking", "user-1").map((item) => [item.id, item.active, item.value])).toEqual([
+      ["checking", false, "4.485,13 \u20ac"],
+      ["checking:bbva", false, "3.396,74 \u20ac"],
+      ["checking:trade_republic", true, "1.088,39 \u20ac"]
+    ]);
+  });
+
+  it("clears transient values when a UI-only resting publish arrives", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "123,45 \u20ac"
+    }]);
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "456,78 \u20ac"
+    }], { transient: true });
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "999,99 \u20ac"
+    }], { uiOnly: true });
+
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+  });
 });

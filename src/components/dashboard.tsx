@@ -307,8 +307,6 @@ export function Dashboard({
         visibleTabs={visibleTabs}
         activeTab={activeTab}
         activePoint={data ? topbarPoint : null}
-        seedPoint={data ? currentPoint : null}
-        data={data}
         isTooltipActive={!!activeChartPoint}
         cryptoValuesKnown={topbarCryptoValuesKnown}
         investmentValuesKnown={topbarInvestmentValuesKnown}

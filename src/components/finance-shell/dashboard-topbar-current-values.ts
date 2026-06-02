@@ -1,4 +1,4 @@
-import { Coins, Landmark, Wallet } from "lucide-react";
+import { Bitcoin, ChartPie, Coins, Landmark, Wallet } from "lucide-react";
 
 import { formatEuroCents } from "@/components/dashboard/formatters";
 
@@ -55,6 +55,30 @@ function seedCheckingTopbar(user: UserRecord, snapshot: CurrentValuationSnapshot
   ]);
 }
 
+function seedDashboardTopbar(user: UserRecord, snapshot: CurrentValuationSnapshot) {
+  const items = selectCurrentValuationTopbar(snapshot, "dashboard");
+
+  if (items.length === 0) {
+    return;
+  }
+
+  const iconById: Record<string, typeof ChartPie> = {
+    checking: Landmark,
+    crypto: Coins,
+    heritage: ChartPie,
+    investment: Wallet
+  };
+
+  seedDashboardTopbarLayout("dashboard", user.id, items.map((item, index) => ({
+    active: index === 0,
+    animateChanges: item.id !== "checking",
+    ariaLabel: `${item.id.toUpperCase()} dashboard tab`,
+    icon: iconById[item.id] ?? ChartPie,
+    id: item.id,
+    value: formatValuationValue(item)
+  })));
+}
+
 function seedInvestmentTopbar(user: UserRecord, snapshot: CurrentValuationSnapshot) {
   const items = selectCurrentValuationTopbar(snapshot, "investment");
 
@@ -93,6 +117,34 @@ function seedCryptoTopbar(user: UserRecord, snapshot: CurrentValuationSnapshot) 
   ]);
 }
 
+function seedBinanceTopbar(user: UserRecord, snapshot: CurrentValuationSnapshot) {
+  const items = selectCurrentValuationTopbar(snapshot, "binance");
+
+  if (items.length === 0) {
+    return;
+  }
+
+  seedDashboardTopbarLayout("binance", user.id, [{
+    active: true,
+    animateChanges: true,
+    icon: Bitcoin,
+    id: "binance",
+    label: "BINANCE",
+    value: formatValuationValue(items[0])
+  }]);
+}
+
+export function seedCurrentDashboardStageTopbarsFromSnapshot(
+  user: UserRecord,
+  snapshot: CurrentValuationSnapshot
+) {
+  seedDashboardTopbar(user, snapshot);
+  seedCheckingTopbar(user, snapshot);
+  seedInvestmentTopbar(user, snapshot);
+  seedCryptoTopbar(user, snapshot);
+  seedBinanceTopbar(user, snapshot);
+}
+
 export function seedCurrentDashboardStageTopbars(user: UserRecord, binanceRefreshKey = 0) {
   const snapshot = refreshCurrentValuationFromCaches(user, { binanceRefreshKey });
 
@@ -100,7 +152,5 @@ export function seedCurrentDashboardStageTopbars(user: UserRecord, binanceRefres
     return;
   }
 
-  seedCheckingTopbar(user, snapshot);
-  seedInvestmentTopbar(user, snapshot);
-  seedCryptoTopbar(user, snapshot);
+  seedCurrentDashboardStageTopbarsFromSnapshot(user, snapshot);
 }

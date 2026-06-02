@@ -24,6 +24,7 @@ type DashboardTopbarEntry = {
 
 type PublishDashboardTopbarOptions = {
   transient?: boolean;
+  uiOnly?: boolean;
 };
 
 type StoredDashboardTopbarItem = Pick<DashboardTopbarItem, "active" | "animateChanges" | "ariaLabel" | "id" | "label"> & {
@@ -262,6 +263,45 @@ function publishTransientDashboardTopbar(cacheKey: string, items: DashboardTopba
   emitTopbarChange();
 }
 
+function mergeTopbarUiState(
+  stage: DashboardStageKey,
+  previousItems: DashboardTopbarItem[],
+  nextItems: DashboardTopbarItem[]
+) {
+  const previousById = new Map(previousItems.map((item) => [item.id, item]));
+
+  return normalizeDashboardTopbarItems(
+    stage,
+    nextItems.map((item) => {
+      const previousItem = previousById.get(item.id);
+
+      return {
+        ...item,
+        suppressInitialChanges: previousItem?.suppressInitialChanges ?? item.suppressInitialChanges,
+        value: previousItem?.value ?? pendingTopbarValue
+      };
+    })
+  );
+}
+
+function publishDashboardTopbarUiState(
+  stage: DashboardStageKey,
+  cacheKey: string,
+  items: DashboardTopbarItem[]
+) {
+  const previousItems = entries.get(cacheKey)?.items ?? [];
+  const mergedItems = mergeTopbarUiState(stage, previousItems, items);
+
+  clearDelayedTopbarPublish(cacheKey);
+  transientEntries.delete(cacheKey);
+  entries.set(cacheKey, {
+    items: mergedItems,
+    updatedAt: Date.now()
+  });
+  writeStoredTopbarItems(cacheKey, mergedItems);
+  emitTopbarChange();
+}
+
 export function clearTransientDashboardTopbar(stage: DashboardStageKey, userId: string) {
   const cacheKey = getEntryKey(userId, stage);
   const hadEntry = transientEntries.delete(cacheKey);
@@ -332,13 +372,18 @@ export function publishDashboardTopbar(
   stage: DashboardStageKey,
   userId: string,
   items: DashboardTopbarItem[],
-  { transient = false }: PublishDashboardTopbarOptions = {}
+  { transient = false, uiOnly = false }: PublishDashboardTopbarOptions = {}
 ) {
   const cacheKey = getEntryKey(userId, stage);
   const normalizedItems = normalizeDashboardTopbarItems(stage, items);
 
   if (transient) {
     publishTransientDashboardTopbar(cacheKey, normalizedItems);
+    return;
+  }
+
+  if (uiOnly) {
+    publishDashboardTopbarUiState(stage, cacheKey, normalizedItems);
     return;
   }
 
@@ -459,14 +504,15 @@ export function usePublishDashboardTopbar(
   options: PublishDashboardTopbarOptions = {}
 ) {
   const transient = !!options.transient;
+  const uiOnly = !!options.uiOnly;
 
   useIsomorphicLayoutEffect(() => {
-    publishDashboardTopbar(stage, userId, items, { transient });
+    publishDashboardTopbar(stage, userId, items, { transient, uiOnly });
 
     return () => {
       if (transient) {
         clearTransientDashboardTopbar(stage, userId);
       }
     };
-  }, [items, stage, transient, userId]);
+  }, [items, stage, transient, uiOnly, userId]);
 }

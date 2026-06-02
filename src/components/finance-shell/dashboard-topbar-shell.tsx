@@ -6,7 +6,14 @@ import {
   resolveVisibleDashboardStage,
   type DashboardStageKey
 } from "./dashboard-stage-items";
-import { seedCurrentDashboardStageTopbars } from "./dashboard-topbar-current-values";
+import {
+  seedCurrentDashboardStageTopbars,
+  seedCurrentDashboardStageTopbarsFromSnapshot
+} from "./dashboard-topbar-current-values";
+import {
+  isCurrentValuationSnapshotCurrentForProfile,
+  useCurrentValuationSnapshot
+} from "./current-valuations-store";
 import { getCachedStageTopbarItems } from "./dashboard-topbar-cache";
 import {
   readStoredDashboardTopbarItems,
@@ -154,14 +161,23 @@ export function DashboardTopbarShell({
     [activeStage, activeUser, hasTopbarData]
   );
   const [hydratedItems, setHydratedItems] = useState<DashboardTopbarItem[]>([]);
+  const valuationSnapshot = useCurrentValuationSnapshot(activeUser?.id ?? null);
 
   useLayoutEffect(() => {
     if (!activeUser) {
       return;
     }
 
+    if (
+      valuationSnapshot
+      && isCurrentValuationSnapshotCurrentForProfile(valuationSnapshot, activeUser, { binanceRefreshKey })
+    ) {
+      seedCurrentDashboardStageTopbarsFromSnapshot(activeUser, valuationSnapshot);
+      return;
+    }
+
     seedCurrentDashboardStageTopbars(activeUser, binanceRefreshKey);
-  }, [activeStage, activeUser, binanceRefreshKey]);
+  }, [activeStage, activeUser, binanceRefreshKey, valuationSnapshot]);
 
   useEffect(() => {
     if (!activeUser) {

@@ -291,7 +291,7 @@ export function BinanceDashboard({
     value: topbarValue
   }], [topbarValue]);
 
-  usePublishDashboardTopbar("binance", userId, topbarItems);
+  usePublishDashboardTopbar("binance", userId, topbarItems, { uiOnly: true });
 
   return (
     <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4 overflow-hidden", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>

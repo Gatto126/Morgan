@@ -1,7 +1,7 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `d074012`
+Current baseline commit: `4bba198`
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -440,6 +440,10 @@ Implemented so far:
   - `DashboardTabs`, `CheckingDashboardTabs` and `PortfolioDashboardTabs` publish tooltip values with `{ transient: true }`;
   - transient topbar values are visible during chart interaction but are not persisted and do not replace the resting committed topbar entry;
   - when the tooltip ends or the publisher unmounts, the topbar falls back to the last committed valuation/resting value.
+- dashboard topbar resting publishers are now UI-only:
+  - `DashboardTabs`, `CheckingDashboardTabs`, `PortfolioDashboardTabs` and `BinanceDashboard` can update active tab/click/layout without overwriting the committed money value;
+  - `dashboard-topbar-current-values.ts` seeds dashboard/checking/investment/crypto/Binance resting topbars from the current valuation selector;
+  - `DashboardTopbarShell` seeds from the current valuation snapshot when it changes, with version checks, before falling back to cache refresh.
 
 Important limitation:
 
@@ -453,6 +457,7 @@ Known mismatch found during production smoke and current mitigation:
 - Production smoke after `3b5d8b7` showed provider tabs could swap order between publishers. The shared topbar store now applies a canonical order per stage, so clicking BBVA/TR or switching dashboards must not reorder the buttons.
 - Follow-up topbar cleanup made session storage layout-only. It can keep tab shape while the app hydrates, but it must never replay a previous money value as current after F5/reload.
 - Follow-up publisher cleanup made chart tooltip topbar values transient. Historical hover values can still be shown while interacting with a chart, but they should not survive dashboard switches, unmounts or the next resting publish.
+- Follow-up resting publisher cleanup made dashboard tab publishers UI-only when not hovering. A dashboard can select a tab or provide click handlers, but it should not overwrite the resting valuation money value.
 - Production smoke also showed Trade Republic crypto prices could fail to refresh when Binance API was not connected. Binance is optional: a no-Binance profile must still fetch TR crypto live quotes and publish `crypto = Trade Republic crypto`.
 - Production smoke after `5cc65eb` showed the authenticated home Heritage can differ from the main dashboard Heritage. `src/components/finance-shell/welcome-heritage-preview.tsx` now keeps preview/history for the chart, but the current pill and current chart point are sourced from the multi-profile valuation aggregate.
 - Follow-up smoke after `be821a5` showed the home value can remain stale if the only refresh owner is the home component. The refresh owner must be the shell/orchestrator: app boot, focus/reconnect, daily rollover, dashboard navigation and login warmup should ensure current valuation snapshots for all profiles. The home must only subscribe and aggregate.
@@ -485,6 +490,7 @@ Current progress:
 - Binance dashboard prefers `totals.binance` from the valuation snapshot for its topbar and current flat chart value.
 - Topbar storage is now a UI/layout bridge only: persisted topbar entries keep identity/order/labels, not authoritative values.
 - Topbar store now has committed entries plus transient entries for chart interactions. `useDashboardTopbarEntry(...)` reads the transient overlay first, then falls back to the committed entry.
+- Resting topbar values are seeded from `selectCurrentValuationTopbar(...)` for dashboard, checking, investment, crypto and Binance. Dashboard components now publish UI state at rest and transient values only during chart interaction.
 
 Remaining work:
 
@@ -496,7 +502,8 @@ Remaining work:
 - migrate checking dashboard card/topbar/chart where useful, though checking does not depend on live quotes;
 - remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough;
 - expand tests for orchestration races and UI consistency.
-- continue topbar cleanup by reducing direct dashboard value publishers for resting values. Current slices fixed storage/hydration/order and tooltip persistence; `DashboardTabs`, `CheckingDashboardTabs`, `PortfolioDashboardTabs` and `BinanceDashboard` can still own active tab/click UI, but resting financial values should keep moving toward valuation selectors.
+- smoke the resting topbar publisher cleanup after deploy;
+- cleanup local current fallback builders once smoke confirms valuation is early and stable enough;
 
 Snapshot shape should include:
 
@@ -635,8 +642,12 @@ Current policy before Binance history exists:
 - include Binance in the central current valuation;
 - include Binance in current `crypto` and current `heritage`;
 - include Binance in topbar, cards, and today's current chart point;
+- include Binance in the `today` / current chart point because that point is a live valuation snapshot;
 - do not backfill historical Binance values into old `crypto`/`heritage` chart points;
 - do not pretend the historical Binance line is known before a real historical sync;
+- past chart points remain reconstructed historical data only; if Binance history is not synced, past `crypto`/`heritage` points exclude Binance;
+- while hovering a past chart point, topbar/card/tooltip values should stay on that historical point and must not follow live updates until the interaction ends;
+- when the chart is at rest, topbar/cards/current point return to the full current valuation, including Binance;
 - if a chart needs to represent Binance now, keep it as current-only / flat-current / current marker behavior, clearly distinct from reconstructed historical data.
 
 Later:
@@ -649,12 +660,12 @@ Until then:
 
 - topbar should include Binance current value;
 - crypto dashboard can show Binance current card;
-- graph history for Binance may be flat/current-only;
+- graph history for Binance may be flat/current-only or current-marker only, but must not be presented as reconstructed history;
 - a future "sync" control should be about missing Binance historical sync state, not merely current balance refresh. Current balance refresh should still refresh/invalidate the central valuation.
 
 ## Implementation Plan
 
-Current next execution order after `d074012` and the topbar transient overlay slice:
+Current next execution order after `4bba198` and the resting topbar publisher cleanup slice:
 
 1. Smoke topbar storage/UI/transient cleanup:
    - F5 on dashboard/checking/investment/crypto/Binance must not replay old topbar money values from session storage;
@@ -665,10 +676,10 @@ Current next execution order after `d074012` and the topbar transient overlay sl
    - one profile: home Heritage equals dashboard Heritage after dashboard visits and return home;
    - multiple profiles: home equals the sum of profile snapshots;
    - inactive profile ETF/crypto live quotes refresh without opening that profile's dashboards.
-3. Continue resting topbar publisher cleanup:
-   - keep active tab/click handlers local;
-   - move resting/current values toward valuation selectors only;
-   - avoid direct local current builders for resting topbar values.
+3. Smoke resting topbar publisher cleanup:
+   - at rest, dashboard/checking/investment/crypto/Binance topbar values must match valuation even after tab clicks;
+   - active tab/click state should still work;
+   - tooltip values should still appear only while hovering.
 4. Cleanup local current fallback builders:
    - only after dashboard and home current values are consistently valuation-driven;
    - keep local logic for historical chart reconstruction and tooltip transforms only.
