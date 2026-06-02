@@ -15,10 +15,9 @@ export function getBinanceBalanceLivePriceKey(balance: BinanceBalanceRow) {
 
 export function getBinanceLivePriceKeys(balances: BinanceBalanceRow[] | undefined) {
   const keys = new Set<string>();
-  const pricedBalances = [...balances ?? []]
+  const openBalances = [...balances ?? []]
     .filter((balance) =>
-      Math.abs(getBinanceBalanceQuantity(balance)) > NON_ZERO_THRESHOLD &&
-      balance.eurValue > BINANCE_VISIBLE_VALUE_THRESHOLD_EUR
+      Math.abs(getBinanceBalanceQuantity(balance)) > NON_ZERO_THRESHOLD
     )
     .sort((a, b) => {
       const valueDelta = b.eurValue - a.eurValue;
@@ -27,7 +26,7 @@ export function getBinanceLivePriceKeys(balances: BinanceBalanceRow[] | undefine
         : (getBinanceBalanceLivePriceKey(a) ?? "").localeCompare(getBinanceBalanceLivePriceKey(b) ?? "");
     });
 
-  for (const balance of pricedBalances) {
+  for (const balance of openBalances) {
     const key = getBinanceBalanceLivePriceKey(balance);
     if (key) {
       keys.add(key);

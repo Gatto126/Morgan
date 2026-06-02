@@ -583,6 +583,69 @@ describe("current valuations store", () => {
     });
   });
 
+  it("values Binance open balances from live quotes even when synced EUR value is zero", () => {
+    const now = 1_000;
+    const snapshot = buildCurrentValuationSnapshot({
+      binancePayload: {
+        balances: [{
+          eurValue: 0,
+          freeAmount: 2,
+          lockedAmount: 0,
+          tokenName: "Solana",
+          tokenSymbol: "SOL"
+        }]
+      },
+      dashboardData,
+      dateKey: "2026-06-01",
+      livePrices: {
+        BTC: 20_000,
+        IE00B4L5Y983: 100,
+        SOL: 150
+      },
+      liveQuotes: {
+        BTC: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 20_000
+        },
+        IE00B4L5Y983: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 100
+        },
+        SOL: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 150
+        }
+      },
+      now,
+      profile: {
+        ...profile,
+        hasBinanceCredentials: true
+      }
+    });
+
+    expect(snapshot.status).toBe("ready");
+    expect(snapshot.quoteKeys.cryptos).toEqual(["BTC", "SOL"]);
+    expect(snapshot.totals).toMatchObject({
+      binance: { cents: 30_000, status: "ready" },
+      crypto: { cents: 1_030_000, status: "ready" },
+      heritage: { cents: 1_060_000, status: "ready" }
+    });
+    expect(snapshot.providers.BINANCE?.hasBinance).toBe(true);
+    expect(selectCurrentValuationTopbar(snapshot, "crypto").map((item) => [item.id, item.value.cents])).toContainEqual([
+      "crypto:BINANCE",
+      30_000
+    ]);
+  });
+
   it("publishes cached snapshots to subscribers and invalidates by profile", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
