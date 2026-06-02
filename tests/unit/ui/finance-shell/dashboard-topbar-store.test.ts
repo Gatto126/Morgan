@@ -447,4 +447,68 @@ describe("dashboard topbar store", () => {
       "checking:bbva"
     ]);
   });
+
+  it("shows transient tooltip values without persisting them", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "123,45 \u20ac"
+    }]);
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "456,78 \u20ac"
+    }], { transient: true });
+
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("456,78 \u20ac");
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("--");
+
+    store.clearTransientDashboardTopbar("dashboard", "user-1");
+
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+  });
+
+  it("clears transient values when a resting publish is dropped as unready", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "123,45 \u20ac"
+    }]);
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "456,78 \u20ac"
+    }], { transient: true });
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "--"
+    }]);
+
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+  });
+
+  it("clears transient values when a resting bootstrap publish is rejected", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "456,78 \u20ac"
+    }], { transient: true });
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "0,00"
+    }]);
+
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+  });
 });

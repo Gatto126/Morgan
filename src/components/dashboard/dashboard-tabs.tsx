@@ -105,7 +105,7 @@ export function DashboardTabs({
     ]
   );
 
-  usePublishDashboardTopbar("dashboard", userId, items);
+  usePublishDashboardTopbar("dashboard", userId, items, { transient: isTooltipActive });
 
   useLayoutEffect(() => {
     if (!data || !valuesKnown) {

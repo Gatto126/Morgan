@@ -51,7 +51,7 @@ export function CheckingDashboardTabs({
     [activePoint, activeTab, isTooltipActive, onSelectTab, tabs, valuesKnown]
   );
 
-  usePublishDashboardTopbar("checking", userId, items);
+  usePublishDashboardTopbar("checking", userId, items, { transient: isTooltipActive });
 
   return null;
 }

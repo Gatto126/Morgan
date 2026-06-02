@@ -22,12 +22,17 @@ type DashboardTopbarEntry = {
   updatedAt: number;
 };
 
+type PublishDashboardTopbarOptions = {
+  transient?: boolean;
+};
+
 type StoredDashboardTopbarItem = Pick<DashboardTopbarItem, "active" | "animateChanges" | "ariaLabel" | "id" | "label"> & {
   value?: string;
 };
 
 const listeners = new Set<() => void>();
 const entries = new Map<string, DashboardTopbarEntry>();
+const transientEntries = new Map<string, DashboardTopbarEntry>();
 const delayedTopbarPublishes = new Map<string, ReturnType<typeof globalThis.setTimeout>>();
 const emptyEntry: DashboardTopbarEntry = {
   items: [],
@@ -239,12 +244,31 @@ function clearDelayedTopbarPublish(cacheKey: string) {
 }
 
 function commitDashboardTopbar(cacheKey: string, items: DashboardTopbarItem[]) {
+  transientEntries.delete(cacheKey);
   entries.set(cacheKey, {
     items,
     updatedAt: Date.now()
   });
   writeStoredTopbarItems(cacheKey, items);
   emitTopbarChange();
+}
+
+function publishTransientDashboardTopbar(cacheKey: string, items: DashboardTopbarItem[]) {
+  clearDelayedTopbarPublish(cacheKey);
+  transientEntries.set(cacheKey, {
+    items,
+    updatedAt: Date.now()
+  });
+  emitTopbarChange();
+}
+
+export function clearTransientDashboardTopbar(stage: DashboardStageKey, userId: string) {
+  const cacheKey = getEntryKey(userId, stage);
+  const hadEntry = transientEntries.delete(cacheKey);
+
+  if (hadEntry) {
+    emitTopbarChange();
+  }
 }
 
 function dropUnverifiedTopbar(cacheKey: string) {
@@ -307,10 +331,18 @@ function subscribeTopbar(listener: () => void) {
 export function publishDashboardTopbar(
   stage: DashboardStageKey,
   userId: string,
-  items: DashboardTopbarItem[]
+  items: DashboardTopbarItem[],
+  { transient = false }: PublishDashboardTopbarOptions = {}
 ) {
   const cacheKey = getEntryKey(userId, stage);
   const normalizedItems = normalizeDashboardTopbarItems(stage, items);
+
+  if (transient) {
+    publishTransientDashboardTopbar(cacheKey, normalizedItems);
+    return;
+  }
+
+  const hadTransientEntry = transientEntries.delete(cacheKey);
 
   if (normalizedItems.length === 0) {
     clearDelayedTopbarPublish(cacheKey);
@@ -322,11 +354,17 @@ export function publishDashboardTopbar(
   if (shouldDropInitialZeroTopbarPublish(previousItems, normalizedItems)) {
     clearDelayedTopbarPublish(cacheKey);
     dropUnverifiedTopbar(cacheKey);
+    if (hadTransientEntry) {
+      emitTopbarChange();
+    }
     return;
   }
 
   if (shouldDropUnreadyTopbarPublish(previousItems, normalizedItems)) {
     clearDelayedTopbarPublish(cacheKey);
+    if (hadTransientEntry) {
+      emitTopbarChange();
+    }
     return;
   }
 
@@ -388,18 +426,28 @@ export function clearDashboardTopbar(stage: DashboardStageKey, userId: string) {
   const cacheKey = getEntryKey(userId, stage);
   clearDelayedTopbarPublish(cacheKey);
   entries.delete(cacheKey);
+  transientEntries.delete(cacheKey);
   removeStoredTopbarItems(cacheKey);
   emitTopbarChange();
 }
 
 export function readDashboardTopbarItems(stage: DashboardStageKey, userId: string) {
-  return entries.get(getEntryKey(userId, stage))?.items ?? [];
+  const cacheKey = getEntryKey(userId, stage);
+
+  return transientEntries.get(cacheKey)?.items ?? entries.get(cacheKey)?.items ?? [];
 }
 
 export function useDashboardTopbarEntry(userId: string | null, stage: DashboardStageKey | null) {
   return useSyncExternalStore(
     subscribeTopbar,
-    () => userId && stage ? entries.get(getEntryKey(userId, stage)) ?? emptyEntry : emptyEntry,
+    () => {
+      if (!userId || !stage) {
+        return emptyEntry;
+      }
+
+      const cacheKey = getEntryKey(userId, stage);
+      return transientEntries.get(cacheKey) ?? entries.get(cacheKey) ?? emptyEntry;
+    },
     () => emptyEntry
   );
 }
@@ -407,9 +455,18 @@ export function useDashboardTopbarEntry(userId: string | null, stage: DashboardS
 export function usePublishDashboardTopbar(
   stage: DashboardStageKey,
   userId: string,
-  items: DashboardTopbarItem[]
+  items: DashboardTopbarItem[],
+  options: PublishDashboardTopbarOptions = {}
 ) {
+  const transient = !!options.transient;
+
   useIsomorphicLayoutEffect(() => {
-    publishDashboardTopbar(stage, userId, items);
-  }, [items, stage, userId]);
+    publishDashboardTopbar(stage, userId, items, { transient });
+
+    return () => {
+      if (transient) {
+        clearTransientDashboardTopbar(stage, userId);
+      }
+    };
+  }, [items, stage, transient, userId]);
 }

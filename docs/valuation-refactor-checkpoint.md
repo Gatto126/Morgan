@@ -1,7 +1,7 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `ff25c55`
+Current baseline commit: `d074012`
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -436,6 +436,10 @@ Implemented so far:
   - stored topbar entries no longer replay old money values after reload/F5;
   - `dashboard-topbar-store.ts` keeps provider order canonical and removes stale provider tabs when a new valuation layout no longer includes them;
   - `dashboard-topbar-shell.tsx` keys rendered tabs by stage/item identity so UI state is not reused across unrelated slots.
+- dashboard topbar tooltip/hover values are transient overlays:
+  - `DashboardTabs`, `CheckingDashboardTabs` and `PortfolioDashboardTabs` publish tooltip values with `{ transient: true }`;
+  - transient topbar values are visible during chart interaction but are not persisted and do not replace the resting committed topbar entry;
+  - when the tooltip ends or the publisher unmounts, the topbar falls back to the last committed valuation/resting value.
 
 Important limitation:
 
@@ -448,6 +452,7 @@ Known mismatch found during production smoke and current mitigation:
 - The document and code should treat `investment` like `crypto` for current values: both depend on live market quotes and must be valued centrally, not rebuilt independently per dashboard.
 - Production smoke after `3b5d8b7` showed provider tabs could swap order between publishers. The shared topbar store now applies a canonical order per stage, so clicking BBVA/TR or switching dashboards must not reorder the buttons.
 - Follow-up topbar cleanup made session storage layout-only. It can keep tab shape while the app hydrates, but it must never replay a previous money value as current after F5/reload.
+- Follow-up publisher cleanup made chart tooltip topbar values transient. Historical hover values can still be shown while interacting with a chart, but they should not survive dashboard switches, unmounts or the next resting publish.
 - Production smoke also showed Trade Republic crypto prices could fail to refresh when Binance API was not connected. Binance is optional: a no-Binance profile must still fetch TR crypto live quotes and publish `crypto = Trade Republic crypto`.
 - Production smoke after `5cc65eb` showed the authenticated home Heritage can differ from the main dashboard Heritage. `src/components/finance-shell/welcome-heritage-preview.tsx` now keeps preview/history for the chart, but the current pill and current chart point are sourced from the multi-profile valuation aggregate.
 - Follow-up smoke after `be821a5` showed the home value can remain stale if the only refresh owner is the home component. The refresh owner must be the shell/orchestrator: app boot, focus/reconnect, daily rollover, dashboard navigation and login warmup should ensure current valuation snapshots for all profiles. The home must only subscribe and aggregate.
@@ -479,6 +484,7 @@ Current progress:
 - Main dashboard and portfolio cards prefer valuation values for provider totals and asset current values.
 - Binance dashboard prefers `totals.binance` from the valuation snapshot for its topbar and current flat chart value.
 - Topbar storage is now a UI/layout bridge only: persisted topbar entries keep identity/order/labels, not authoritative values.
+- Topbar store now has committed entries plus transient entries for chart interactions. `useDashboardTopbarEntry(...)` reads the transient overlay first, then falls back to the committed entry.
 
 Remaining work:
 
@@ -490,7 +496,7 @@ Remaining work:
 - migrate checking dashboard card/topbar/chart where useful, though checking does not depend on live quotes;
 - remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough;
 - expand tests for orchestration races and UI consistency.
-- continue topbar cleanup by reducing direct dashboard value publishers. Current slice fixed storage/hydration/order; `DashboardTabs`, `CheckingDashboardTabs`, `PortfolioDashboardTabs` and `BinanceDashboard` can still publish topbar values during active chart interactions and should be reduced carefully.
+- continue topbar cleanup by reducing direct dashboard value publishers for resting values. Current slices fixed storage/hydration/order and tooltip persistence; `DashboardTabs`, `CheckingDashboardTabs`, `PortfolioDashboardTabs` and `BinanceDashboard` can still own active tab/click UI, but resting financial values should keep moving toward valuation selectors.
 
 Snapshot shape should include:
 
@@ -648,20 +654,21 @@ Until then:
 
 ## Implementation Plan
 
-Current next execution order after `ff25c55` and the first topbar UI cleanup slice:
+Current next execution order after `d074012` and the topbar transient overlay slice:
 
-1. Smoke topbar storage/UI cleanup:
+1. Smoke topbar storage/UI/transient cleanup:
    - F5 on dashboard/checking/investment/crypto/Binance must not replay old topbar money values from session storage;
    - click BBVA/TR repeatedly and switch dashboards: provider order must stay canonical;
    - delete/connect Binance or change provider availability: stale provider tabs must disappear.
+   - hover chart points, switch dashboard while hovering, then return: historical tooltip values must not remain as resting topbar values.
 2. Smoke the shell-owned multi-profile valuation refresh:
    - one profile: home Heritage equals dashboard Heritage after dashboard visits and return home;
    - multiple profiles: home equals the sum of profile snapshots;
    - inactive profile ETF/crypto live quotes refresh without opening that profile's dashboards.
-3. Continue topbar publisher cleanup:
+3. Continue resting topbar publisher cleanup:
    - keep active tab/click handlers local;
    - move resting/current values toward valuation selectors only;
-   - preserve tooltip hover values without letting them become persisted authoritative values.
+   - avoid direct local current builders for resting topbar values.
 4. Cleanup local current fallback builders:
    - only after dashboard and home current values are consistently valuation-driven;
    - keep local logic for historical chart reconstruction and tooltip transforms only.
