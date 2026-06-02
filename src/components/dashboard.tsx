@@ -8,7 +8,6 @@ import { cn } from "@/shared/utils";
 
 import { DashboardCards } from "./dashboard/dashboard-cards";
 import { DashboardChart } from "./dashboard/dashboard-chart";
-import { buildDashboardCurrentSnapshot } from "./dashboard/dashboard-current-snapshot";
 import { DashboardErrorState, DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "./dashboard/dashboard-status";
 import { DashboardTabs } from "./dashboard/dashboard-tabs";
 import {
@@ -253,30 +252,7 @@ export function Dashboard({
     livePrices,
     transactionCount
   });
-  const currentSnapshot = useMemo(
-    () => dataFresh
-      ? buildDashboardCurrentSnapshot({
-          binanceBalancesKnown,
-          binanceTotalCents,
-          cryptoPricesReady,
-          data,
-          hasBinancePortfolio,
-          investmentPricesReady,
-          livePrices
-        })
-      : null,
-    [
-      binanceBalancesKnown,
-      binanceTotalCents,
-      cryptoPricesReady,
-      data,
-      dataFresh,
-      hasBinancePortfolio,
-      investmentPricesReady,
-      livePrices
-    ]
-  );
-  const currentPoint = currentValuationChartPoint ?? currentSnapshot;
+  const currentPoint = currentValuationChartPoint;
   const topbarPoint = activeChartPoint ?? currentPoint;
   const {
     contentVisible,
