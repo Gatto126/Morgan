@@ -42,7 +42,7 @@ type SettingsContentProps = {
   onBackToMenu: () => void;
   onDeleteAccount: () => void;
   onDeleteApiKeys: (deleteData: boolean) => void;
-  onSaveApiKeys: (apiKey: string, apiSecret: string) => void;
+  onConnectBinanceApi: (apiKey: string, apiSecret: string) => void;
   onSelectSection: (section: SettingsSection) => void;
   onSignOut: () => void;
   onToggleDeleteApiConfirm: () => void;
@@ -183,7 +183,7 @@ export function FinanceShellSettingsContent({
   onBackToMenu,
   onDeleteAccount,
   onDeleteApiKeys,
-  onSaveApiKeys,
+  onConnectBinanceApi,
   onSelectSection,
   onSignOut,
   onToggleDeleteApiConfirm,
@@ -205,7 +205,7 @@ export function FinanceShellSettingsContent({
       onBackToMenu={onBackToMenu}
       onDeleteAccount={onDeleteAccount}
       onDeleteApiKeys={onDeleteApiKeys}
-      onSaveApiKeys={onSaveApiKeys}
+      onConnectBinanceApi={onConnectBinanceApi}
       onSelectSection={onSelectSection}
       onSignOut={onSignOut}
       onToggleDeleteApiConfirm={onToggleDeleteApiConfirm}

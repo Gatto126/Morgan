@@ -54,7 +54,7 @@ type UseFinanceShellContentParams = {
   onNextPage: () => void;
   onOpenFilePicker: () => void;
   onPreviousPage: () => void;
-  onSaveApiKeys: (apiKey: string, apiSecret: string) => void;
+  onConnectBinanceApi: (apiKey: string, apiSecret: string) => void;
   onSelectSettingsSection: (section: SettingsSection) => void;
   onSelectUser: (user: UserRecord) => void;
   onSignOut: () => void;
@@ -106,7 +106,7 @@ export function useFinanceShellContent({
   onNextPage,
   onOpenFilePicker,
   onPreviousPage,
-  onSaveApiKeys,
+  onConnectBinanceApi,
   onSelectSettingsSection,
   onSelectUser,
   onSignOut,
@@ -127,7 +127,7 @@ export function useFinanceShellContent({
       onBackToMenu={onBackToSettingsMenu}
       onDeleteAccount={onDeleteAccount}
       onDeleteApiKeys={onDeleteApiKeys}
-      onSaveApiKeys={onSaveApiKeys}
+      onConnectBinanceApi={onConnectBinanceApi}
       onSelectSection={onSelectSettingsSection}
       onSignOut={onSignOut}
       onToggleDeleteApiConfirm={onToggleDeleteApiConfirm}

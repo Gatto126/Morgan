@@ -84,7 +84,6 @@ export function PortfolioDashboard({
     binanceListRef
   } = useBinanceBalances({
     binanceRefreshKey,
-    isActive: isActive && isCryptoDashboard,
     shouldLoad: shouldLoad && isCryptoDashboard,
     userId
   });

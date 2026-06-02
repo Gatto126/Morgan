@@ -19,19 +19,13 @@ import {
   getBinanceXAxisTicks,
   type BinanceTimeRange
 } from "./binance-dashboard/binance-chart-model";
-import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import {
   fetchDashboardStageData,
   readDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
 import { CurrentValueSkeleton } from "./finance-shell/current-value-skeleton";
-import {
-  ensureFinanceBinanceCurrentBalances,
-  ensureFinanceCurrentValuation
-} from "./finance-shell/finance-session-orchestrator";
 import { useCurrentValuationSnapshot } from "./finance-shell/current-valuations-store";
 import { usePublishDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
-import { useDashboardLivePrices } from "./dashboard/use-dashboard-live-prices";
 import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
 import { cn } from "@/shared/utils";
 import type { ActiveDotProps } from "@/types/chart";
@@ -83,11 +77,6 @@ export function BinanceDashboard({
   reviewElement,
   previewTransactionsCount = 0,
   binanceRefreshKey = 0,
-  checkingCount = 0,
-  cryptoCount = 0,
-  hasBinanceCredentials = true,
-  investmentCount = 0,
-  transactionCount = 0,
   isActive = true,
   shouldLoad = isActive,
   showSettingsView = false,
@@ -104,14 +93,6 @@ export function BinanceDashboard({
   const [isMobile, setIsMobile] = useState(false);
   const [balances, setBalances] = useState<BinanceBalance[]>([]);
   const [balancesKnown, setBalancesKnown] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [syncNotice, setSyncNotice] = useState<string | null>(null);
-  useDashboardLivePrices(undefined, {
-    binanceBalances: balances,
-    isActive,
-    shouldLoad: shouldLoad && balancesKnown
-  });
   const valuationSnapshot = useCurrentValuationSnapshot(userId);
   const hasValuationBinanceProvider = !!valuationSnapshot?.providers.BINANCE?.hasBinance;
   const valuationBinanceCents = valuationSnapshot?.version.binanceRefreshKey === binanceRefreshKey && hasValuationBinanceProvider
@@ -158,53 +139,6 @@ export function BinanceDashboard({
 
     return () => window.clearTimeout(timer);
   }, [loadBalances, shouldLoad]);
-
-  async function handleSyncBalances() {
-    if (isSyncing) return;
-
-    setIsSyncing(true);
-    setSyncError(null);
-    setSyncNotice(null);
-
-    try {
-      const valuationUser = {
-        binanceApiKeyPreview: null,
-        checkingCount,
-        cryptoCount,
-        hasBinanceCredentials,
-        id: userId,
-        investmentCount,
-        name: "",
-        transactionCount
-      };
-      const syncResult = await ensureFinanceBinanceCurrentBalances({
-        binanceRefreshKey,
-        event: "binance-sync",
-        force: true,
-        priority: "user",
-        throwOnError: true,
-        user: valuationUser
-      });
-
-      setBalances(syncResult.balances as BinanceBalance[]);
-      setBalancesKnown(true);
-
-      await ensureFinanceCurrentValuation({
-        binanceRefreshKey,
-        event: "binance-sync",
-        force: true,
-        livePriceMaxAgeMs: 0,
-        priority: "user",
-        user: valuationUser
-      });
-
-      setSyncNotice("Sync complete.");
-    } catch (error) {
-      setSyncError(error instanceof Error ? error.message : "Binance sync failed.");
-    } finally {
-      setIsSyncing(false);
-    }
-  }
 
   const totalEur = useMemo(
     () => typeof valuationBinanceCents === "number" ? valuationBinanceCents / 100 : 0,
@@ -279,14 +213,13 @@ export function BinanceDashboard({
               </div>
             ) : !hasRenderableChartData ? (
               <div className="flex h-full w-full items-center justify-center">
-                <EmptyChartAction
-                  actionLabel={isSyncing ? "Loading" : "Sync"}
-                  disabled={isSyncing}
-                  error={syncError}
-                  notice={syncNotice}
-                  onAction={() => void handleSyncBalances()}
-                  title="Binance"
-                />
+                {balancesKnown ? (
+                  <h1 className="text-3xl font-bold tracking-[-0.06em] text-white sm:text-[2.35rem]">
+                    Binance
+                  </h1>
+                ) : (
+                  <CurrentValueSkeleton className="h-10 w-40 rounded-[18px]" />
+                )}
               </div>
             ) : (
               <>

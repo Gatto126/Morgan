@@ -13,7 +13,7 @@ type SettingsApiKeySectionProps = {
   showDeleteApiConfirm: boolean;
   showSecret: boolean;
   onDeleteApiKeys: (deleteData: boolean) => void;
-  onSaveApiKeys: (apiKey: string, apiSecret: string) => void;
+  onConnectBinanceApi: (apiKey: string, apiSecret: string) => void;
   onToggleDeleteApiConfirm: () => void;
   onToggleSecret: () => void;
 };
@@ -27,15 +27,15 @@ export function SettingsApiKeySection({
   showDeleteApiConfirm,
   showSecret,
   onDeleteApiKeys,
-  onSaveApiKeys,
+  onConnectBinanceApi,
   onToggleDeleteApiConfirm,
   onToggleSecret
 }: SettingsApiKeySectionProps) {
   const [binanceKeyInput, setBinanceKeyInput] = useState("");
   const [binanceSecretInput, setBinanceSecretInput] = useState("");
 
-  function saveApiKeys() {
-    onSaveApiKeys(binanceKeyInput, binanceSecretInput);
+  function connectBinanceApi() {
+    onConnectBinanceApi(binanceKeyInput, binanceSecretInput);
   }
 
   return (
@@ -139,9 +139,10 @@ export function SettingsApiKeySection({
         ) : (
           <button
             type="button"
-            onClick={saveApiKeys}
-            title="Save API Keys"
+            title="Connect Binance API"
             className="flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--text-dim)] hover:text-white hover:bg-[color:var(--surface-elevated)] hover:border-white transition-colors cursor-pointer"
+            aria-label="Connect Binance API"
+            onClick={connectBinanceApi}
           >
             <CircleCheckBig className="h-4 w-4 md:h-5 md:w-5" strokeWidth={2.3} />
           </button>

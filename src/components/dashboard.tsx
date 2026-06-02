@@ -115,7 +115,6 @@ export function Dashboard({
     binanceListRef
   } = useBinanceBalances({
     userId,
-    isActive,
     shouldLoad,
     binanceRefreshKey
   });

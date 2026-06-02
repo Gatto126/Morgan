@@ -28,7 +28,7 @@ type SettingsPanelProps = {
   onToggleSecret: () => void;
   onToggleDeleteApiConfirm: () => void;
   onDeleteApiKeys: (deleteData: boolean) => void;
-  onSaveApiKeys: (apiKey: string, apiSecret: string) => void;
+  onConnectBinanceApi: (apiKey: string, apiSecret: string) => void;
   onDeleteAccount: () => void;
 };
 
@@ -50,7 +50,7 @@ export function SettingsPanel({
   onToggleSecret,
   onToggleDeleteApiConfirm,
   onDeleteApiKeys,
-  onSaveApiKeys,
+  onConnectBinanceApi,
   onDeleteAccount
 }: SettingsPanelProps) {
   const isOpen = activeSection !== null;
@@ -102,7 +102,7 @@ export function SettingsPanel({
                     showDeleteApiConfirm={showDeleteApiConfirm}
                     showSecret={showSecret}
                     onDeleteApiKeys={onDeleteApiKeys}
-                    onSaveApiKeys={onSaveApiKeys}
+                    onConnectBinanceApi={onConnectBinanceApi}
                     onToggleDeleteApiConfirm={onToggleDeleteApiConfirm}
                     onToggleSecret={onToggleSecret}
                   />

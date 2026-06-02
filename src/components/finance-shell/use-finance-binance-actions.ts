@@ -69,7 +69,7 @@ export function useFinanceBinanceActions({
     }
   }, [notice, error, isTesting]);
 
-  const handleSaveApiKeys = useCallback(async (apiKey: string, apiSecret: string) => {
+  const handleConnectBinanceApi = useCallback(async (apiKey: string, apiSecret: string) => {
     if (!activeUser) return;
 
     try {
@@ -102,7 +102,7 @@ export function useFinanceBinanceActions({
 
       keepApiSettingsOpen();
       setIsTesting(true);
-      setNotice("Testing endpoint...");
+      setNotice("Connecting Binance...");
 
       const nextRefreshKey = binanceRefreshKey + 1;
       const syncResult = await ensureFinanceBinanceCurrentBalances({
@@ -148,7 +148,7 @@ export function useFinanceBinanceActions({
           user: updatedUser
         })
       ]).catch(() => {
-        // Binance dashboard keeps the synced balances visible if live quote refresh fails.
+        // The last committed valuation remains visible if live quote refresh fails.
       });
     } catch (err) {
       keepApiSettingsOpen();
@@ -250,7 +250,7 @@ export function useFinanceBinanceActions({
     error,
     getVisibleSettingsSection,
     handleDeleteApiKeys,
-    handleSaveApiKeys,
+    handleConnectBinanceApi,
     isTesting,
     notice,
     setError,

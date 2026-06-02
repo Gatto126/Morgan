@@ -9,7 +9,6 @@ import type { BinanceBalanceRow } from "./types";
 
 type UseBinanceBalancesOptions = {
   userId: string;
-  isActive: boolean;
   shouldLoad: boolean;
   binanceRefreshKey: number;
 };
@@ -22,7 +21,6 @@ type BinanceBalancesPayload = {
 
 export function useBinanceBalances({
   userId,
-  isActive,
   shouldLoad,
   binanceRefreshKey
 }: UseBinanceBalancesOptions) {
@@ -94,24 +92,8 @@ export function useBinanceBalances({
     }
 
     lastPreloadKeyRef.current = preloadKey;
-    void fetchBinanceBalances(true);
+    void fetchBinanceBalances(false);
   }, [fetchBinanceBalances, binanceRefreshKey, shouldLoad, userId]);
-
-  useEffect(() => {
-    if (!isActive && !shouldLoad) {
-      return;
-    }
-
-    const interval = window.setInterval(() => void fetchBinanceBalances(true), 600_000);
-    const handleFocus = () => void fetchBinanceBalances(true);
-
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [fetchBinanceBalances, binanceRefreshKey, isActive, shouldLoad]);
 
   return {
     binanceBalances,

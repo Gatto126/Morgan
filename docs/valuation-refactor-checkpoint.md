@@ -1,11 +1,11 @@
 # Morgan Valuation Refactor Checkpoint
 
-Last updated: 2026-06-02
-Current baseline commit: `a230f98` (pushed dashboard navigation valuation view-only)
-Last Vercel-smoked checkpoint: `a230f98` (dashboard-change stability smoke, partial)
-Latest Vercel smoke note: dashboard switching is more stable and no longer appears to refresh Binance/crypto because of the click itself. Current updates can appear later than exactly 10s because the interval only starts the refresh; the visible swap waits for the full committed snapshot.
-Current local slice: detail asset/token row coherence after real-Binance totals smoke.
-Next implementation phase after this slice: smoke detail rows across main/investment/crypto/Binance, then Binance API connect/current-sync naming cleanup before archive/daily snapshots.
+Last updated: 2026-06-03
+Current baseline commit: `87bf4e0` (pushed detail card valuation asset alignment)
+Last Vercel-smoked checkpoint: `87bf4e0` (real-Binance cross-dashboard coherence diagnostics)
+Latest Vercel smoke note: `window.morganFinanceCoherenceDiagnostics?.()` returned `coherent: true` across main, investment, crypto and Binance. Snapshot/totals can change while navigating, but diagnostics show those changes come from committed valuation refreshes, not from dashboard clicks.
+Current local slice: Binance current-sync ownership cleanup. Dashboard navigation and Binance dashboard UI should not initiate current sync; settings connect remains the explicit user-triggered current sync entry.
+Next implementation phase after this slice: Vercel smoke for no dashboard-triggered Binance refresh, then decide whether to keep this cleanup or revert before moving to automated E2E/coherence tests.
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -41,7 +41,7 @@ All topbar, card and current chart values must come from the same current valuat
 
 ## Current Coherence Status
 
-As of pushed commit `a230f98`:
+As of pushed commit `87bf4e0`:
 
 - primary topbar/current totals are valuation-driven;
 - main, investment, crypto and Binance current cards prefer the committed valuation snapshot;
@@ -52,10 +52,10 @@ As of pushed commit `a230f98`:
 
 Remaining coherence work is narrower:
 
-- audit detail asset/token rows that may still read local live quote caches while totals read the committed valuation;
-  - current local slice adds a shared valuation asset lookup by `providerId + priceKey + chartKey`;
-  - main and portfolio investment/crypto detail rows use committed valuation asset values when a current snapshot exists;
+- detail asset/token rows have been aligned for main and portfolio investment/crypto cards:
+  - `providerId + priceKey + chartKey` lookup reads committed valuation asset values when a current snapshot exists;
   - if a current snapshot exists but an asset row is not present, the row stays pending instead of falling back to a local live price;
+  - remaining smoke: visually confirm ETF rows, TR BTC/ETH rows and Binance token rows change only with committed snapshot changes;
 - confirm inactive mounted dashboards can warm data without publishing current totals or expensive hidden rendering work;
 - clarify home multi-profile refresh expectations: active profile refreshes on the live ticker, inactive profiles refresh on boot/focus/profile changes unless a future requirement asks for full multi-profile live ticking;
 - improve diagnostics so a production value can be traced to a specific committed snapshot, refresh attempt and quote set;
@@ -155,8 +155,9 @@ Binance sync ownership policy:
 - Binance has two separate concerns and they must not be mixed:
   - current balance sync: get the freshest known quantities for the current valuation;
   - daily snapshot history: save an immutable day-level record for historical charts.
-- Sync persistence should save the full Binance portfolio, including dust, locked balances and tokens currently worth `0 EUR`. Materiality must not decide what data we preserve.
-- Materiality (`> 0.49 EUR` today) applies only to live current pricing/display decisions: which tokens request live quotes for current valuation and which token rows are shown as current-value rows.
+- Current balance sync for the fast current lane is allowed to prioritize/store the material current set used by valuation, because it is optimized for quick current display.
+- Archive persistence is separate: the future daily snapshot/backfill lane must save the full Binance portfolio, including dust, locked balances and tokens currently worth `0 EUR`. Materiality must not decide what data we preserve for history.
+- Materiality (`> 0.49 EUR` today) applies to live current pricing/display decisions: which tokens request live quotes for current valuation and which token rows are shown as current-value rows.
 - Current valuation may use the latest synced quantities plus live prices, but it must publish only through the committed valuation snapshot.
 - Current balance auto-sync must be owned by the shell/orchestrator, not by an individual dashboard hook.
 - A dashboard can expose a manual user action, but it should call an orchestrator/service path that dedupes sync, updates caches, refreshes valuation and optionally writes a daily snapshot.
@@ -169,7 +170,7 @@ Binance sync ownership policy:
   - after sync fails, keep the last committed valuation and expose diagnostics.
 - There is no current Binance-dashboard manual sync button in the intended product flow. Future user-initiated sync/capture belongs to the Binance historical/past-sync section, not to the current dashboard itself.
 - Current API settings flow:
-  - the settings save action should be understood as `Connect Binance API` / `Save and Connect`, not as historical sync;
+  - the settings action should be understood as `Connect Binance API`, not as historical sync;
   - after credentials are saved, Morgan runs the fast current lane immediately: fetch current balances, seed Binance cache, invalidate the profile valuation and publish one committed current snapshot when live prices are ready;
   - this path is allowed to update current quantities, but it must not create historical daily snapshots until the archive lane exists;
   - repeated dashboard navigation must not re-run this connect/current sync path.
@@ -178,6 +179,11 @@ Binance sync ownership policy:
   - full archive lane: save the full raw portfolio without materiality filtering, create/update today's provisional daily snapshot, and prepare the future history/backfill anchor.
 - The full archive lane must not block the first visible current valuation.
 - Diagnostics must expose at least: `hasApiKey`, `isStale`, `lastSyncedAt`, `syncInFlight`, `syncReason`, `lastSyncError`, balance count and material/dust counts.
+- Current local cleanup after `87bf4e0`:
+  - remove the Binance dashboard empty-state current sync action;
+  - remove local focus/interval balance polling from dashboard Binance balance hooks;
+  - keep dashboard balance reads as cache hydration/data display only;
+  - keep explicit current sync ownership in the shell/orchestrator through boot/F5/focus stale policy, active ticker, connect/delete and import/profile changes.
 
 Binance daily snapshot history policy:
 
@@ -677,6 +683,12 @@ Known mismatch found during production smoke and current mitigation:
   - topbar current skeletons are controlled by an explicit pending flag, so historical hover gaps stay empty instead of looking like loading current values.
 - Follow-up smoke after `a1406b5` found checking topbar could remain skeleton after leaving chart hover. Cause: UI-only topbar publishes preserved the numeric value but could also preserve/infer a pending flag incorrectly when the checking publisher did not send explicit readiness. Fix: checking tabs publish explicit `valuePending`, and the topbar renderer/store derive pending from the preserved value so numeric values cannot be hidden by a stale pending flag.
 - Follow-up smoke after `1fa9519` showed Binance balances data starts almost together with dashboard data, but Binance current can still stay at `0,00`. Cause: Binance live quote collection still filtered balances by synced `balance.eurValue > 0.49`, which conflicts with the stricter policy that synced EUR is not a trusted current fallback. Fix: request live quotes for every open Binance balance with a normalizable symbol; include only balances with valid live quotes in current valuation.
+- Vercel smoke after `87bf4e0` with real synced Binance data showed `visibleSnapshotIsCoherentAcrossStages: true` across main, investment, crypto and Binance. Snapshot ids changed during the test, but the refresh timestamps showed committed valuation refreshes rather than dashboard-click refreshes.
+- Current local slice removes the remaining Binance current-sync ownership from dashboard UI:
+  - Binance dashboard no longer exposes its empty-state current sync action;
+  - Binance dashboard no longer starts local Binance live-price warmup;
+  - `useBinanceBalances` no longer polls/focus-refreshes balance stage data locally and uses cache-first initial reads;
+  - settings API save is now named internally and in tooltip as `Connect Binance API`.
 
 ## Gaps To Close
 
@@ -716,6 +728,7 @@ Current progress:
 - Vercel smoke confirmed the portfolio fallback removal and topbar hydration fix after `4fd1966`.
 - Main dashboard and portfolio cards prefer valuation values for provider totals and asset current values.
 - Binance dashboard prefers `totals.binance` from the valuation snapshot for its topbar and current flat chart value.
+- Binance dashboard is now view-only for current sync ownership: it hydrates/loads balance stage data for display, but does not trigger `/api/binance/sync` or live quote warmups itself.
 - Topbar storage is now a UI/layout bridge only: persisted topbar entries keep identity/order/labels, not authoritative values.
 - Topbar store now has committed entries plus transient entries for chart interactions. `useDashboardTopbarEntry(...)` reads the transient overlay first, then falls back to the committed entry.
 - Resting topbar values are seeded from `selectCurrentValuationTopbar(...)` for dashboard, checking, investment, crypto and Binance. Dashboard components now publish UI state at rest and transient values only during chart interaction.
@@ -743,8 +756,8 @@ Remaining work:
 
 - close the final active-dashboard coherence audit:
   - topbar totals, provider cards and today/current chart point must continue to match across main/checking/investment/crypto/Binance;
-  - detail asset/token rows that still read local quote caches must be either migrated to committed valuation values or explicitly documented as non-authoritative detail;
-  - inactive dashboard hooks may warm caches but must not publish current totals;
+  - visually smoke ETF rows, TR BTC/ETH rows and Binance token rows after `87bf4e0`;
+  - inactive dashboard hooks may warm data caches but must not publish current totals or trigger Binance current sync;
   - dashboard switching under the ticker interval must not create visible refresh sequences;
 - improve valuation diagnostics:
   - show committed snapshot id/version/date/age;
