@@ -531,6 +531,7 @@ Known mismatch found during production smoke and current mitigation:
   - warmup order starts active stage, dashboard and Binance before auxiliary stages;
   - focus/reconnect and dashboard navigation use the full active-profile preload instead of only the visible stage;
   - topbar current skeletons are controlled by an explicit pending flag, so historical hover gaps stay empty instead of looking like loading current values.
+- Follow-up smoke after `a1406b5` found checking topbar could remain skeleton after leaving chart hover. Cause: UI-only topbar publishes preserved the numeric value but could also preserve/infer a pending flag incorrectly when the checking publisher did not send explicit readiness. Fix: checking tabs publish explicit `valuePending`, and the topbar renderer/store derive pending from the preserved value so numeric values cannot be hidden by a stale pending flag.
 
 ## Gaps To Close
 
@@ -610,6 +611,7 @@ Remaining work:
   - Binance skeleton duration should be shorter and should not trail auxiliary stage preloads;
   - once values appear, topbar/cards/current chart point still swap together from one committed snapshot;
   - chart hover on dates before investment/crypto/Binance existed does not show animated skeletons for those missing historical values;
+  - checking dashboard hover-out restores numeric topbar values when a committed value exists and does not keep animating skeleton pills;
 - smoke the shell-owned multi-profile valuation refresh after deploy:
   - one profile: home Heritage equals main dashboard Heritage after visiting dashboards and returning home;
   - multiple profiles: home Heritage equals the sum of profile Heritage snapshots;

@@ -55,7 +55,7 @@ export function DashboardTopbarTab({
     ));
   };
   const valueIsPlaceholder = value.trim() === "" || value === "--" || value === "-";
-  const isValuePending = valuePending ?? valueIsPlaceholder;
+  const isValuePending = valueIsPlaceholder && (valuePending ?? true);
   const displayValue = valueIsPlaceholder ? "" : value;
   const { amount, currency } = getDashboardTopbarValueParts(displayValue);
   const showEuroIcon = currency === "EUR" || currency === "\u20ac";

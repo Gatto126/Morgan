@@ -29,13 +29,11 @@ export function CheckingDashboardTabs({
   const items = useMemo<DashboardTopbarItem[]>(
     () => tabs.map((tab) => {
         const isSelected = activeTab === tab.key;
-        const value = valuesKnown
-          ? formatEuroCents(
-              activePoint
-                ? Number(tab.key === "ALL" ? (activePoint.heritage ?? 0) : (activePoint[tab.key] ?? 0))
-                : tab.total
-            )
-          : "--";
+        const pointValue = activePoint
+          ? Number(tab.key === "ALL" ? (activePoint.heritage ?? 0) : (activePoint[tab.key] ?? 0))
+          : tab.total;
+        const hasValue = valuesKnown && Number.isFinite(pointValue);
+        const value = hasValue ? formatEuroCents(pointValue) : "";
 
         return {
           active: isSelected,
@@ -45,7 +43,8 @@ export function CheckingDashboardTabs({
           label: tab.key === "ALL" ? undefined : getAbbreviatedLabel(tab.label),
           onClick: () => onSelectTab(tab.key),
           suppressInitialChanges: !isTooltipActive,
-          value
+          value,
+          valuePending: !isTooltipActive && !hasValue
         };
       }),
     [activePoint, activeTab, isTooltipActive, onSelectTab, tabs, valuesKnown]

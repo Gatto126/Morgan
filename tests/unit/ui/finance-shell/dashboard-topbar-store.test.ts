@@ -587,6 +587,28 @@ describe("dashboard topbar store", () => {
     ]);
   });
 
+  it("keeps preserved numeric values non-pending during UI-only publishes", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("checking", "user-1", [{
+      active: true,
+      id: "checking",
+      value: "1.088,39 \u20ac"
+    }]);
+    store.publishDashboardTopbar("checking", "user-1", [{
+      active: true,
+      id: "checking",
+      value: "999,99 \u20ac"
+    }], { uiOnly: true });
+
+    expect(store.readDashboardTopbarItems("checking", "user-1")[0]).toMatchObject({
+      id: "checking",
+      value: "1.088,39 \u20ac",
+      valuePending: false
+    });
+  });
+
   it("clears transient values when a UI-only resting publish arrives", async () => {
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     const store = await loadTopbarStoreModule();

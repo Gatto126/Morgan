@@ -218,6 +218,7 @@ function publishFinanceSessionDiagnostics() {
     return;
   }
 
+  installFinanceSessionDiagnosticsHook();
   registerLivePriceDiagnosticsListener();
 
   const diagnostics = getFinanceSessionDiagnostics();
@@ -256,6 +257,17 @@ function publishFinanceSessionDiagnostics() {
     detail: diagnostics
   }));
 }
+
+function installFinanceSessionDiagnosticsHook() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.morganFinanceDiagnostics = () => getFinanceSessionDiagnostics();
+  window.__MORGAN_FINANCE_DIAGNOSTICS__ ??= getFinanceSessionDiagnostics();
+}
+
+installFinanceSessionDiagnosticsHook();
 
 function getValuationDiagnostics(profileId: string) {
   const state = getCurrentValuationState(profileId);

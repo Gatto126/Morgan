@@ -200,6 +200,10 @@ function isPendingTopbarValue(value: string) {
   return trimmedValue === "" || trimmedValue === pendingTopbarValue || trimmedValue.includes(pendingTopbarValue);
 }
 
+function getEffectiveTopbarValuePending(item: DashboardTopbarItem) {
+  return isPendingTopbarValue(item.value) && (item.valuePending ?? true);
+}
+
 function isZeroOnlyTopbarValue(value: string) {
   const amounts = getNumericAmounts(value);
 
@@ -275,12 +279,13 @@ function mergeTopbarUiState(
     stage,
     nextItems.map((item) => {
       const previousItem = previousById.get(item.id);
+      const value = previousItem?.value ?? pendingTopbarValue;
 
       return {
         ...item,
         suppressInitialChanges: previousItem?.suppressInitialChanges ?? item.suppressInitialChanges,
-        value: previousItem?.value ?? pendingTopbarValue,
-        valuePending: previousItem?.valuePending ?? item.valuePending ?? true
+        value,
+        valuePending: previousItem ? getEffectiveTopbarValuePending(previousItem) : true
       };
     })
   );
