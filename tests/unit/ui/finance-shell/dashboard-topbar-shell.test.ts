@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { seedDashboardStageDataCache } from "@/components/finance-shell/dashboard-stage-data-cache";
 import { getCachedStageTopbarItems } from "@/components/finance-shell/dashboard-topbar-cache";
+import { getHydratedTopbarItemsForStage } from "@/components/finance-shell/dashboard-topbar-hydration";
 import { hasDashboardStageTopbarData } from "@/components/finance-shell/dashboard-topbar-visibility";
 import type { UserRecord } from "@/components/finance-shell/types";
 
@@ -48,5 +49,23 @@ describe("dashboard topbar shell", () => {
     expect(getCachedStageTopbarItems(user, "checking")).toEqual([]);
     expect(getCachedStageTopbarItems(user, "investment")).toEqual([]);
     expect(getCachedStageTopbarItems(user, "crypto")).toEqual([]);
+  });
+
+  it("does not reuse hydrated topbar items from another dashboard stage", () => {
+    const dashboardItems = [{
+      active: true,
+      id: "heritage",
+      value: ""
+    }];
+
+    expect(getHydratedTopbarItemsForStage({
+      items: dashboardItems,
+      key: "user-1:dashboard"
+    }, "user-1:investment")).toEqual([]);
+
+    expect(getHydratedTopbarItemsForStage({
+      items: dashboardItems,
+      key: "user-1:dashboard"
+    }, "user-1:dashboard")).toBe(dashboardItems);
   });
 });

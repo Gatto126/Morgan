@@ -16,6 +16,10 @@ import {
 } from "./current-valuations-store";
 import { getCachedStageTopbarItems } from "./dashboard-topbar-cache";
 import {
+  getHydratedTopbarItemsForStage,
+  type HydratedTopbarItems
+} from "./dashboard-topbar-hydration";
+import {
   readStoredDashboardTopbarItems,
   useDashboardTopbarEntry,
   type DashboardTopbarItem
@@ -108,6 +112,10 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
   }];
 }
 
+function getHydrationKey(userId: string, stage: DashboardStageKey) {
+  return `${userId}:${stage}`;
+}
+
 function preferStableTopbarItems(
   entryItems: DashboardTopbarItem[],
   hydratedItems: DashboardTopbarItem[],
@@ -160,7 +168,11 @@ export function DashboardTopbarShell({
     () => activeUser && activeStage && hasTopbarData ? getDashboardFallbackItems(activeUser, activeStage) : [],
     [activeStage, activeUser, hasTopbarData]
   );
-  const [hydratedItems, setHydratedItems] = useState<DashboardTopbarItem[]>([]);
+  const hydrationKey = activeUser && activeStage && hasTopbarData
+    ? getHydrationKey(activeUser.id, activeStage)
+    : null;
+  const [hydratedState, setHydratedState] = useState<HydratedTopbarItems | null>(null);
+  const hydratedItems = getHydratedTopbarItemsForStage(hydratedState, hydrationKey);
   const valuationSnapshot = useCurrentValuationSnapshot(activeUser?.id ?? null);
 
   useLayoutEffect(() => {
@@ -195,10 +207,10 @@ export function DashboardTopbarShell({
   useEffect(() => {
     let cancelled = false;
 
-    if (!activeUser || !activeStage || !hasTopbarData) {
+    if (!activeUser || !activeStage || !hasTopbarData || !hydrationKey) {
       const resetTimer = window.setTimeout(() => {
         if (!cancelled) {
-          setHydratedItems([]);
+          setHydratedState(null);
         }
       }, 0);
 
@@ -216,14 +228,17 @@ export function DashboardTopbarShell({
       const storedItems = readStoredDashboardTopbarItems(activeStage, activeUser.id, { placeholderValues: true });
       const cachedItems = getCachedStageTopbarItems(activeUser, activeStage);
 
-      setHydratedItems(cachedItems.length > storedItems.length ? cachedItems : storedItems);
+      setHydratedState({
+        items: cachedItems.length > storedItems.length ? cachedItems : storedItems,
+        key: hydrationKey
+      });
     }, 0);
 
     return () => {
       cancelled = true;
       window.clearTimeout(hydrateTimer);
     };
-  }, [activeStage, activeUser, hasTopbarData]);
+  }, [activeStage, activeUser, hasTopbarData, hydrationKey]);
 
   const rawItems = preferStableTopbarItems(entry.items, hydratedItems, fallbackItems);
   const items = useMemo(

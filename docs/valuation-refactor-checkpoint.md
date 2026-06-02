@@ -2,7 +2,7 @@
 
 Last updated: 2026-06-02
 Current baseline commit: `583eddc` (last Vercel-smoked)
-Current slice pending Vercel smoke: portfolio current fallback removal
+Current slice pending Vercel smoke: portfolio current fallback removal + topbar stage hydration flicker fix
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -466,6 +466,7 @@ Known mismatch found during production smoke and current mitigation:
 - Production smoke after `2777133` passed: main dashboard and crypto dashboard now follow the same Binance policy. Historical main dashboard `crypto`/`heritage` points exclude current-only Binance, while the today/current point includes Binance through the valuation current point.
 - Production smoke after `88675f4` passed: removing the main dashboard legacy current fallback did not regress F5, resting topbar/cards/current chart point, hover restore, or fake-zero behavior. Main dashboard current values are now fully valuation-driven.
 - Production smoke after `583eddc` passed: investment/crypto valuation-first current points did not regress F5, dashboard switching, hover restore, Binance current-only behavior, or fake-zero behavior. The portfolio fallback can now be removed in the next cleanup slice.
+- Production smoke after `1927c16` found topbar flicker when switching away from the main dashboard after staying there for several seconds. Likely cause: `DashboardTopbarShell` kept hydrated topbar items in state without scoping them to `userId:stage`, so a stage with fewer tabs could render the previous dashboard stage's hydrated layout for one frame before the valuation/topbar entry caught up. The fix scopes hydrated topbar items by stage and ignores them when the active stage changes.
 
 ## Gaps To Close
 
@@ -507,6 +508,7 @@ Current progress:
 - Topbar storage is now a UI/layout bridge only: persisted topbar entries keep identity/order/labels, not authoritative values.
 - Topbar store now has committed entries plus transient entries for chart interactions. `useDashboardTopbarEntry(...)` reads the transient overlay first, then falls back to the committed entry.
 - Resting topbar values are seeded from `selectCurrentValuationTopbar(...)` for dashboard, checking, investment, crypto and Binance. Dashboard components now publish UI state at rest and transient values only during chart interaction.
+- `DashboardTopbarShell` hydrated layout state is scoped by `userId:stage`, preventing a previous dashboard stage's hydrated items from flashing during navigation to a different stage.
 
 Remaining work:
 
@@ -704,6 +706,7 @@ Current next execution order after the portfolio current fallback removal slice:
    - F5 on dashboard/checking/investment/crypto/Binance must not replay old topbar money values from session storage;
    - click BBVA/TR repeatedly and switch dashboards: provider order must stay canonical;
    - delete/connect Binance or change provider availability: stale provider tabs must disappear.
+   - stay on the main dashboard for 5-10 seconds, then switch to investment/crypto/checking: topbar values/layout must not flash the previous dashboard stage.
    - hover chart points, switch dashboard while hovering, then return: historical tooltip values must not remain as resting topbar values.
    - one profile: home Heritage equals dashboard Heritage after dashboard visits and return home;
    - multiple profiles: home equals the sum of profile snapshots;
