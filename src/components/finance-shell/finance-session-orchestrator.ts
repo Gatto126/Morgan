@@ -115,6 +115,16 @@ type EnsureFinanceCurrentValuationOptions = {
   user: UserRecord;
 };
 
+type EnsureFinanceProfilesCurrentValuationsOptions = {
+  activeUserId?: string | null;
+  binanceRefreshKey?: number;
+  event?: FinanceSessionEvent;
+  force?: boolean;
+  livePriceMaxAgeMs?: number;
+  priority?: FinanceSessionPriority;
+  users: UserRecord[];
+};
+
 type WarmFinanceSessionOptions = {
   maxWaitMs?: number;
 };
@@ -608,6 +618,59 @@ export async function ensureFinanceCurrentValuation({
   };
 }
 
+function getPrioritizedCurrentValuationProfiles(
+  users: UserRecord[],
+  activeUserId: string | null | undefined
+) {
+  const uniqueUsers = users.filter((user, index, profiles) => (
+    profiles.findIndex((profile) => profile.id === user.id) === index
+  ));
+
+  if (!activeUserId) {
+    return uniqueUsers;
+  }
+
+  const activeUser = uniqueUsers.find((user) => user.id === activeUserId);
+  if (!activeUser) {
+    return uniqueUsers;
+  }
+
+  return [
+    activeUser,
+    ...uniqueUsers.filter((user) => user.id !== activeUserId)
+  ];
+}
+
+export async function ensureFinanceProfilesCurrentValuations({
+  activeUserId = null,
+  binanceRefreshKey = 0,
+  event = "profile-change",
+  force = false,
+  livePriceMaxAgeMs = 0,
+  priority = "background",
+  users
+}: EnsureFinanceProfilesCurrentValuationsOptions) {
+  const valuationProfiles = getPrioritizedCurrentValuationProfiles(users, activeUserId);
+  const results = await Promise.allSettled(valuationProfiles.map((user) => (
+    ensureFinanceCurrentValuation({
+      binanceRefreshKey,
+      event,
+      force,
+      livePriceMaxAgeMs,
+      priority: user.id === activeUserId ? getHigherPriority(priority, "active") : "background",
+      user
+    })
+  )));
+
+  publishFinanceSessionDiagnostics();
+
+  return {
+    activeUserId,
+    results,
+    userIds: valuationProfiles.map((user) => user.id)
+  };
+}
+
 export async function warmFinanceProfilePreview(user: UserRecord) {
   const dashboardPromise = user.transactionCount > 0
     ? fetchDashboardPreviewData(user).catch(() => null)
@@ -672,7 +735,15 @@ async function runFinanceSessionWarmup() {
   const warmupProfiles = selectLoginWarmupProfiles(users, persistedProfileId);
 
   if (!primaryProfile) {
-    await Promise.allSettled(warmupProfiles.map((user) => warmFinanceProfilePreview(user)));
+    await Promise.allSettled([
+      ensureFinanceProfilesCurrentValuations({
+        activeUserId: null,
+        event: "login",
+        priority: "background",
+        users: warmupProfiles
+      }),
+      ...warmupProfiles.map((user) => warmFinanceProfilePreview(user))
+    ]);
     return;
   }
 
@@ -694,6 +765,12 @@ async function runFinanceSessionWarmup() {
       event: "login",
       priority: "background",
       user: primaryProfile
+    }),
+    ensureFinanceProfilesCurrentValuations({
+      activeUserId: primaryProfile.id,
+      event: "login",
+      priority: "background",
+      users: warmupProfiles
     }),
     ...warmupProfiles
       .filter((user) => user.id !== primaryProfile.id)

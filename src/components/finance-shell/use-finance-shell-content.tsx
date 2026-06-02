@@ -209,7 +209,6 @@ export function useFinanceShellContent({
         userSelectContent={userSelectContent}
         welcomeContent={(
           <FinanceShellWelcomeContent
-            activeUserId={activeUser?.id ?? null}
             backgroundRef={welcomeBackgroundRef}
             binanceRefreshKey={binanceRefreshKey}
             isBackgroundVisible={isWelcomeBackgroundVisible}

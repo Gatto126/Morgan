@@ -29,7 +29,7 @@ import { useTransactionImport, type ImportedTransactionCounts } from "./finance-
 import { dashboardStages, getStageTitle } from "./finance-shell/stage-title";
 import { warmImportedProfileData } from "./finance-shell/import-data-warmup";
 import {
-  ensureFinanceCurrentValuation,
+  ensureFinanceProfilesCurrentValuations,
   ensureFinanceStageReady,
   preloadFinanceProfileStages
 } from "./finance-shell/finance-session-orchestrator";
@@ -53,6 +53,25 @@ function getSuggestedFirstProfileName(accountName: string) {
   const trimmedName = accountName.trim();
   const emailLocalPart = trimmedName.includes("@") ? trimmedName.split("@")[0] : trimmedName;
   return emailLocalPart.trim().slice(0, 24);
+}
+
+function getProfilesValuationWarmupKey(
+  users: UserRecord[],
+  activeUserId: string | null,
+  binanceRefreshKey: number
+) {
+  return [
+    activeUserId ?? "no-active-profile",
+    binanceRefreshKey,
+    ...users.map((user) => [
+      user.id,
+      user.transactionCount,
+      user.checkingCount,
+      user.investmentCount,
+      user.cryptoCount,
+      user.hasBinanceCredentials ? "binance" : "no-binance"
+    ].join(":"))
+  ].join("|");
 }
 
 export function FinanceShell({
@@ -125,6 +144,7 @@ export function FinanceShell({
   const createUserInputRef = useRef<HTMLInputElement | null>(null);
   const importedTransactionsHandlerRef = useRef<((counts: ImportedTransactionCounts) => Promise<void>) | null>(null);
   const lastProfileBootWarmupKeyRef = useRef("");
+  const lastProfilesValuationWarmupKeyRef = useRef("");
   const {
     parsing,
     approving,
@@ -374,32 +394,66 @@ export function FinanceShell({
     });
   }, [activeUser, binanceRefreshKey, hasRestoredClientState, stage]);
   useEffect(() => {
-    if (!activeUser || !hasRestoredClientState) {
+    if (!hasRestoredClientState || users.length === 0) {
+      return;
+    }
+
+    const warmupKey = getProfilesValuationWarmupKey(
+      users,
+      activeUser?.id ?? null,
+      binanceRefreshKey
+    );
+
+    if (lastProfilesValuationWarmupKeyRef.current === warmupKey) {
+      return;
+    }
+
+    lastProfilesValuationWarmupKeyRef.current = warmupKey;
+
+    void ensureFinanceProfilesCurrentValuations({
+      activeUserId: activeUser?.id ?? null,
+      binanceRefreshKey,
+      event: "app-boot",
+      livePriceMaxAgeMs: 0,
+      priority: activeUser ? "active" : "background",
+      users
+    }).catch(() => {
+      // Home and inactive profile previews keep their last validated snapshots.
+    });
+  }, [activeUser, binanceRefreshKey, hasRestoredClientState, users]);
+  useEffect(() => {
+    if (!hasRestoredClientState || users.length === 0) {
       return;
     }
 
     const refreshActiveStage = (event: "network-reconnect" | "tab-focus") => {
-      const activeStage = isDashboardStageKey(stage)
-        ? resolveVisibleDashboardStage(stage, activeUser)
-        : "dashboard";
+      const refreshTasks: Promise<unknown>[] = [
+        ensureFinanceProfilesCurrentValuations({
+          activeUserId: activeUser?.id ?? null,
+          binanceRefreshKey,
+          event,
+          livePriceMaxAgeMs: 0,
+          priority: "user",
+          users
+        })
+      ];
 
-      void Promise.allSettled([
-        ensureFinanceStageReady({
+      if (activeUser) {
+        const activeStage = isDashboardStageKey(stage)
+          ? resolveVisibleDashboardStage(stage, activeUser)
+          : "dashboard";
+
+        refreshTasks.unshift(ensureFinanceStageReady({
           binanceRefreshKey,
           event,
           livePriceMaxAgeMs: 0,
           priority: "user",
           stage: activeStage,
           user: activeUser
-        }),
-        ensureFinanceCurrentValuation({
-          binanceRefreshKey,
-          event,
-          livePriceMaxAgeMs: 0,
-          priority: "user",
-          user: activeUser
-        })
-      ]).catch(() => {
+        }));
+      }
+
+      void Promise.allSettled(refreshTasks).catch(() => {
         // Refresh is opportunistic; existing visible values stay mounted.
       });
     };
@@ -421,30 +475,49 @@ export function FinanceShell({
       window.removeEventListener("online", handleOnline);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [activeUser, binanceRefreshKey, hasRestoredClientState, stage]);
+  }, [activeUser, binanceRefreshKey, hasRestoredClientState, stage, users]);
   useEffect(() => {
-    if (!activeUser || !hasRestoredClientState) {
+    if (!hasRestoredClientState || users.length === 0) {
       return;
     }
 
-    const activeStage = isDashboardStageKey(stage)
-      ? resolveVisibleDashboardStage(stage, activeUser)
-      : "dashboard";
     const timer = window.setTimeout(() => {
       lastProfileBootWarmupKeyRef.current = "";
-      void preloadFinanceProfileStages({
-        activeStage,
-        binanceRefreshKey,
-        event: "daily-rollover",
-        priority: "user",
-        user: activeUser
-      }).catch(() => {
+      lastProfilesValuationWarmupKeyRef.current = "";
+      const rolloverTasks: Promise<unknown>[] = [
+        ensureFinanceProfilesCurrentValuations({
+          activeUserId: activeUser?.id ?? null,
+          binanceRefreshKey,
+          event: "daily-rollover",
+          force: true,
+          livePriceMaxAgeMs: 0,
+          priority: "user",
+          users
+        })
+      ];
+
+      if (activeUser) {
+        const activeStage = isDashboardStageKey(stage)
+          ? resolveVisibleDashboardStage(stage, activeUser)
+          : "dashboard";
+
+        rolloverTasks.unshift(preloadFinanceProfileStages({
+          activeStage,
+          binanceRefreshKey,
+          event: "daily-rollover",
+          force: true,
+          priority: "user",
+          user: activeUser
+        }));
+      }
+
+      void Promise.allSettled(rolloverTasks).catch(() => {
         // The next user action or focus event will retry the fresh-day preload.
       });
     }, getMillisecondsUntilNextUtcDate() + 1_000);
 
     return () => window.clearTimeout(timer);
-  }, [activeUser, binanceRefreshKey, hasRestoredClientState, stage]);
+  }, [activeUser, binanceRefreshKey, hasRestoredClientState, stage, users]);
 
   function showApiSettingsPanel() {
     setShowSettingsView(true);
@@ -500,17 +573,18 @@ export function FinanceShell({
         stage: stageKey,
         user: activeUser
       }),
-      ensureFinanceCurrentValuation({
+      ensureFinanceProfilesCurrentValuations({
+        activeUserId: activeUser.id,
         binanceRefreshKey,
         event: "dashboard-change",
         livePriceMaxAgeMs: 0,
         priority: "user",
-        user: activeUser
+        users
       })
     ]).catch(() => {
       // The destination dashboard owns the visible error state.
     });
-  }, [activeUser, binanceRefreshKey, navigateTo]);
+  }, [activeUser, binanceRefreshKey, navigateTo, users]);
 
   function closeActiveOverlayPanel() {
     if (showUploadView) {

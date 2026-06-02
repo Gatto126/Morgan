@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   collectStageLivePriceKeys,
   ensureFinanceCurrentValuation,
+  ensureFinanceProfilesCurrentValuations,
   ensureFinanceStageReady,
   getFinanceStageRequestKey,
   getFinanceSessionDiagnostics,
@@ -323,6 +324,110 @@ describe("finance session orchestrator", () => {
     expect(second.snapshot.totals.crypto.cents).toBe(610_000);
     expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith("/api/binance/"))).toBe(false);
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/prices?cryptos=BTC")).toHaveLength(2);
+  });
+
+  it("warms current valuation snapshots for active and inactive profiles", async () => {
+    const activeProfile: UserRecord = {
+      ...user,
+      checkingCount: 1,
+      cryptoCount: 0,
+      hasBinanceCredentials: false,
+      id: "profile-active-valuation",
+      investmentCount: 1,
+      transactionCount: 2
+    };
+    const inactiveProfile: UserRecord = {
+      ...user,
+      checkingCount: 0,
+      cryptoCount: 1,
+      hasBinanceCredentials: false,
+      id: "profile-inactive-valuation",
+      investmentCount: 0,
+      transactionCount: 1
+    };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/transactions/dashboard?")) {
+        const userId = new URL(url, "https://morgan.test").searchParams.get("userId");
+
+        if (userId === activeProfile.id) {
+          return {
+            ok: true,
+            json: async () => ({
+              accountTotals: { checking: 10_000, crypto: 0, heritage: 10_000, investment: 0 },
+              dailyData: [],
+              monthlyData: [],
+              providerSummaries: [{
+                checking: { cashback: 0, expenses: 0, income: 0, interest: 0, tax: 0, total: 10_000 },
+                cryptoTokens: [],
+                investmentProducts: [{
+                  cashback: 0,
+                  investedValue: 0,
+                  isin: "IE00B4L5Y983",
+                  productName: "ETF",
+                  quantity: 3
+                }],
+                sourceInstitution: "trade_republic",
+                total: 10_000
+              }]
+            })
+          };
+        }
+
+        if (userId === inactiveProfile.id) {
+          return {
+            ok: true,
+            json: async () => ({
+              accountTotals: { checking: 0, crypto: 0, heritage: 0, investment: 0 },
+              dailyData: [],
+              monthlyData: [],
+              providerSummaries: [{
+                checking: { cashback: 0, expenses: 0, income: 0, interest: 0, tax: 0, total: 0 },
+                cryptoTokens: [{ investedValue: 0, quantity: 2, tokenName: "Ethereum", tokenSymbol: "ETH" }],
+                investmentProducts: [],
+                sourceInstitution: "trade_republic",
+                total: 0
+              }]
+            })
+          };
+        }
+      }
+
+      if (url.startsWith("/api/prices?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            ETH: 2_000,
+            IE00B4L5Y983: 50
+          })
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await ensureFinanceProfilesCurrentValuations({
+      activeUserId: activeProfile.id,
+      event: "tab-focus",
+      livePriceMaxAgeMs: 0,
+      priority: "user",
+      users: [inactiveProfile, activeProfile, inactiveProfile]
+    });
+
+    expect(result.userIds).toEqual([activeProfile.id, inactiveProfile.id]);
+    expect(getCurrentValuationSnapshot(activeProfile.id)?.totals).toMatchObject({
+      checking: { cents: 10_000 },
+      crypto: { cents: 0 },
+      heritage: { cents: 25_000 },
+      investment: { cents: 15_000 }
+    });
+    expect(getCurrentValuationSnapshot(inactiveProfile.id)?.totals).toMatchObject({
+      checking: { cents: 0 },
+      crypto: { cents: 400_000 },
+      heritage: { cents: 400_000 },
+      investment: { cents: 0 }
+    });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/transactions/dashboard?"))).toHaveLength(2);
   });
 
   it("reports refreshed live quote diagnostics after a later price update", async () => {

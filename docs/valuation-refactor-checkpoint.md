@@ -1,7 +1,7 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `5cc65eb`
+Current baseline commit: `be821a5`
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -428,6 +428,10 @@ Implemented so far:
 - authenticated home current Heritage now uses a multi-profile aggregate of current valuation snapshots instead of recalculating from preview/live totals:
   - `src/components/finance-shell/welcome-heritage-preview.tsx`
   - `src/components/finance-shell/current-valuations-store.ts`
+- current valuation warmup for all profiles is now owned by the shell/orchestrator instead of the home preview:
+  - `src/components/finance-shell/finance-session-orchestrator.ts`
+  - `src/components/finance-shell.tsx`
+  - `src/components/finance-shell/welcome-heritage-preview.tsx`
 
 Important limitation:
 
@@ -440,7 +444,8 @@ Known mismatch found during production smoke and current mitigation:
 - The document and code should treat `investment` like `crypto` for current values: both depend on live market quotes and must be valued centrally, not rebuilt independently per dashboard.
 - Production smoke after `3b5d8b7` showed provider tabs could swap order between publishers. The shared topbar store now applies a canonical order per stage, so clicking BBVA/TR or switching dashboards must not reorder the buttons.
 - Production smoke also showed Trade Republic crypto prices could fail to refresh when Binance API was not connected. Binance is optional: a no-Binance profile must still fetch TR crypto live quotes and publish `crypto = Trade Republic crypto`.
-- Production smoke after `5cc65eb` showed the authenticated home Heritage can differ from the main dashboard Heritage. `src/components/finance-shell/welcome-heritage-preview.tsx` now keeps preview/history for the chart, but the current pill and current chart point are sourced from the multi-profile valuation aggregate. Manual smoke still needs to confirm single-profile home equals dashboard Heritage and multi-profile home equals the sum of profile snapshots.
+- Production smoke after `5cc65eb` showed the authenticated home Heritage can differ from the main dashboard Heritage. `src/components/finance-shell/welcome-heritage-preview.tsx` now keeps preview/history for the chart, but the current pill and current chart point are sourced from the multi-profile valuation aggregate.
+- Follow-up smoke after `be821a5` showed the home value can remain stale if the only refresh owner is the home component. The refresh owner must be the shell/orchestrator: app boot, focus/reconnect, daily rollover, dashboard navigation and login warmup should ensure current valuation snapshots for all profiles. The home must only subscribe and aggregate.
 
 ## Gaps To Close
 
@@ -459,6 +464,7 @@ Current progress:
 - Zero live quotes are treated as unavailable and do not publish fake zero totals.
 - Topbar cache seeding now reads checking/investment/crypto values through valuation selectors.
 - `finance-session-orchestrator` exposes `ensureFinanceCurrentValuation(...)` and includes valuation status/missing/unavailable quote diagnostics in session diagnostics.
+- `finance-session-orchestrator` exposes `ensureFinanceProfilesCurrentValuations(...)`, which prioritizes the active profile but also refreshes inactive profile snapshots in background without mounting their dashboards.
 - `warmImportedProfileData(...)` waits for a forced post-import valuation snapshot before returning.
 - Binance connect/delete invalidates the profile valuation and triggers a coherent valuation refresh.
 - Focus/reconnect refresh now asks for a full current valuation refresh, not only the visible stage.
@@ -470,7 +476,10 @@ Current progress:
 
 Remaining work:
 
-- smoke the multi-profile valuation aggregate for the authenticated home after deploy;
+- smoke the shell-owned multi-profile valuation refresh after deploy:
+  - one profile: home Heritage equals main dashboard Heritage after visiting dashboards and returning home;
+  - multiple profiles: home Heritage equals the sum of profile Heritage snapshots;
+  - inactive profile quotes refresh without opening that profile's dashboards;
 - replace remaining local current-value builders after consumers are migrated;
 - migrate checking dashboard card/topbar/chart where useful, though checking does not depend on live quotes;
 - remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough;
@@ -527,10 +536,17 @@ The authenticated home currently behaves like a preview surface, but its display
 
 Current problem:
 
-- `WelcomeHeritagePreview` combines `useAccountPortfolioPreviewData(...)`, `useDashboardLivePrices(...)` and `useDashboardLiveTotals(...)`;
-- this can produce a number close to, but not exactly equal to, the dashboard Heritage;
-- with one profile, that mismatch is visibly wrong;
-- with multiple profiles, the same mismatch becomes harder to diagnose because the home total is expected to be different from a single active dashboard.
+- `WelcomeHeritagePreview` historically combined preview/history and live totals locally;
+- this produced numbers close to, but not exactly equal to, dashboard Heritage;
+- the current pill/today point now read valuation aggregates, but the snapshots must be warmed outside the home so they keep updating while the user is on a dashboard.
+
+Current progress:
+
+- `selectCurrentValuationHeritageAggregate(...)` aggregates profile snapshots for the home current pill/today point;
+- `useCurrentValuationSnapshotMap(...)` subscribes the home to profile snapshots;
+- `ensureFinanceProfilesCurrentValuations(...)` warms all profile snapshots from the orchestrator;
+- `FinanceShell` triggers multi-profile valuation refresh on app boot/profile changes, focus/reconnect, daily rollover and dashboard navigation;
+- `WelcomeHeritagePreview` no longer calls `ensureFinanceCurrentValuation(...)` or owns focus/online refresh listeners.
 
 Target:
 
@@ -626,12 +642,12 @@ Until then:
 
 ## Implementation Plan
 
-Current next execution order after `5cc65eb`:
+Current next execution order after `be821a5` and the shell-owned warmup slice:
 
-1. Home multi-profile current valuation aggregate:
-   - calculate/ensure valuation snapshots for all profiles;
-   - home current Heritage reads the sum of snapshot `totals.heritage`;
-   - home chart keeps historical preview but replaces current pill/today point with valuation aggregate.
+1. Smoke the shell-owned multi-profile valuation refresh:
+   - one profile: home Heritage equals dashboard Heritage after dashboard visits and return home;
+   - multiple profiles: home equals the sum of profile snapshots;
+   - inactive profile ETF/crypto live quotes refresh without opening that profile's dashboards.
 2. Topbar UI state cleanup:
    - values remain owned by valuation/store;
    - active tab, click handlers, animation state and session hydration are treated as UI-only;

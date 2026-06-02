@@ -6,7 +6,6 @@ import type { UserRecord } from "./types";
 import { WelcomeHeritagePreview } from "./welcome-heritage-preview";
 
 type WelcomeStageProps = {
-  activeUserId: string | null;
   backgroundRef: RefObject<HTMLDivElement | null>;
   binanceRefreshKey: number;
   isBackgroundVisible: boolean;
@@ -15,7 +14,6 @@ type WelcomeStageProps = {
 };
 
 export function WelcomeStage({
-  activeUserId,
   backgroundRef,
   binanceRefreshKey,
   isBackgroundVisible,
@@ -73,7 +71,6 @@ export function WelcomeStage({
             <div className="hidden w-[2px] shrink-0 self-stretch bg-[color:var(--line-strong)] opacity-30 md:block" />
 
             <WelcomeHeritagePreview
-              activeUserId={activeUserId}
               binanceRefreshKey={binanceRefreshKey}
               isActive={isBackgroundVisible && !isPanelModalOpen}
               users={users}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChartPie } from "lucide-react";
 import { Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -22,7 +22,6 @@ import {
   selectCurrentValuationHeritageAggregate,
   useCurrentValuationSnapshotMap
 } from "./current-valuations-store";
-import { ensureFinanceCurrentValuation } from "./finance-session-orchestrator";
 import type { UserRecord } from "./types";
 import {
   type AccountPortfolioPreviewRecord,
@@ -34,7 +33,6 @@ import {
 } from "./welcome-heritage-preview-axis";
 
 type WelcomeHeritagePreviewProps = {
-  activeUserId: string | null;
   binanceRefreshKey: number;
   isActive: boolean;
   users: UserRecord[];
@@ -65,7 +63,6 @@ function WelcomeHeritageTooltip({ active, payload, setActivePoint }: HeritageToo
 }
 
 export function WelcomeHeritagePreview({
-  activeUserId,
   binanceRefreshKey,
   isActive,
   users = []
@@ -93,19 +90,6 @@ export function WelcomeHeritagePreview({
     ),
     [currentValuationPoint, records]
   );
-  const refreshHomeValuations = useCallback(() => {
-    if (!shouldLoad) {
-      return;
-    }
-
-    void Promise.allSettled(users.map((user) => ensureFinanceCurrentValuation({
-      binanceRefreshKey,
-      event: "profile-change",
-      livePriceMaxAgeMs: 0,
-      priority: user.id === activeUserId ? "active" : "background",
-      user
-    })));
-  }, [activeUserId, binanceRefreshKey, shouldLoad, users]);
   const heritageValues = useMemo(
     () => chartData
       .map((point) => point.heritage)
@@ -123,24 +107,6 @@ export function WelcomeHeritagePreview({
   const topbarDisplayValue = typeof topbarValue === "number" && Number.isFinite(topbarValue)
     ? formatEuroCents(topbarValue)
     : "";
-
-  useEffect(() => {
-    refreshHomeValuations();
-  }, [refreshHomeValuations]);
-
-  useEffect(() => {
-    if (!shouldLoad) {
-      return;
-    }
-
-    window.addEventListener("focus", refreshHomeValuations);
-    window.addEventListener("online", refreshHomeValuations);
-
-    return () => {
-      window.removeEventListener("focus", refreshHomeValuations);
-      window.removeEventListener("online", refreshHomeValuations);
-    };
-  }, [refreshHomeValuations, shouldLoad]);
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[520px] flex-col justify-center">
