@@ -1,11 +1,11 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `87829f0` (server-side Binance material filtering + atomic Binance current commit)
+Current baseline commit: `2d1dbaf` (inactive dashboard visual render gate on top of atomic Binance current valuation)
 Last fully Vercel-smoked checkpoint: `4cf0420`
-Latest Vercel smoke note: `87829f0` looks better for Binance loading, but console verbose output shows repeated `content-visibility` hidden-subtree renders.
-Current slice pending Vercel smoke: inactive-stage visual render gate spike
-Next implementation phase: inactive-stage render cleanup, diagnostics deepening and remaining current-value fallback audit
+Latest Vercel smoke note: inactive-stage visual render gate reduced `content-visibility` verbose output substantially; remaining messages appear mostly during dashboard changes.
+Current slice pending Vercel smoke: Binance/crypto price refresh batch optimization with 5s max cache
+Next implementation phase: diagnostics deepening and remaining current-value fallback audit
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -92,6 +92,17 @@ Binance current policy:
 - Binance token above threshold whose quote has not arrived yet: keep the new valuation snapshot pending so the visible current total does not grow in steps.
 - Binance token above threshold with attempted unavailable/invalid quote: exclude from current totals and hide from current-value card rows; record the token/key in diagnostics. Do not use `balance.eurValue` as an unmarked current fallback.
 - Token name/quantity may be shown as synced balance data only if the UI clearly separates it from current valuation. For the current valuation card, prefer hiding unpriced token rows.
+
+Binance/crypto live price performance policy:
+
+- Current values still require live quotes. Do not reintroduce visible `balance.eurValue` fallback to make Binance appear faster.
+- Binance public ticker prices should be fetched as a batch price map instead of one request per token.
+- Primary conversion route: `TOKENUSDT / EURUSDT`, because USDT pairs usually have the broadest coverage.
+- Fallback routes: direct `TOKENEUR`, then `TOKENUSDC` converted to EUR through `USDC/EUR` or `USDC/USDT + EUR/USDT` pairs.
+- Trade Republic crypto and Binance must share normalized quote keys (`BTC`, `ETH`, etc.) so a single price refresh feeds both providers and the central valuation.
+- A short server-side/in-flight cache is acceptable only up to 5 seconds. It is meant to dedupe boot/focus/dashboard-change bursts, not to display old prices as live for a long time.
+- Public Binance market-data rate-limit/WAF risk should be reduced by batching and caching. Avoid returning to dozens of single-symbol requests during cold login/F5.
+- Rollback for this slice: if Vercel shows stale-feeling prices, missing common crypto quotes, or worse Binance bootstrap, revert only the batch-price commit and return to `2d1dbaf`.
 
 ## Target Architecture
 
@@ -896,7 +907,7 @@ Current next execution order after `4cf0420`:
      - no-Binance profile still computes `crypto = TR crypto`;
      - Binance total/topbar/card/today point all come from the same committed snapshot.
 
-5. Inactive-stage render cleanup: next concrete performance/UI slice.
+5. Inactive-stage render cleanup: implemented and pushed, smoke continuing.
    - Problem observed on Vercel after Binance material filtering:
      - Console shows many Chrome verbose messages: `Rendering was performed in a subtree hidden by content-visibility`.
      - Source is inactive dashboard roots using `getDashboardStageVisibilityStyle(false)` with `contentVisibility: "hidden"`.
@@ -915,16 +926,45 @@ Current next execution order after `4cf0420`:
      - `Dashboard`, `CheckingDashboard`, `PortfolioDashboard` and `BinanceDashboard` keep parent state/hooks mounted;
      - visual JSX for tabs, charts, cards and panel bodies renders only while the stage is active;
      - valuation, stage cache and live quote warmup are intentionally left untouched.
-   - Rollback plan:
-     - baseline before this spike is pushed commit `87829f0`;
-     - if smoke shows flash, lost UI state, delayed dashboard switching, broken panel overlays or worse perceived performance, revert only this inactive-stage render gate commit/slice and return to `87829f0` behavior.
+    - Rollback plan:
+      - baseline before this spike is pushed commit `87829f0`;
+      - if smoke shows flash, lost UI state, delayed dashboard switching, broken panel overlays or worse perceived performance, revert only this inactive-stage render gate commit/slice and return to `87829f0` behavior.
+    - Latest Vercel note:
+      - verbose messages dropped sharply and now mostly appear only during dashboard switching;
+      - no visible UI regression reported so far.
 
-6. Final current fallback cleanup:
+6. Binance/crypto price refresh batch optimization: implemented locally, pending Vercel smoke.
+   - Problem observed after materiality filtering:
+     - Binance current valuation can still arrive later than checking/investment/TR crypto on cold login/F5;
+     - diagnostics showed the expensive part is quote refresh, not loading balances from DB.
+   - Root cause:
+     - old default crypto price path fetched Binance ticker prices per symbol;
+     - each token could try direct EUR, then USDT plus EUR/USDT conversion;
+     - many material Binance balances produced many HTTP requests even though public Binance ticker data can be queried in batch.
+   - Implementation plan:
+     - keep valuation atomic and committed-only; do not reintroduce `balance.eurValue` as visible current fallback;
+     - add a default Binance ticker price-map fetcher in `price-refresh`;
+     - call Binance public `GET /api/v3/ticker/price` once and build a symbol -> price map;
+     - resolve crypto quote keys with USDT-first conversion (`TOKENUSDT / EURUSDT`);
+     - fallback to direct `TOKENEUR`, then `TOKENUSDC` converted through USDC/EUR or USDC/USDT + EUR/USDT;
+     - share normalized crypto quote keys across Trade Republic crypto and Binance, so BTC/ETH are priced once per refresh;
+     - add a maximum 5 second in-service cache/in-flight dedupe for the ticker map;
+     - preserve the existing custom `cryptoFetcher` path for tests/special cases.
+   - Rollback plan:
+     - baseline before this spike is pushed commit `2d1dbaf`;
+     - if Vercel shows stale-feeling prices, missing common token prices, worse Binance bootstrap, or Binance API/WAF issues, revert only this batch-price commit and return to `2d1dbaf`.
+   - Smoke targets:
+     - cold login/F5: Binance should leave skeleton faster;
+     - diagnostics: `/api/prices` may still be called by app flow, but external Binance ticker fetching should be one batch per short window;
+     - TR crypto and Binance common tokens should update together from the same quote keys;
+     - no visible current fallback from synced `eurValue`.
+
+7. Final current fallback cleanup:
    - Re-audit remaining `balance.eurValue`, `livePrices`, local current and topbar publishers.
    - Keep local logic only for historical reconstruction, tooltip values, chart transforms, synced balance metadata and diagnostics.
    - Remove or quarantine helpers that can publish current money outside the committed valuation path.
 
-7. Regression smoke checklist for every slice:
+8. Regression smoke checklist for every slice:
    - F5 on dashboard/checking/investment/crypto/Binance:
      - no fake `0,00`;
      - skeleton only if no committed snapshot exists;

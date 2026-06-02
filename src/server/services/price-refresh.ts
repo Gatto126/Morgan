@@ -12,6 +12,8 @@ import { consumeScopedRateLimit } from "@/server/services/rate-limit";
 const log = apiLogger("Prices");
 
 const BINANCE_TIMEOUT_MS = 5_000;
+const BINANCE_TICKER_PRICE_URL = "https://api.binance.com/api/v3/ticker/price";
+const DEFAULT_BINANCE_TICKER_CACHE_MS = 5_000;
 const DEFAULT_ISIN_PRICE_CONCURRENCY = 5;
 const DEFAULT_CRYPTO_PRICE_CONCURRENCY = 10;
 const DEFAULT_HISTORICAL_FALLBACK_GRACE_MS = 1_200;
@@ -26,8 +28,9 @@ type PriceFetchResult = {
 };
 
 type PriceFetcher = (key: string) => Promise<number | null>;
-
+type CryptoBatchFetcher = (keys: string[]) => Promise<Record<string, number | null>>;
 type PriceLogger = Pick<ReturnType<typeof apiLogger>, "error" | "info">;
+type BinanceTickerPriceMap = Map<string, number>;
 
 export type PriceRefreshRequest = {
   isins: string[];
@@ -97,10 +100,12 @@ export class PersistentPriceRateLimiter implements PriceRateLimiter {
 }
 
 type CreatePriceRefreshServiceOptions = {
+  binanceTickerCacheMs?: number;
   repository?: PriceRefreshRepository;
   rateLimiter?: PriceRateLimiter;
   isinFetcher?: PriceFetcher;
   cryptoFetcher?: PriceFetcher;
+  cryptoBatchFetcher?: CryptoBatchFetcher | null;
   isinConcurrency?: number;
   cryptoConcurrency?: number;
   historicalFallbackGraceMs?: number;
@@ -236,7 +241,7 @@ function fetchLivePrice(isin: string, timeoutMs = 6_000, logger: PriceLogger = l
 }
 
 async function fetchBinanceTickerPrice(binanceSymbol: string, timeoutMs: number) {
-  const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${binanceSymbol}`, {
+  const response = await fetch(`${BINANCE_TICKER_PRICE_URL}?symbol=${binanceSymbol}`, {
     cache: "no-store",
     signal: AbortSignal.timeout(timeoutMs)
   });
@@ -274,6 +279,155 @@ async function fetchBinancePrice(symbol: string, timeoutMs = BINANCE_TIMEOUT_MS,
     logger.info(`[${symbol}] Binance fetch error: ${error}`);
     return null;
   }
+}
+
+async function fetchAllBinanceTickerPrices(timeoutMs: number): Promise<BinanceTickerPriceMap> {
+  const response = await fetch(BINANCE_TICKER_PRICE_URL, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+
+  if (!response.ok) {
+    return new Map();
+  }
+
+  const data = await response.json();
+  const rows = Array.isArray(data) ? data : [data];
+  const prices: BinanceTickerPriceMap = new Map();
+
+  for (const row of rows) {
+    const symbol = typeof row?.symbol === "string" ? row.symbol.toUpperCase() : null;
+    const price = row?.price != null ? Number(row.price) : null;
+    if (symbol && typeof price === "number" && Number.isFinite(price) && price > 0) {
+      prices.set(symbol, price);
+    }
+  }
+
+  return prices;
+}
+
+function getTickerMapPrice(prices: BinanceTickerPriceMap, symbol: string) {
+  const price = prices.get(symbol.toUpperCase());
+  return typeof price === "number" && Number.isFinite(price) && price > 0 ? price : null;
+}
+
+function getUsdtToEurRate(prices: BinanceTickerPriceMap) {
+  const usdtEur = getTickerMapPrice(prices, "USDTEUR");
+  if (usdtEur !== null) {
+    return usdtEur;
+  }
+
+  const eurUsdt = getTickerMapPrice(prices, "EURUSDT");
+  return eurUsdt !== null ? 1 / eurUsdt : null;
+}
+
+function getUsdcToEurRate(prices: BinanceTickerPriceMap) {
+  const usdcEur = getTickerMapPrice(prices, "USDCEUR");
+  if (usdcEur !== null) {
+    return usdcEur;
+  }
+
+  const eurUsdc = getTickerMapPrice(prices, "EURUSDC");
+  if (eurUsdc !== null) {
+    return 1 / eurUsdc;
+  }
+
+  const usdtToEur = getUsdtToEurRate(prices);
+  if (usdtToEur === null) {
+    return null;
+  }
+
+  const usdcUsdt = getTickerMapPrice(prices, "USDCUSDT");
+  if (usdcUsdt !== null) {
+    return usdcUsdt * usdtToEur;
+  }
+
+  const usdtUsdc = getTickerMapPrice(prices, "USDTUSDC");
+  return usdtUsdc !== null ? usdtToEur / usdtUsdc : null;
+}
+
+function resolveBinanceTickerMapCryptoPrice(symbol: string, prices: BinanceTickerPriceMap) {
+  const uppercaseSymbol = symbol.toUpperCase();
+
+  if (uppercaseSymbol === "EUR") {
+    return 1;
+  }
+
+  if (uppercaseSymbol === "USDT") {
+    return getUsdtToEurRate(prices);
+  }
+
+  if (uppercaseSymbol === "USDC") {
+    return getUsdcToEurRate(prices);
+  }
+
+  const usdtPrice = getTickerMapPrice(prices, `${uppercaseSymbol}USDT`);
+  const usdtToEur = getUsdtToEurRate(prices);
+  if (usdtPrice !== null && usdtToEur !== null) {
+    return usdtPrice * usdtToEur;
+  }
+
+  const eurPrice = getTickerMapPrice(prices, `${uppercaseSymbol}EUR`);
+  if (eurPrice !== null) {
+    return eurPrice;
+  }
+
+  const usdcPrice = getTickerMapPrice(prices, `${uppercaseSymbol}USDC`);
+  const usdcToEur = getUsdcToEurRate(prices);
+  if (usdcPrice !== null && usdcToEur !== null) {
+    return usdcPrice * usdcToEur;
+  }
+
+  return null;
+}
+
+function createBinanceBatchCryptoFetcher({
+  cacheMs,
+  logger,
+  timeoutMs
+}: {
+  cacheMs: number;
+  logger: PriceLogger;
+  timeoutMs: number;
+}): CryptoBatchFetcher {
+  let cachedAt = 0;
+  let cachedPrices: BinanceTickerPriceMap | null = null;
+  let inFlightPrices: Promise<BinanceTickerPriceMap> | null = null;
+
+  async function getTickerPrices() {
+    const now = Date.now();
+    if (cachedPrices && now - cachedAt <= cacheMs) {
+      return cachedPrices;
+    }
+
+    inFlightPrices ??= fetchAllBinanceTickerPrices(timeoutMs)
+      .then((prices) => {
+        cachedAt = Date.now();
+        cachedPrices = prices;
+        logger.info(`[binance] Received ${prices.size} ticker prices from batch endpoint.`);
+        return prices;
+      })
+      .catch((error) => {
+        logger.info(`[binance] Batch ticker price fetch error: ${error}`);
+        return new Map();
+      })
+      .finally(() => {
+        inFlightPrices = null;
+      });
+
+    return inFlightPrices;
+  }
+
+  return async (keys: string[]) => {
+    const tickerPrices = await getTickerPrices();
+    const prices: Record<string, number | null> = {};
+
+    for (const key of keys) {
+      prices[key] = resolveBinanceTickerMapCryptoPrice(key, tickerPrices);
+    }
+
+    return prices;
+  };
 }
 
 async function fetchPriceResults(
@@ -321,11 +475,35 @@ async function fetchPriceResults(
   return keys.map((key) => resultByKey.get(key) ?? { key, price: null });
 }
 
+async function fetchBatchCryptoPriceResults(
+  keys: string[],
+  fetcher: CryptoBatchFetcher,
+  logger: PriceLogger
+) {
+  if (keys.length === 0) {
+    return [];
+  }
+
+  try {
+    logger.info(`[crypto] Fetching ${keys.length} live prices from Binance batch.`);
+    const prices = await fetcher(keys);
+    return keys.map((key): PriceFetchResult => ({
+      key,
+      price: prices[key] ?? null
+    }));
+  } catch (error) {
+    logger.error("GET", "/api/prices?cryptos=batch", error);
+    return keys.map((key): PriceFetchResult => ({ key, price: null }));
+  }
+}
+
 export function createPriceRefreshService({
+  binanceTickerCacheMs = DEFAULT_BINANCE_TICKER_CACHE_MS,
   repository = marketDataRepository,
   rateLimiter = new InMemoryPriceRateLimiter(),
   isinFetcher,
   cryptoFetcher,
+  cryptoBatchFetcher,
   isinConcurrency = DEFAULT_ISIN_PRICE_CONCURRENCY,
   cryptoConcurrency = DEFAULT_CRYPTO_PRICE_CONCURRENCY,
   historicalFallbackGraceMs = DEFAULT_HISTORICAL_FALLBACK_GRACE_MS,
@@ -335,6 +513,15 @@ export function createPriceRefreshService({
 }: CreatePriceRefreshServiceOptions = {}) {
   const fetchIsinPrice: PriceFetcher = isinFetcher ?? ((isin) => fetchLivePrice(isin, 6_000, logger));
   const fetchCryptoPrice: PriceFetcher = cryptoFetcher ?? ((symbol) => fetchBinancePrice(symbol, BINANCE_TIMEOUT_MS, logger));
+  const fetchCryptoBatchPrices: CryptoBatchFetcher | null | undefined = cryptoBatchFetcher === undefined
+    ? cryptoFetcher
+      ? null
+      : createBinanceBatchCryptoFetcher({
+          cacheMs: binanceTickerCacheMs,
+          logger,
+          timeoutMs: BINANCE_TIMEOUT_MS
+        })
+    : cryptoBatchFetcher;
 
   return {
     async getRetryAfterMs(userId: string) {
@@ -368,16 +555,22 @@ export function createPriceRefreshService({
             historicalFallbackGraceMs,
             logger
           ),
-          fetchPriceResults(
-            "crypto",
-            cryptos,
-            cryptoConcurrency,
-            fetchCryptoPrice,
-            inFlightCryptoPrices,
-            historicalPrices,
-            historicalFallbackGraceMs,
-            logger
-          )
+          fetchCryptoBatchPrices
+            ? fetchBatchCryptoPriceResults(
+                cryptos,
+                fetchCryptoBatchPrices,
+                logger
+              )
+            : fetchPriceResults(
+                "crypto",
+                cryptos,
+                cryptoConcurrency,
+                fetchCryptoPrice,
+                inFlightCryptoPrices,
+                historicalPrices,
+                historicalFallbackGraceMs,
+                logger
+              )
         ]),
         ([isinRows, cryptoRows]) => ({
           cryptoKeys: cryptos.length,

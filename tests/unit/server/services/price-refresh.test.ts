@@ -86,18 +86,19 @@ describe("price refresh service", () => {
     expect(cryptoFetcher).toHaveBeenCalledWith("BTC");
   });
 
-  it("falls back to USDT crypto pairs and converts them to EUR", async () => {
+  it("uses the Binance ticker batch with USDT-first EUR conversion", async () => {
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.includes("BTCEUR")) {
-        return { ok: false };
+      if (url === "https://api.binance.com/api/v3/ticker/price") {
+        return {
+          ok: true,
+          json: async () => [
+            { symbol: "BTCEUR", price: "61000" },
+            { symbol: "BTCUSDT", price: "66000" },
+            { symbol: "EURUSDT", price: "1.10" }
+          ]
+        };
       }
-      if (url.includes("BTCUSDT")) {
-        return { ok: true, json: async () => ({ price: "66000" }) };
-      }
-      if (url.includes("EURUSDT")) {
-        return { ok: true, json: async () => ({ price: "1.10" }) };
-      }
-      return { ok: false };
+      return { ok: false, json: async () => [] };
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -113,18 +114,76 @@ describe("price refresh service", () => {
       cryptos: ["BTC"]
     });
     expect(prices.BTC).toBeCloseTo(60000);
+    expect(fetchMock).toHaveBeenCalledOnce();
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.binance.com/api/v3/ticker/price?symbol=BTCEUR",
+      "https://api.binance.com/api/v3/ticker/price",
       expect.any(Object)
     );
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT",
-      expect.any(Object)
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT",
-      expect.any(Object)
-    );
+  });
+
+  it("falls back to EUR and USDC pairs from the Binance ticker batch", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "https://api.binance.com/api/v3/ticker/price") {
+        return {
+          ok: true,
+          json: async () => [
+            { symbol: "ADAEUR", price: "0.50" },
+            { symbol: "SOLUSDC", price: "180" },
+            { symbol: "USDCUSDT", price: "1.00" },
+            { symbol: "EURUSDT", price: "1.20" }
+          ]
+        };
+      }
+      return { ok: false, json: async () => [] };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const service = createPriceRefreshService({
+      repository: { listLatestHistoricalPrices: vi.fn(async () => new Map()) },
+      rateLimiter: { getRetryAfterMs: () => null },
+      isinFetcher: vi.fn(async () => null),
+      logger: silentLogger
+    });
+
+    const prices = await service.fetchPrices({
+      isins: [],
+      cryptos: ["ADA", "SOL"]
+    });
+    expect(prices.ADA).toBeCloseTo(0.5);
+    expect(prices.SOL).toBeCloseTo(150);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("deduplicates Binance ticker batch requests inside the five second cache window", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "https://api.binance.com/api/v3/ticker/price") {
+        return {
+          ok: true,
+          json: async () => [
+            { symbol: "BTCUSDT", price: "66000" },
+            { symbol: "ETHUSDT", price: "3300" },
+            { symbol: "EURUSDT", price: "1.10" }
+          ]
+        };
+      }
+      return { ok: false, json: async () => [] };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const service = createPriceRefreshService({
+      repository: { listLatestHistoricalPrices: vi.fn(async () => new Map()) },
+      rateLimiter: { getRetryAfterMs: () => null },
+      isinFetcher: vi.fn(async () => null),
+      logger: silentLogger
+    });
+
+    await expect(service.fetchPrices({ isins: [], cryptos: ["BTC"] })).resolves.toEqual({
+      BTC: 60000
+    });
+    await expect(service.fetchPrices({ isins: [], cryptos: ["ETH"] })).resolves.toEqual({
+      ETH: 3000
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("uses historical fallback quickly when a live price is slow", async () => {
