@@ -1,7 +1,7 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `be821a5`
+Current baseline commit: `ff25c55`
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -432,6 +432,10 @@ Implemented so far:
   - `src/components/finance-shell/finance-session-orchestrator.ts`
   - `src/components/finance-shell.tsx`
   - `src/components/finance-shell/welcome-heritage-preview.tsx`
+- dashboard topbar session storage is layout-only:
+  - stored topbar entries no longer replay old money values after reload/F5;
+  - `dashboard-topbar-store.ts` keeps provider order canonical and removes stale provider tabs when a new valuation layout no longer includes them;
+  - `dashboard-topbar-shell.tsx` keys rendered tabs by stage/item identity so UI state is not reused across unrelated slots.
 
 Important limitation:
 
@@ -443,6 +447,7 @@ Known mismatch found during production smoke and current mitigation:
 - The Binance dashboard manual sync button used to update local balances without forcing the central current valuation. `src/components/binance-dashboard.tsx` now seeds the Binance stage cache and calls `ensureFinanceCurrentValuation(... force: true)` after sync.
 - The document and code should treat `investment` like `crypto` for current values: both depend on live market quotes and must be valued centrally, not rebuilt independently per dashboard.
 - Production smoke after `3b5d8b7` showed provider tabs could swap order between publishers. The shared topbar store now applies a canonical order per stage, so clicking BBVA/TR or switching dashboards must not reorder the buttons.
+- Follow-up topbar cleanup made session storage layout-only. It can keep tab shape while the app hydrates, but it must never replay a previous money value as current after F5/reload.
 - Production smoke also showed Trade Republic crypto prices could fail to refresh when Binance API was not connected. Binance is optional: a no-Binance profile must still fetch TR crypto live quotes and publish `crypto = Trade Republic crypto`.
 - Production smoke after `5cc65eb` showed the authenticated home Heritage can differ from the main dashboard Heritage. `src/components/finance-shell/welcome-heritage-preview.tsx` now keeps preview/history for the chart, but the current pill and current chart point are sourced from the multi-profile valuation aggregate.
 - Follow-up smoke after `be821a5` showed the home value can remain stale if the only refresh owner is the home component. The refresh owner must be the shell/orchestrator: app boot, focus/reconnect, daily rollover, dashboard navigation and login warmup should ensure current valuation snapshots for all profiles. The home must only subscribe and aggregate.
@@ -473,6 +478,7 @@ Current progress:
 - Portfolio/investment/crypto chart data accepts a valuation current point and uses it for today's point.
 - Main dashboard and portfolio cards prefer valuation values for provider totals and asset current values.
 - Binance dashboard prefers `totals.binance` from the valuation snapshot for its topbar and current flat chart value.
+- Topbar storage is now a UI/layout bridge only: persisted topbar entries keep identity/order/labels, not authoritative values.
 
 Remaining work:
 
@@ -484,7 +490,7 @@ Remaining work:
 - migrate checking dashboard card/topbar/chart where useful, though checking does not depend on live quotes;
 - remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough;
 - expand tests for orchestration races and UI consistency.
-- watch the topbar UI while changing dashboard/stage: values are increasingly centralized, but active state, animations and stored hydration still live in the topbar UI bridge.
+- continue topbar cleanup by reducing direct dashboard value publishers. Current slice fixed storage/hydration/order; `DashboardTabs`, `CheckingDashboardTabs`, `PortfolioDashboardTabs` and `BinanceDashboard` can still publish topbar values during active chart interactions and should be reduced carefully.
 
 Snapshot shape should include:
 
@@ -642,23 +648,27 @@ Until then:
 
 ## Implementation Plan
 
-Current next execution order after `be821a5` and the shell-owned warmup slice:
+Current next execution order after `ff25c55` and the first topbar UI cleanup slice:
 
-1. Smoke the shell-owned multi-profile valuation refresh:
+1. Smoke topbar storage/UI cleanup:
+   - F5 on dashboard/checking/investment/crypto/Binance must not replay old topbar money values from session storage;
+   - click BBVA/TR repeatedly and switch dashboards: provider order must stay canonical;
+   - delete/connect Binance or change provider availability: stale provider tabs must disappear.
+2. Smoke the shell-owned multi-profile valuation refresh:
    - one profile: home Heritage equals dashboard Heritage after dashboard visits and return home;
    - multiple profiles: home equals the sum of profile snapshots;
    - inactive profile ETF/crypto live quotes refresh without opening that profile's dashboards.
-2. Topbar UI state cleanup:
-   - values remain owned by valuation/store;
-   - active tab, click handlers, animation state and session hydration are treated as UI-only;
-   - remove stale publisher/session state that can cause micro-flashes or wrong active tabs.
-3. Cleanup local current fallback builders:
+3. Continue topbar publisher cleanup:
+   - keep active tab/click handlers local;
+   - move resting/current values toward valuation selectors only;
+   - preserve tooltip hover values without letting them become persisted authoritative values.
+4. Cleanup local current fallback builders:
    - only after dashboard and home current values are consistently valuation-driven;
    - keep local logic for historical chart reconstruction and tooltip transforms only.
-4. Edge-case tests:
+5. Edge-case tests:
    - clean login/cache, F5 on every dashboard, import while navigating, profile switch during refresh, Binance connect/delete/sync, no-Binance crypto, missing quotes.
-5. Diagnostics improvements.
-6. Binance historical sync as a separate future project.
+6. Diagnostics improvements.
+7. Binance historical sync as a separate future project.
 
 ### Phase 1: Stabilize Central Current Valuation
 

@@ -22,7 +22,9 @@ type DashboardTopbarEntry = {
   updatedAt: number;
 };
 
-type StoredDashboardTopbarItem = Pick<DashboardTopbarItem, "active" | "animateChanges" | "ariaLabel" | "id" | "label" | "value">;
+type StoredDashboardTopbarItem = Pick<DashboardTopbarItem, "active" | "animateChanges" | "ariaLabel" | "id" | "label"> & {
+  value?: string;
+};
 
 const listeners = new Set<() => void>();
 const entries = new Map<string, DashboardTopbarEntry>();
@@ -32,7 +34,7 @@ const emptyEntry: DashboardTopbarEntry = {
   updatedAt: 0
 };
 const pendingTopbarValue = "--";
-const storagePrefix = "morgan:dashboard-topbar:v1:";
+const storagePrefix = "morgan:dashboard-topbar:v2:";
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 const stageRootOrder: Partial<Record<DashboardStageKey, string[]>> = {
   binance: ["binance"],
@@ -68,13 +70,12 @@ function getSessionStorage() {
 }
 
 function serializeItems(items: DashboardTopbarItem[]): StoredDashboardTopbarItem[] {
-  return items.map(({ active, animateChanges, ariaLabel, id, label, value }) => ({
+  return items.map(({ active, animateChanges, ariaLabel, id, label }) => ({
     active,
     animateChanges,
     ariaLabel,
     id,
-    label,
-    value
+    label
   }));
 }
 
@@ -248,7 +249,6 @@ function commitDashboardTopbar(cacheKey: string, items: DashboardTopbarItem[]) {
 
 function dropUnverifiedTopbar(cacheKey: string) {
   const hadEntry = entries.delete(cacheKey);
-  removeStoredTopbarItems(cacheKey);
 
   if (hadEntry) {
     emitTopbarChange();
@@ -279,10 +279,6 @@ export function readStoredDashboardTopbarItems(
     const items = parsedItems
       .filter((item): item is StoredDashboardTopbarItem => typeof item.id === "string")
       .map((item) => {
-        const storedValue = item.value && item.value !== "--" && item.value !== "-"
-          ? item.value
-          : pendingTopbarValue;
-
         return {
           active: !!item.active,
           animateChanges: !!item.animateChanges,
@@ -290,7 +286,7 @@ export function readStoredDashboardTopbarItems(
           id: item.id,
           label: item.label,
           suppressInitialChanges: true,
-          value: placeholderValues ? "" : storedValue
+          value: placeholderValues ? "" : pendingTopbarValue
         };
       });
 
@@ -322,7 +318,7 @@ export function publishDashboardTopbar(
     return;
   }
 
-  const previousItems = entries.get(cacheKey)?.items ?? readStoredDashboardTopbarItems(stage, userId);
+  const previousItems = entries.get(cacheKey)?.items ?? [];
   if (shouldDropInitialZeroTopbarPublish(previousItems, normalizedItems)) {
     clearDelayedTopbarPublish(cacheKey);
     dropUnverifiedTopbar(cacheKey);
@@ -357,22 +353,18 @@ export function seedDashboardTopbarLayout(
     }
 
     const previousById = new Map(previousEntry.items.map((item) => [item.id, item]));
-    const nextIds = new Set(normalizedItems.map((item) => item.id));
-    const mergedItems = [
-      ...normalizedItems.map((item) => {
-        const previousItem = previousById.get(item.id);
+    const mergedItems = normalizedItems.map((item) => {
+      const previousItem = previousById.get(item.id);
 
-        return previousItem
-          ? {
-              ...item,
-              active: previousItem.active,
-              onClick: previousItem.onClick,
-              suppressInitialChanges: previousItem.suppressInitialChanges ?? item.suppressInitialChanges
-            }
-          : item;
-      }),
-      ...previousEntry.items.filter((item) => !nextIds.has(item.id))
-    ];
+      return previousItem
+        ? {
+            ...item,
+            active: previousItem.active,
+            onClick: previousItem.onClick,
+            suppressInitialChanges: previousItem.suppressInitialChanges ?? item.suppressInitialChanges
+          }
+        : item;
+    });
     const normalizedMergedItems = normalizeDashboardTopbarItems(stage, mergedItems);
 
     entries.set(cacheKey, {

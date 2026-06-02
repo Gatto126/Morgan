@@ -58,7 +58,7 @@ describe("dashboard topbar store", () => {
     }]);
   });
 
-  it("keeps persisted live values visible while a reload publishes pending values", async () => {
+  it("reuses stored tab layout without replaying old values when a reload publishes pending values", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     let store = await loadTopbarStoreModule();
@@ -76,6 +76,7 @@ describe("dashboard topbar store", () => {
       value: "--"
     }]);
 
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("--");
     expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([{
       active: true,
       animateChanges: false,
@@ -83,7 +84,7 @@ describe("dashboard topbar store", () => {
       id: "heritage",
       label: undefined,
       suppressInitialChanges: true,
-      value: "123,45 \u20ac"
+      value: "--"
     }]);
   });
 
@@ -103,15 +104,8 @@ describe("dashboard topbar store", () => {
       value: "--"
     }]);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([{
-      active: true,
-      animateChanges: false,
-      ariaLabel: undefined,
-      id: "heritage",
-      label: undefined,
-      suppressInitialChanges: true,
-      value: "123,45 \u20ac"
-    }]);
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("--");
   });
 
   it("keeps previous live values when a transient refresh publishes only zeroes", async () => {
@@ -130,11 +124,12 @@ describe("dashboard topbar store", () => {
       value: "0,00"
     }]);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
 
     vi.advanceTimersByTime(3_000);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("--");
   });
 
   it("drops an initial all-zero publish during bootstrap", async () => {
@@ -174,9 +169,13 @@ describe("dashboard topbar store", () => {
       }
     ]);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1").map((item) => item.value)).toEqual([
+    expect(store.readDashboardTopbarItems("dashboard", "user-1").map((item) => item.value)).toEqual([
       "123,45 \u20ac",
       "67,89 \u20ac"
+    ]);
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1").map((item) => item.value)).toEqual([
+      "--",
+      "--"
     ]);
   });
 
@@ -312,7 +311,8 @@ describe("dashboard topbar store", () => {
       value: "123,45 \u20ac"
     }]);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("--");
   });
 
   it("does not persist only-zero bootstrap values across reloads", async () => {
@@ -344,14 +344,15 @@ describe("dashboard topbar store", () => {
       value: "123,45 \u20ac"
     }]);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("--");
 
     vi.advanceTimersByTime(3_000);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
   });
 
-  it("keeps persisted live values when a reload publishes only zeroes", async () => {
+  it("keeps stored layout but not old values when a reload publishes only zeroes", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     let store = await loadTopbarStoreModule();
@@ -374,7 +375,16 @@ describe("dashboard topbar store", () => {
       value: "0,00"
     }]);
 
-    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([{
+      active: true,
+      animateChanges: false,
+      ariaLabel: undefined,
+      id: "heritage",
+      label: undefined,
+      suppressInitialChanges: true,
+      value: "--"
+    }]);
   });
 
   it("clears persisted topbar layout when publishing an empty topbar", async () => {
@@ -389,5 +399,52 @@ describe("dashboard topbar store", () => {
     store.publishDashboardTopbar("dashboard", "user-1", []);
 
     expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+  });
+
+  it("removes stale provider tabs when a valuation layout no longer includes them", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.seedDashboardTopbarLayout("checking", "user-1", [
+      {
+        active: true,
+        id: "checking",
+        value: "4.485,13 \u20ac"
+      },
+      {
+        active: false,
+        id: "checking:bbva",
+        label: "BBVA",
+        value: "3.396,74 \u20ac"
+      },
+      {
+        active: false,
+        id: "checking:trade_republic",
+        label: "TR",
+        value: "1.088,39 \u20ac"
+      }
+    ]);
+    store.seedDashboardTopbarLayout("checking", "user-1", [
+      {
+        active: true,
+        id: "checking",
+        value: "3.396,74 \u20ac"
+      },
+      {
+        active: false,
+        id: "checking:bbva",
+        label: "BBVA",
+        value: "3.396,74 \u20ac"
+      }
+    ]);
+
+    expect(store.readDashboardTopbarItems("checking", "user-1").map((item) => item.id)).toEqual([
+      "checking",
+      "checking:bbva"
+    ]);
+    expect(store.readStoredDashboardTopbarItems("checking", "user-1").map((item) => item.id)).toEqual([
+      "checking",
+      "checking:bbva"
+    ]);
   });
 });
