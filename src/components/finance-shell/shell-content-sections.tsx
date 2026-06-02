@@ -73,7 +73,9 @@ type UploadContentProps = {
 type InlineUploadContentProps = UploadContentProps;
 
 type WelcomeContentProps = {
+  activeUserId: string | null;
   backgroundRef: RefObject<HTMLDivElement | null>;
+  binanceRefreshKey: number;
   isBackgroundVisible: boolean;
   isPanelModalOpen: boolean;
   users: UserRecord[];
@@ -99,14 +101,18 @@ type NonDashboardStageContentProps = {
 };
 
 export function FinanceShellWelcomeContent({
+  activeUserId,
   backgroundRef,
+  binanceRefreshKey,
   isBackgroundVisible,
   isPanelModalOpen,
   users
 }: WelcomeContentProps) {
   return (
     <WelcomeStage
+      activeUserId={activeUserId}
       backgroundRef={backgroundRef}
+      binanceRefreshKey={binanceRefreshKey}
       isBackgroundVisible={isBackgroundVisible}
       isPanelModalOpen={isPanelModalOpen}
       users={users}

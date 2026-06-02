@@ -21,6 +21,7 @@ type UseFinanceShellContentParams = {
   activeSection: SettingsSection | null;
   activeUser: UserRecord | null;
   approving: boolean;
+  binanceRefreshKey: number;
   createInputRef: RefObject<HTMLInputElement | null>;
   deletingProfileId: string | null;
   currentTransactions: PreviewTransaction[];
@@ -72,6 +73,7 @@ export function useFinanceShellContent({
   activeSection,
   activeUser,
   approving,
+  binanceRefreshKey,
   createInputRef,
   deletingProfileId,
   currentTransactions,
@@ -207,7 +209,9 @@ export function useFinanceShellContent({
         userSelectContent={userSelectContent}
         welcomeContent={(
           <FinanceShellWelcomeContent
+            activeUserId={activeUser?.id ?? null}
             backgroundRef={welcomeBackgroundRef}
+            binanceRefreshKey={binanceRefreshKey}
             isBackgroundVisible={isWelcomeBackgroundVisible}
             isPanelModalOpen={isWelcomePanelModalOpen}
             users={users}

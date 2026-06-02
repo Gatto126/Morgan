@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChartPie } from "lucide-react";
 import { Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -14,12 +14,15 @@ import {
 } from "@/components/dashboard/dashboard-chart-data-model";
 import type { DashboardChartPoint } from "@/components/dashboard/dashboard-chart-types";
 import { formatEuroCents } from "@/components/dashboard/formatters";
-import type { AccountTab, BinanceBalanceRow, DashboardData } from "@/components/dashboard/types";
-import { useDashboardLivePrices } from "@/components/dashboard/use-dashboard-live-prices";
-import { useDashboardLiveTotals } from "@/components/dashboard/use-dashboard-live-totals";
+import type { BinanceBalanceRow } from "@/components/dashboard/types";
 import { DashboardTopbarTab } from "@/components/finance-shell/dashboard-topbar-tab";
 import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
 
+import {
+  selectCurrentValuationHeritageAggregate,
+  useCurrentValuationSnapshotMap
+} from "./current-valuations-store";
+import { ensureFinanceCurrentValuation } from "./finance-session-orchestrator";
 import type { UserRecord } from "./types";
 import {
   type AccountPortfolioPreviewRecord,
@@ -31,6 +34,8 @@ import {
 } from "./welcome-heritage-preview-axis";
 
 type WelcomeHeritagePreviewProps = {
+  activeUserId: string | null;
+  binanceRefreshKey: number;
   isActive: boolean;
   users: UserRecord[];
 };
@@ -60,6 +65,8 @@ function WelcomeHeritageTooltip({ active, payload, setActivePoint }: HeritageToo
 }
 
 export function WelcomeHeritagePreview({
+  activeUserId,
+  binanceRefreshKey,
   isActive,
   users = []
 }: WelcomeHeritagePreviewProps) {
@@ -72,24 +79,33 @@ export function WelcomeHeritagePreview({
     isActive: shouldLoad,
     users
   });
-  const combinedData = useMemo(() => getCombinedDashboardData(records), [records]);
-  const binanceBalances = useMemo(
-    () => records.flatMap((record) => record.binanceBalances),
-    [records]
+  const profileIds = useMemo(() => users.map((user) => user.id), [users]);
+  const snapshotsByProfileId = useCurrentValuationSnapshotMap(profileIds);
+  const currentValuationAggregate = useMemo(
+    () => selectCurrentValuationHeritageAggregate(users, snapshotsByProfileId, { binanceRefreshKey }),
+    [binanceRefreshKey, snapshotsByProfileId, users]
   );
-  const { livePrices } = useDashboardLivePrices(combinedData?.providerSummaries, {
-    isActive,
-    shouldLoad: shouldLoad && !!combinedData
-  });
-  const {
-    getGlobalCryptoLiveTotal,
-    getGlobalInvestmentLiveTotal
-  } = useDashboardLiveTotals({
-    binanceBalances,
-    data: combinedData,
-    livePrices
-  });
-  const chartData = useMemo(() => getAggregatedAccountChartData(records), [records]);
+  const currentValuationPoint = currentValuationAggregate.point;
+  const chartData = useMemo(
+    () => mergeCurrentValuationPoint(
+      getAggregatedAccountChartData(records),
+      currentValuationPoint
+    ),
+    [currentValuationPoint, records]
+  );
+  const refreshHomeValuations = useCallback(() => {
+    if (!shouldLoad) {
+      return;
+    }
+
+    void Promise.allSettled(users.map((user) => ensureFinanceCurrentValuation({
+      binanceRefreshKey,
+      event: "profile-change",
+      livePriceMaxAgeMs: 0,
+      priority: user.id === activeUserId ? "active" : "background",
+      user
+    })));
+  }, [activeUserId, binanceRefreshKey, shouldLoad, users]);
   const heritageValues = useMemo(
     () => chartData
       .map((point) => point.heritage)
@@ -97,21 +113,34 @@ export function WelcomeHeritagePreview({
     [chartData]
   );
   const xAxisTicks = useMemo(() => getWelcomeXAxisTicks(chartData), [chartData]);
-  const latestPoint = useMemo(
-    () => [...chartData].reverse().find((point) => typeof point.heritage === "number") ?? null,
-    [chartData]
-  );
-  const currentHeritageValue = combinedData
-    ? combinedData.accountTotals.checking + getGlobalInvestmentLiveTotal() + getGlobalCryptoLiveTotal()
-    : Number(latestPoint?.heritage ?? 0);
-  const topbarValue = Number(activePoint?.heritage ?? currentHeritageValue);
+  const topbarValue = activePoint?.heritage ?? currentValuationPoint?.heritage ?? null;
   const yDomain = getWelcomeYDomain(heritageValues);
   const hasChartData = heritageValues.length > 0;
   const xAxisLabels = useMemo(
     () => hasChartData ? xAxisTicks.map((tick) => formatWelcomeXAxisTick(tick)) : [],
     [hasChartData, xAxisTicks]
   );
-  const topbarDisplayValue = formatEuroCents(hasChartData ? topbarValue : 0);
+  const topbarDisplayValue = typeof topbarValue === "number" && Number.isFinite(topbarValue)
+    ? formatEuroCents(topbarValue)
+    : "";
+
+  useEffect(() => {
+    refreshHomeValuations();
+  }, [refreshHomeValuations]);
+
+  useEffect(() => {
+    if (!shouldLoad) {
+      return;
+    }
+
+    window.addEventListener("focus", refreshHomeValuations);
+    window.addEventListener("online", refreshHomeValuations);
+
+    return () => {
+      window.removeEventListener("focus", refreshHomeValuations);
+      window.removeEventListener("online", refreshHomeValuations);
+    };
+  }, [refreshHomeValuations, shouldLoad]);
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[520px] flex-col justify-center">
@@ -119,8 +148,8 @@ export function WelcomeHeritagePreview({
         <div className="hide-scrollbar absolute left-0 top-10 z-20 flex gap-2 overflow-x-auto px-1 pb-1 [&_.dashboard-topbar-currency-icon]:h-3.5 [&_.dashboard-topbar-currency-icon]:w-3.5 [&_.dashboard-topbar-line]:gap-2 [&_.dashboard-topbar-tab]:h-10 [&_.dashboard-topbar-tab]:w-[146px] [&_.dashboard-topbar-tab]:rounded-[14px] [&_.dashboard-topbar-tab]:px-2 sm:top-12 sm:[&_.dashboard-topbar-currency-icon]:h-4 sm:[&_.dashboard-topbar-currency-icon]:w-4 sm:[&_.dashboard-topbar-line]:gap-3 sm:[&_.dashboard-topbar-tab]:h-12 sm:[&_.dashboard-topbar-tab]:w-[178px] sm:[&_.dashboard-topbar-tab]:rounded-[16px] sm:[&_.dashboard-topbar-tab]:px-3">
           <DashboardTopbarTab
             active
-            animateChanges={hasChartData && !activePoint}
-            ariaLabel={hasChartData ? "Heritage preview" : "Heritage preview loading"}
+            animateChanges={!!currentValuationPoint && !activePoint}
+            ariaLabel={currentValuationPoint ? "Heritage preview" : "Heritage valuation loading"}
             icon={ChartPie}
             value={topbarDisplayValue}
           />
@@ -249,37 +278,6 @@ function getWelcomeYDomain(values: number[]): [number, number] {
   return [Math.max(0, min - padding), max + padding];
 }
 
-function getCombinedDashboardData(records: AccountPortfolioPreviewRecord[]): DashboardData | null {
-  const recordsWithData = records.filter((record) => record.data);
-
-  if (recordsWithData.length === 0) {
-    return null;
-  }
-
-  const accountTotals = {
-    crypto: 0,
-    checking: 0,
-    heritage: 0,
-    investment: 0
-  } satisfies Record<AccountTab, number>;
-
-  for (const { data } of recordsWithData) {
-    if (!data) continue;
-
-    accountTotals.checking += data.accountTotals.checking;
-    accountTotals.investment += data.accountTotals.investment;
-    accountTotals.crypto += data.accountTotals.crypto;
-    accountTotals.heritage += data.accountTotals.heritage;
-  }
-
-  return {
-    accountTotals,
-    dailyData: [],
-    monthlyData: [],
-    providerSummaries: recordsWithData.flatMap((record) => record.data?.providerSummaries ?? [])
-  };
-}
-
 function getAggregatedAccountChartData(records: AccountPortfolioPreviewRecord[]): DashboardChartPoint[] {
   const pointsByDate = new Map<string, DashboardChartPoint>();
 
@@ -327,6 +325,31 @@ function getAggregatedAccountChartData(records: AccountPortfolioPreviewRecord[])
   return [...pointsByDate.values()].sort((first, second) => {
     return String(first.rawMonth).localeCompare(String(second.rawMonth));
   });
+}
+
+function mergeCurrentValuationPoint(
+  chartData: DashboardChartPoint[],
+  currentPoint: DashboardChartPoint | null
+) {
+  if (!currentPoint || typeof currentPoint.heritage !== "number" || !Number.isFinite(currentPoint.heritage)) {
+    return chartData;
+  }
+
+  const rawMonth = String(currentPoint.rawMonth ?? currentPoint.month ?? "");
+  if (!rawMonth) {
+    return chartData;
+  }
+
+  return [
+    ...chartData.filter((point) => String(point.rawMonth ?? point.month ?? "") !== rawMonth),
+    {
+      ...currentPoint,
+      heritage: currentPoint.heritage,
+      month: rawMonth,
+      rawMonth,
+      value: currentPoint.heritage
+    }
+  ].sort((first, second) => String(first.rawMonth).localeCompare(String(second.rawMonth)));
 }
 
 function getBinanceTotalCents(binanceBalances: BinanceBalanceRow[]) {

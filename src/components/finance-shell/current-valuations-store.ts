@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 
 import {
   getBinanceBalanceLivePriceKey,
@@ -160,6 +160,19 @@ export type CurrentValuationCardItem = {
   value: ValuationValue;
 };
 
+export type CurrentValuationSnapshotsByProfile = Record<string, CurrentValuationSnapshot | null | undefined>;
+
+export type CurrentValuationHeritageAggregate = {
+  diagnostics: {
+    missingKeys: string[];
+    pendingProfileIds: string[];
+    unavailableKeys: string[];
+  };
+  point: DashboardChartPoint | null;
+  status: CurrentValuationStatus;
+  value: ValuationValue;
+};
+
 type MutableQuoteKeys = {
   cryptos: Set<string>;
   isins: Set<string>;
@@ -172,6 +185,11 @@ type CurrentValuationEntry = {
 
 const currentValuationEntries = new Map<string, CurrentValuationEntry>();
 const currentValuationListeners = new Map<string, Set<CurrentValuationListener>>();
+const emptySnapshotMap: CurrentValuationSnapshotsByProfile = {};
+const currentValuationSnapshotMapCache = new Map<string, {
+  snapshots: Array<CurrentValuationSnapshot | null>;
+  value: CurrentValuationSnapshotsByProfile;
+}>();
 
 function createQuoteKeySets(): MutableQuoteKeys {
   return {
@@ -793,17 +811,25 @@ function publishCurrentValuationSnapshot(snapshot: CurrentValuationSnapshot) {
   return snapshot;
 }
 
-function isSnapshotCurrentForProfile(
+export function isCurrentValuationSnapshotCurrentForProfile(
   snapshot: CurrentValuationSnapshot,
   profile: UserRecord,
-  options: EnsureCurrentValuationOptions
+  { binanceRefreshKey = 0, dateKey = getUtcDateKey() }: EnsureCurrentValuationOptions = {}
 ) {
   return snapshot.version.transactionCount === profile.transactionCount
     && snapshot.version.checkingCount === profile.checkingCount
     && snapshot.version.investmentCount === profile.investmentCount
     && snapshot.version.cryptoCount === profile.cryptoCount
-    && snapshot.version.binanceRefreshKey === (options.binanceRefreshKey ?? 0)
-    && snapshot.version.dateKey === (options.dateKey ?? getUtcDateKey())
+    && snapshot.version.binanceRefreshKey === binanceRefreshKey
+    && snapshot.version.dateKey === dateKey;
+}
+
+function isSnapshotCurrentForProfile(
+  snapshot: CurrentValuationSnapshot,
+  profile: UserRecord,
+  options: EnsureCurrentValuationOptions
+) {
+  return isCurrentValuationSnapshotCurrentForProfile(snapshot, profile, options)
     && isSnapshotLivePriceFresh(snapshot, options);
 }
 
@@ -979,6 +1005,63 @@ export function useCurrentValuationSnapshot(profileId: string | null) {
   );
 }
 
+function getProfileIdsKey(profileIds: string[]) {
+  return [...new Set(profileIds)].sort().join("|");
+}
+
+function getCurrentValuationSnapshotMap(profileIdsKey: string) {
+  if (!profileIdsKey) {
+    return emptySnapshotMap;
+  }
+
+  const profileIds = profileIdsKey.split("|");
+  const snapshots = profileIds.map((profileId) => getCurrentValuationSnapshot(profileId));
+  const cached = currentValuationSnapshotMapCache.get(profileIdsKey);
+
+  if (
+    cached
+    && cached.snapshots.length === snapshots.length
+    && cached.snapshots.every((snapshot, index) => snapshot === snapshots[index])
+  ) {
+    return cached.value;
+  }
+
+  const value = Object.fromEntries(
+    profileIds.map((profileId, index) => [profileId, snapshots[index]])
+  ) satisfies CurrentValuationSnapshotsByProfile;
+
+  currentValuationSnapshotMapCache.set(profileIdsKey, {
+    snapshots,
+    value
+  });
+
+  return value;
+}
+
+function subscribeCurrentValuationSnapshotMap(profileIdsKey: string, listener: () => void) {
+  if (!profileIdsKey) {
+    return () => undefined;
+  }
+
+  const unsubscribers = profileIdsKey
+    .split("|")
+    .map((profileId) => subscribeCurrentValuation(profileId, listener));
+
+  return () => {
+    unsubscribers.forEach((unsubscribe) => unsubscribe());
+  };
+}
+
+export function useCurrentValuationSnapshotMap(profileIds: string[]) {
+  const profileIdsKey = useMemo(() => getProfileIdsKey(profileIds), [profileIds]);
+
+  return useSyncExternalStore(
+    (listener) => subscribeCurrentValuationSnapshotMap(profileIdsKey, listener),
+    () => getCurrentValuationSnapshotMap(profileIdsKey),
+    () => emptySnapshotMap
+  );
+}
+
 export function invalidateCurrentValuation(profileId: string) {
   const hadEntry = currentValuationEntries.delete(profileId);
 
@@ -999,6 +1082,84 @@ export function isValuationValueReady(value: ValuationValue) {
 
 function shouldExposeValuationValue(value: ValuationValue) {
   return isValuationValueReady(value);
+}
+
+export function selectCurrentValuationHeritageAggregate(
+  profiles: UserRecord[],
+  snapshotsByProfileId: CurrentValuationSnapshotsByProfile,
+  options: EnsureCurrentValuationOptions = {}
+): CurrentValuationHeritageAggregate {
+  const pendingProfileIds: string[] = [];
+  const missingKeys = new Set<string>();
+  const unavailableKeys = new Set<string>();
+  const values = {
+    binance: [] as ValuationValue[],
+    checking: [] as ValuationValue[],
+    crypto: [] as ValuationValue[],
+    heritage: [] as ValuationValue[],
+    investment: [] as ValuationValue[]
+  };
+
+  for (const profile of profiles) {
+    const snapshot = snapshotsByProfileId[profile.id];
+
+    if (!snapshot || !isCurrentValuationSnapshotCurrentForProfile(snapshot, profile, options)) {
+      pendingProfileIds.push(profile.id);
+      continue;
+    }
+
+    snapshot.diagnostics.missingKeys.forEach((key) => missingKeys.add(key));
+    snapshot.diagnostics.unavailableKeys.forEach((key) => unavailableKeys.add(key));
+    values.binance.push(snapshot.totals.binance);
+    values.checking.push(snapshot.totals.checking);
+    values.crypto.push(snapshot.totals.crypto);
+    values.heritage.push(snapshot.totals.heritage);
+    values.investment.push(snapshot.totals.investment);
+  }
+
+  if (pendingProfileIds.length > 0) {
+    return {
+      diagnostics: {
+        missingKeys: [...missingKeys].sort(),
+        pendingProfileIds,
+        unavailableKeys: [...unavailableKeys].sort()
+      },
+      point: null,
+      status: "loading",
+      value: createLoadingValue()
+    };
+  }
+
+  const totals = {
+    binance: sumValuationValues(values.binance),
+    checking: sumValuationValues(values.checking),
+    crypto: sumValuationValues(values.crypto),
+    heritage: sumValuationValues(values.heritage),
+    investment: sumValuationValues(values.investment)
+  };
+  const status = getSnapshotStatus(totals);
+  const dateKey = options.dateKey ?? getUtcDateKey();
+
+  return {
+    diagnostics: {
+      missingKeys: [...missingKeys].sort(),
+      pendingProfileIds,
+      unavailableKeys: [...unavailableKeys].sort()
+    },
+    point: isValuationValueReady(totals.heritage)
+      ? {
+          binance: totals.binance.cents,
+          checking: totals.checking.cents,
+          crypto: totals.crypto.cents,
+          heritage: totals.heritage.cents,
+          investment: totals.investment.cents,
+          rawMonth: dateKey,
+          value: totals.heritage.cents
+        }
+      : null,
+    status,
+    value: totals.heritage
+  };
 }
 
 export function selectCurrentValuationTopbar(

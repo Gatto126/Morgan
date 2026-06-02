@@ -258,6 +258,7 @@ export function FinanceShell({
     activeSection: visibleSettingsSection,
     activeUser,
     approving,
+    binanceRefreshKey,
     createInputRef: createUserInputRef,
     deletingProfileId,
     currentTransactions,

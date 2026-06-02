@@ -7,6 +7,7 @@ import {
   invalidateCurrentValuation,
   refreshCurrentValuationFromCaches,
   resetCurrentValuationsStore,
+  selectCurrentValuationHeritageAggregate,
   selectCurrentValuationChartPoint,
   selectCurrentPortfolioValuationChartPoint,
   selectCurrentValuationTopbar,
@@ -245,6 +246,137 @@ describe("current valuations store", () => {
       "crypto",
       "crypto:trade_republic"
     ]);
+  });
+
+  it("aggregates home Heritage from per-profile current valuation snapshots", () => {
+    const now = 1_000;
+    const firstProfileSnapshot = buildCurrentValuationSnapshot({
+      dashboardData,
+      dateKey: "2026-06-01",
+      livePrices: {
+        BTC: 20_000,
+        IE00B4L5Y983: 100
+      },
+      liveQuotes: {
+        BTC: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 20_000
+        },
+        IE00B4L5Y983: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 100
+        }
+      },
+      now,
+      profile
+    });
+    const secondProfile: UserRecord = {
+      ...profile,
+      id: "valuation-profile-2"
+    };
+    const secondProfileSnapshot = buildCurrentValuationSnapshot({
+      dashboardData: {
+        ...dashboardData,
+        accountTotals: {
+          checking: 25_000,
+          crypto: 0,
+          heritage: 25_000,
+          investment: 0
+        },
+        providerSummaries: [{
+          checking: {
+            cashback: 0,
+            expenses: 0,
+            income: 0,
+            interest: 0,
+            tax: 0,
+            total: 25_000
+          },
+          cryptoTokens: [],
+          investmentProducts: [],
+          sourceInstitution: "bbva",
+          total: 25_000
+        }]
+      },
+      dateKey: "2026-06-01",
+      livePrices: {},
+      liveQuotes: {},
+      now,
+      profile: secondProfile
+    });
+
+    const aggregate = selectCurrentValuationHeritageAggregate(
+      [profile, secondProfile],
+      {
+        [profile.id]: firstProfileSnapshot,
+        [secondProfile.id]: secondProfileSnapshot
+      },
+      { dateKey: "2026-06-01" }
+    );
+
+    expect(aggregate.status).toBe("ready");
+    expect(aggregate.value.cents).toBe(1_055_000);
+    expect(aggregate.point).toMatchObject({
+      checking: 35_000,
+      crypto: 1_000_000,
+      heritage: 1_055_000,
+      investment: 20_000,
+      rawMonth: "2026-06-01",
+      value: 1_055_000
+    });
+  });
+
+  it("does not publish a complete home Heritage aggregate when a profile snapshot is missing", () => {
+    const now = 1_000;
+    const snapshot = buildCurrentValuationSnapshot({
+      dashboardData,
+      dateKey: "2026-06-01",
+      livePrices: {
+        BTC: 20_000,
+        IE00B4L5Y983: 100
+      },
+      liveQuotes: {
+        BTC: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 20_000
+        },
+        IE00B4L5Y983: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 100
+        }
+      },
+      now,
+      profile
+    });
+    const pendingProfile: UserRecord = {
+      ...profile,
+      id: "valuation-profile-pending"
+    };
+
+    const aggregate = selectCurrentValuationHeritageAggregate(
+      [profile, pendingProfile],
+      {
+        [profile.id]: snapshot
+      },
+      { dateKey: "2026-06-01" }
+    );
+
+    expect(aggregate.status).toBe("loading");
+    expect(aggregate.value.cents).toBeNull();
+    expect(aggregate.point).toBeNull();
+    expect(aggregate.diagnostics.pendingProfileIds).toEqual([pendingProfile.id]);
   });
 
   it("keeps aggregate values pending when a required live quote is missing", () => {

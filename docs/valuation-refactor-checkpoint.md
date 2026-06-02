@@ -1,7 +1,7 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `3b5d8b7`
+Current baseline commit: `5cc65eb`
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -322,18 +322,23 @@ Current preference:
 
 ### Multi-Profile Home / Preview
 
-The authenticated home can mount with multiple profiles. It should not force full valuation work for every profile.
+The authenticated home is a multi-profile aggregate. It should not mount every profile's dashboards, but it must use the same current valuation engine as the dashboards for the current money value.
 
 Ideal flow:
 
-1. active profile gets complete current valuation;
-2. inactive profiles get lightweight preview only;
-3. selecting an inactive profile promotes it to complete valuation;
-4. previews never overwrite active profile topbar/state.
+1. active profile gets complete current valuation at high priority;
+2. inactive profiles get complete current valuation in background without mounting their dashboard UI;
+3. home current Heritage reads `sum(profile.currentValuation.totals.heritage)` across all profiles;
+4. home historical chart can keep using lightweight preview/history, but its current pill/today point must come from the aggregated valuation snapshots;
+5. selecting an inactive profile promotes it to high-priority valuation and dashboard warmup;
+6. previews never overwrite active profile topbar/state and never mix with valuation totals in one displayed current number.
 
 User-facing rule:
 
 - home must feel fast with many profiles;
+- with one profile, home Heritage must equal the main dashboard Heritage exactly;
+- with multiple profiles, home Heritage must equal the sum of all profile Heritage snapshots;
+- if any required profile snapshot is not ready, the home should wait, keep a last validated aggregate, or show an explicit loading/partial state instead of a mixed preview+valuation total;
 - profile selection must not leak values between profiles.
 
 ### Auth Expiry / 401
@@ -420,6 +425,9 @@ Implemented so far:
 - dashboard navigation now refreshes the central valuation alongside the visible stage, and current valuation freshness accounts for live quote age:
   - `src/components/finance-shell.tsx`
   - `src/components/finance-shell/current-valuations-store.ts`
+- authenticated home current Heritage now uses a multi-profile aggregate of current valuation snapshots instead of recalculating from preview/live totals:
+  - `src/components/finance-shell/welcome-heritage-preview.tsx`
+  - `src/components/finance-shell/current-valuations-store.ts`
 
 Important limitation:
 
@@ -432,6 +440,7 @@ Known mismatch found during production smoke and current mitigation:
 - The document and code should treat `investment` like `crypto` for current values: both depend on live market quotes and must be valued centrally, not rebuilt independently per dashboard.
 - Production smoke after `3b5d8b7` showed provider tabs could swap order between publishers. The shared topbar store now applies a canonical order per stage, so clicking BBVA/TR or switching dashboards must not reorder the buttons.
 - Production smoke also showed Trade Republic crypto prices could fail to refresh when Binance API was not connected. Binance is optional: a no-Binance profile must still fetch TR crypto live quotes and publish `crypto = Trade Republic crypto`.
+- Production smoke after `5cc65eb` showed the authenticated home Heritage can differ from the main dashboard Heritage. `src/components/finance-shell/welcome-heritage-preview.tsx` now keeps preview/history for the chart, but the current pill and current chart point are sourced from the multi-profile valuation aggregate. Manual smoke still needs to confirm single-profile home equals dashboard Heritage and multi-profile home equals the sum of profile snapshots.
 
 ## Gaps To Close
 
@@ -461,6 +470,7 @@ Current progress:
 
 Remaining work:
 
+- smoke the multi-profile valuation aggregate for the authenticated home after deploy;
 - replace remaining local current-value builders after consumers are migrated;
 - migrate checking dashboard card/topbar/chart where useful, though checking does not depend on live quotes;
 - remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough;
@@ -511,7 +521,39 @@ type ValuationValue = {
 };
 ```
 
-### Gap 2: Move UI To Selectors
+### Gap 2: Multi-Profile Home Aggregate
+
+The authenticated home currently behaves like a preview surface, but its displayed current Heritage must be an aggregate valuation surface.
+
+Current problem:
+
+- `WelcomeHeritagePreview` combines `useAccountPortfolioPreviewData(...)`, `useDashboardLivePrices(...)` and `useDashboardLiveTotals(...)`;
+- this can produce a number close to, but not exactly equal to, the dashboard Heritage;
+- with one profile, that mismatch is visibly wrong;
+- with multiple profiles, the same mismatch becomes harder to diagnose because the home total is expected to be different from a single active dashboard.
+
+Target:
+
+- ensure current valuation snapshots for all profiles:
+  - active profile: high priority;
+  - inactive profiles: background priority;
+  - no forced dashboard mounting for inactive profiles;
+- add a home aggregate selector/hook that returns:
+  - aggregated Heritage value;
+  - readiness/status across profile snapshots;
+  - missing/unavailable quote diagnostics per profile;
+- update the home current pill and today's chart point to read the aggregate valuation;
+- keep historical home chart preview separate from the current valuation point;
+- do not mix preview totals and valuation totals in one displayed current value.
+
+Tests:
+
+- one profile: home Heritage equals main dashboard Heritage;
+- multiple profiles: home Heritage equals sum of profile Heritage snapshots;
+- inactive profile with ETF/crypto live prices updates the home aggregate without opening that profile's dashboards;
+- missing snapshot/quote does not publish a fake complete aggregate.
+
+### Gap 3: Move UI To Selectors
 
 After the store exists, migrate consumers gradually:
 
@@ -523,7 +565,7 @@ After the store exists, migrate consumers gradually:
 
 Do not rewrite every component in one commit. Use small verified slices.
 
-### Gap 3: Import Loader Contract
+### Gap 4: Import Loader Contract
 
 Make import completion wait for the central valuation snapshot:
 
@@ -534,7 +576,7 @@ Make import completion wait for the central valuation snapshot:
 
 Then close the loader.
 
-### Gap 4: Diagnostics UI/Console
+### Gap 5: Diagnostics UI/Console
 
 `window.morganFinanceDiagnostics()` exists, but should be extended or replaced with valuation diagnostics:
 
@@ -556,7 +598,7 @@ The goal is to identify in seconds whether a stale value is caused by:
 - valuation engine readiness;
 - rendering/topbar store.
 
-### Gap 5: Binance History
+### Gap 6: Binance History
 
 Current Binance is correct as a live/current value but has no historical account reconstruction yet. Treat Binance as a current-only provider until a dedicated historical Binance sync exists.
 
@@ -583,6 +625,24 @@ Until then:
 - a future "sync" control should be about missing Binance historical sync state, not merely current balance refresh. Current balance refresh should still refresh/invalidate the central valuation.
 
 ## Implementation Plan
+
+Current next execution order after `5cc65eb`:
+
+1. Home multi-profile current valuation aggregate:
+   - calculate/ensure valuation snapshots for all profiles;
+   - home current Heritage reads the sum of snapshot `totals.heritage`;
+   - home chart keeps historical preview but replaces current pill/today point with valuation aggregate.
+2. Topbar UI state cleanup:
+   - values remain owned by valuation/store;
+   - active tab, click handlers, animation state and session hydration are treated as UI-only;
+   - remove stale publisher/session state that can cause micro-flashes or wrong active tabs.
+3. Cleanup local current fallback builders:
+   - only after dashboard and home current values are consistently valuation-driven;
+   - keep local logic for historical chart reconstruction and tooltip transforms only.
+4. Edge-case tests:
+   - clean login/cache, F5 on every dashboard, import while navigating, profile switch during refresh, Binance connect/delete/sync, no-Binance crypto, missing quotes.
+5. Diagnostics improvements.
+6. Binance historical sync as a separate future project.
 
 ### Phase 1: Stabilize Central Current Valuation
 
