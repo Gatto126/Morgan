@@ -4,6 +4,7 @@ import type { DashboardData, ProviderSummary } from "@/components/dashboard/type
 import {
   buildCurrentValuationSnapshot,
   getCurrentValuationSnapshot,
+  getCurrentValuationState,
   invalidateCurrentValuation,
   refreshCurrentValuationFromCaches,
   resetCurrentValuationsStore,
@@ -414,6 +415,75 @@ describe("current valuations store", () => {
       20_000,
       20_000
     ]);
+  });
+
+  it("keeps a cache valuation draft pending when no committed snapshot exists", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+    seedDashboardStageDataCache("dashboard", profile.id, profile.transactionCount, dashboardData);
+    saveLivePricesToCache({
+      IE00B4L5Y983: 100
+    });
+
+    const snapshot = refreshCurrentValuationFromCaches(profile, { dateKey: "2026-06-01" });
+    const state = getCurrentValuationState(profile.id);
+
+    expect(snapshot).toBeNull();
+    expect(getCurrentValuationSnapshot(profile.id)).toBeNull();
+    expect(state.committedSnapshot).toBeNull();
+    expect(state.draftSnapshot?.status).toBe("partial");
+    expect(state.draftSnapshot?.totals.crypto).toMatchObject({
+      cents: null,
+      status: "missing-live-quote"
+    });
+  });
+
+  it("keeps the committed snapshot visible while a cache refresh is partial, then swaps atomically", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+    seedDashboardStageDataCache("dashboard", profile.id, profile.transactionCount, dashboardData);
+    saveLivePricesToCache({
+      BTC: 20_000,
+      IE00B4L5Y983: 100
+    });
+
+    const firstSnapshot = refreshCurrentValuationFromCaches(profile, { dateKey: "2026-06-01" });
+    expect(firstSnapshot?.status).toBe("ready");
+    expect(firstSnapshot?.totals.crypto.cents).toBe(1_000_000);
+
+    clearLivePriceCaches();
+    saveLivePricesToCache({
+      IE00B4L5Y983: 100
+    });
+
+    const partialRefresh = refreshCurrentValuationFromCaches(profile, { dateKey: "2026-06-01" });
+    let state = getCurrentValuationState(profile.id);
+
+    expect(partialRefresh).toBe(firstSnapshot);
+    expect(getCurrentValuationSnapshot(profile.id)).toBe(firstSnapshot);
+    expect(state.committedSnapshot).toBe(firstSnapshot);
+    expect(state.draftSnapshot?.status).toBe("partial");
+    expect(state.draftSnapshot?.totals.crypto).toMatchObject({
+      cents: null,
+      status: "missing-live-quote"
+    });
+    expect(selectCurrentValuationChartPoint(getCurrentValuationSnapshot(profile.id))?.crypto).toBe(1_000_000);
+
+    clearLivePriceCaches();
+    saveLivePricesToCache({
+      BTC: 21_000,
+      IE00B4L5Y983: 100
+    });
+
+    const secondSnapshot = refreshCurrentValuationFromCaches(profile, { dateKey: "2026-06-01" });
+    state = getCurrentValuationState(profile.id);
+
+    expect(secondSnapshot?.status).toBe("ready");
+    expect(secondSnapshot).not.toBe(firstSnapshot);
+    expect(getCurrentValuationSnapshot(profile.id)).toBe(secondSnapshot);
+    expect(state.committedSnapshot).toBe(secondSnapshot);
+    expect(state.draftSnapshot).toBeNull();
+    expect(selectCurrentValuationChartPoint(secondSnapshot)?.crypto).toBe(1_050_000);
   });
 
   it("rejects zero live quotes instead of publishing fake zero totals", () => {

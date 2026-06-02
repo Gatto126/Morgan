@@ -11,7 +11,6 @@ import { DashboardChart } from "./dashboard/dashboard-chart";
 import { DashboardErrorState, DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "./dashboard/dashboard-status";
 import { DashboardTabs } from "./dashboard/dashboard-tabs";
 import {
-  buildCurrentValuationSnapshot,
   selectCurrentValuationChartPoint,
   useCurrentValuationSnapshot,
   type CurrentValuationSnapshot
@@ -145,43 +144,6 @@ export function Dashboard({
   );
   const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0;
   const storedValuationSnapshot = useCurrentValuationSnapshot(userId);
-  const localValuationSnapshot = useMemo(() => {
-    if (!dataFresh || !data) {
-      return null;
-    }
-
-    return buildCurrentValuationSnapshot({
-      binancePayload: hasBinanceCredentials && binanceBalancesKnown
-        ? { balances: liveBinanceBalances, hasApiKey: true }
-        : null,
-      binanceRefreshKey,
-      dashboardData: data,
-      livePrices,
-      profile: {
-        binanceApiKeyPreview: null,
-        checkingCount,
-        cryptoCount,
-        hasBinanceCredentials,
-        id: userId,
-        investmentCount,
-        name: "",
-        transactionCount
-      }
-    });
-  }, [
-    binanceBalancesKnown,
-    binanceRefreshKey,
-    checkingCount,
-    cryptoCount,
-    data,
-    dataFresh,
-    hasBinanceCredentials,
-    investmentCount,
-    liveBinanceBalances,
-    livePrices,
-    transactionCount,
-    userId
-  ]);
   const currentValuationSnapshot = useMemo(
     () => isDashboardValuationSnapshotCurrent(storedValuationSnapshot, {
       binanceRefreshKey,
@@ -191,13 +153,12 @@ export function Dashboard({
       transactionCount
     })
       ? storedValuationSnapshot
-      : localValuationSnapshot,
+      : null,
     [
       binanceRefreshKey,
       checkingCount,
       cryptoCount,
       investmentCount,
-      localValuationSnapshot,
       storedValuationSnapshot,
       transactionCount
     ]

@@ -2,7 +2,8 @@
 
 Last updated: 2026-06-02
 Current baseline commit: `4fd1966` (last Vercel-smoked)
-Current slice pending Vercel smoke: Binance card valuation total/asset alignment
+Current slice pending Vercel smoke: `76dd695` Binance card valuation alignment + active-user atomic committed valuation store
+Next implementation phase: UI readiness gate/skeleton and Binance visible fallback removal
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -15,6 +16,8 @@ Morgan must behave like a trustworthy personal finance and portfolio aggregator:
 - keep historical chart values stable and not recalculate them unnecessarily;
 - never show fake `0,00`, stale values pretending to be live, visible `--` placeholders, or disappearing numbers during refresh;
 - make dashboard navigation feel instant because data is already warm and values are already current.
+- for the active user, every dashboard must show the same committed current snapshot at the same time. Dashboard navigation changes only the visible slice, not the underlying current money state.
+- use an elegant animated skeleton for current money values only when there is no valid committed snapshot yet. Once a committed snapshot exists, dashboard switching must not show skeletons; refreshes keep the last committed snapshot visible until a new complete snapshot is ready.
 
 The key product rule is:
 
@@ -32,6 +35,40 @@ Binance = BTC + ETH + SOL + XRP + other synced Binance balances
 ```
 
 All topbar, card and current chart values must come from the same current valuation snapshot. Main dashboard, checking, investment, crypto and Binance dashboards may show different slices, but they must not create different current totals for the same profile/date/version.
+
+## Atomic Current Valuation Policy
+
+Target behavior for the active user:
+
+```text
+no valid committed snapshot -> skeleton
+valid committed snapshot + refresh in progress -> keep showing committed snapshot
+new complete snapshot ready -> atomic swap everywhere
+refresh failed or partial -> keep committed snapshot and publish diagnostics
+dashboard navigation with committed snapshot -> no skeleton, no fallback, no value recomputation
+```
+
+Definitions:
+
+- `committedSnapshot`: the last complete, coherent current valuation snapshot for a profile/version/date. Selectors for topbar, cards, home and current chart points read this snapshot.
+- `refreshing/draft`: a non-visible refresh in progress. It can fetch stage data, Binance balances and live quotes, but it must not overwrite visible current values one piece at a time.
+- `complete snapshot`: a snapshot whose required children are ready for the requested profile version. Parents such as `crypto` and `heritage` are shown only when their required children are ready or explicitly absent.
+- `stale-while-refresh`: while a new snapshot is being built, the UI keeps showing the last committed snapshot. This is preferable to showing partial values or a loading skeleton during ordinary refresh/navigation.
+
+Skeleton policy:
+
+- cold login/F5/profile switch with no committed snapshot for the target profile/version: show skeleton pills/cards/chart placeholders;
+- dashboard switch with a committed snapshot: do not show skeleton, render the new dashboard from the same committed snapshot;
+- focus/reconnect/daily refresh with a committed snapshot: keep values visible until the new snapshot commits;
+- import/Binance connect/delete can invalidate the old profile version. If there is no committed snapshot for the new version, show skeleton until the post-change valuation commits.
+
+Binance current policy:
+
+- Binance remains current-only until the separate Binance historical sync project.
+- Binance balances are input data, not authoritative live current values.
+- Binance token with a valid live quote: include in Binance/crypto/heritage current and show in Binance card.
+- Binance token with missing/unavailable/invalid quote: exclude from current totals and hide from current-value card rows; record the token/key in diagnostics. Do not use `balance.eurValue` as an unmarked current fallback.
+- Token name/quantity may be shown as synced balance data only if the UI clearly separates it from current valuation. For the current valuation card, prefer hiding unpriced token rows.
 
 ## Target Architecture
 
@@ -470,6 +507,9 @@ Known mismatch found during production smoke and current mitigation:
 - Production smoke after `4fd1966` passed: portfolio current fallback removal and topbar stage hydration scoping did not regress F5 investment/crypto, dashboard switching, topbar flicker, hover restore, Binance current-only behavior, or fake-zero behavior. Current value fallback cleanup for main + portfolio is now considered closed.
 - Production smoke after `4fd1966` found a one-cent mismatch between Binance in the crypto topbar and Binance in the Binance card. Cause: the topbar read `snapshot.totals.binance.cents` from the central valuation, while `DashboardBinanceCard` summed local `balance.eurValue` floats. The card total should use the valuation Binance total when a current valuation snapshot is available.
 - Follow-up audit for similar cases found no other resting topbar/card totals that still sum live float values against valuation totals. Investment/crypto provider card totals already read valuation current points, and asset rows prefer `currentValuationSnapshot.assets`. Remaining `balance.eurValue` sums are bootstrap/fallback, historical preview, chart/current-only Binance support, or the Binance card fallback before valuation exists.
+- `76dd695` aligns Binance card totals and token current values with valuation values when available. It is pending Vercel smoke. The follow-up policy is stricter: remove visible Binance current fallbacks from `balance.eurValue`; if a Binance token cannot be live-priced, exclude/hide it from current valuation and diagnostics should explain why.
+- New target after the Binance card slice: active-user current valuation must be atomic. If the user switches from crypto to main and back, the same committed snapshot must be visible everywhere. No dashboard should show a newer crypto current value while another dashboard still shows an older crypto current value.
+- Current local slice implements the first atomic store step: `getCurrentValuationSnapshot(...)` now exposes only the last complete committed snapshot. Ready snapshots commit; partial/loading/error snapshots stay as draft diagnostics and do not replace visible current values. Main dashboard no longer uses a local built valuation as the visible current fallback.
 
 ## Gaps To Close
 
@@ -516,13 +556,31 @@ Current progress:
 - `DashboardBinanceCard` accepts a valuation `currentValueCents` total, and dashboard/portfolio crypto cards pass `snapshot.totals.binance.cents` so Binance card totals match topbar totals exactly.
 - `DashboardBinanceCard` also accepts valuation Binance asset values keyed by asset id/symbol; dashboard/portfolio crypto cards pass those values so individual Binance token current values use the same valuation source when available. The local `balance.eurValue` display remains only as fallback before valuation arrives.
 - Added `tests/unit/ui/chart-data/dashboard-binance-card-total.test.ts` to lock the one-cent rounding case for both the card total and individual Binance balance values.
+- Atomic committed snapshot support is implemented locally and pending Vercel smoke:
+  - `current-valuations-store.ts` keeps committed snapshot, draft snapshot, refresh state, pending version and last error per profile;
+  - cache refreshes commit only `ready` snapshots;
+  - partial cache refreshes keep the existing committed snapshot visible and store the partial result as draft diagnostics;
+  - `src/components/dashboard.tsx` reads only the current committed store snapshot for its resting current values, removing the last visible local main-dashboard valuation bootstrap;
+  - `finance-session-orchestrator` diagnostics now expose committed/draft valuation status, pending version and refresh state.
+  - Added unit tests for no-committed pending state, stale-while-partial-refresh, and atomic swap when a complete snapshot arrives.
 
 Remaining work:
 
+- smoke active-user atomic current valuation with stale-while-refresh after deploy:
+  - committed values stay visible while a refresh is partial;
+  - complete refreshes swap all selected values together;
+  - no dashboard shows a newer crypto/investment value while another dashboard still shows the previous value;
+  - diagnostics expose committed/draft/refreshing state clearly;
+- implement the UI readiness gate for no-committed states:
+  - show skeleton only when no committed snapshot exists for the requested profile/version;
+  - keep dashboard navigation from showing skeleton when a committed snapshot exists;
+  - make topbar/cards/chart placeholders visually synchronized on cold login/F5;
 - smoke the shell-owned multi-profile valuation refresh after deploy:
   - one profile: home Heritage equals main dashboard Heritage after visiting dashboards and returning home;
   - multiple profiles: home Heritage equals the sum of profile Heritage snapshots;
   - inactive profile quotes refresh without opening that profile's dashboards;
+- replace visible `--` current loading states with an elegant animated skeleton where the value is genuinely pending;
+- remove visible Binance `balance.eurValue` current fallback; hide/exclude unpriced Binance tokens from current valuation and diagnostics;
 - replace remaining local current-value builders after consumers are migrated; dashboard and portfolio current snapshot fallbacks have been removed and smoked;
 - migrate checking dashboard card/topbar/chart where useful, though checking does not depend on live quotes;
 - remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough; main dashboard and portfolio current fallbacks are removed and smoked;
@@ -690,44 +748,111 @@ Until then:
 
 ## Implementation Plan
 
-Current next execution order after `4fd1966` and the passed fallback/topbar smoke:
+Current next execution order after `76dd695`:
 
-1. Close out current fallback cleanup:
-   - inventory remaining fallback paths:
-     - removed and smoked: `src/components/dashboard/dashboard-current-snapshot.ts`;
-     - removed and smoked: `src/components/portfolio-dashboard/portfolio-current-snapshot.ts`;
-     - still present by design: local bootstrap valuation snapshots built through `buildCurrentValuationSnapshot(...)`;
-     - still present by design: historical chart builders, tooltip transforms, preview history and Binance current-only chart rendering.
-   - implementation order:
-     - done: main dashboard removed the legacy current snapshot builder and the resting current point now comes only from `selectCurrentValuationChartPoint(...)`;
-     - done: portfolio/investment/crypto dashboard uses `selectPortfolioCurrentValuationPoint(...)` for chart, tabs and cards when the valuation snapshot is current;
-     - done and smoked: removed `buildPortfolioCurrentSnapshot(...)`, deleted `src/components/portfolio-dashboard/portfolio-current-snapshot.ts` and `tests/unit/ui/current-snapshot/portfolio-current-snapshot.test.ts`, and let investment/crypto current tabs/cards stay pending until the valuation point is available;
-     - Binance dashboard: keep local balance rendering for the current-only chart, but make topbar/current total prefer valuation and never publish local total as authoritative resting money;
-     - checking dashboard: evaluate separately because it is not live-price dependent, but keep it aligned with valuation/topbar selectors where useful;
-     - after each removal, delete the unused builder tests and add/adjust selector tests that lock the valuation-driven behavior.
-   - removal rule:
-     - remove local current builders only when a central valuation snapshot or local central-engine bootstrap snapshot exists for the same profile/version/date;
-     - keep local logic for historical chart reconstruction and tooltip transforms only;
-     - do not remove fallbacks that still protect cold login, F5, import or missing snapshot states until covered by tests/smoke.
-2. Edge-case tests and diagnostics:
-   - convert the most important manual smoke cases into unit/integration tests where practical;
-   - extend `window.morganFinanceDiagnostics()` with valuation status, quote age, missing/unavailable keys, active profile/version and stage cache freshness;
-   - prioritize clean login/cache, F5 on every dashboard, import while navigating, profile switch during refresh, Binance connect/delete/sync, no-Binance crypto and missing quotes.
-3. Regression smoke checklist to keep using after each valuation/topbar slice:
-   - F5 on dashboard/checking/investment/crypto/Binance must not replay old topbar money values from session storage;
-   - click BBVA/TR repeatedly and switch dashboards: provider order must stay canonical;
-   - delete/connect Binance or change provider availability: stale provider tabs must disappear.
-   - stay on the main dashboard for 5-10 seconds, then switch to investment/crypto/checking: topbar values/layout must not flash the previous dashboard stage.
-   - hover chart points, switch dashboard while hovering, then return: historical tooltip values must not remain as resting topbar values.
-   - one profile: home Heritage equals dashboard Heritage after dashboard visits and return home;
-   - multiple profiles: home equals the sum of profile snapshots;
-   - inactive profile ETF/crypto live quotes refresh without opening that profile's dashboards.
-   - at rest, dashboard/checking/investment/crypto/Binance topbar values must match valuation even after tab clicks;
-   - Binance total in crypto topbar must match the Binance card total exactly, including cents;
-   - Binance card token current values should come from valuation when available, with local balance values only as fallback before valuation arrives;
-   - active tab/click state should still work;
-   - tooltip values should still appear only while hovering.
-4. Binance historical sync as a separate future project.
+0. Smoke current pushed slice:
+   - Vercel: crypto dashboard Binance topbar/card total must match exactly, including cents.
+   - Vercel: Binance card token current values must not visibly disagree with the valuation total once valuation is ready.
+   - Vercel: main dashboard crypto and crypto dashboard crypto must still match at rest.
+
+1. Active-user atomic valuation store: implemented locally, pending Vercel smoke.
+   - Add per-profile valuation state with at least:
+     - `committedSnapshot`: last complete coherent snapshot for the current profile/version/date;
+     - `refreshing`: whether a draft refresh is in progress;
+     - `pendingVersion` / `requestedVersion`: profile counts, Binance refresh key and date being refreshed;
+     - `lastError` and diagnostics for missing/unavailable quote keys.
+   - Done: refresh flow builds snapshots as drafts and commits only complete `ready` snapshots.
+   - Done: selectors reading `getCurrentValuationSnapshot(...)` see only the committed snapshot, not draft/partial refresh output.
+   - Done: stale-while-refresh keeps an existing committed snapshot visible while a new refresh is partial or failing.
+   - Remaining UI work: if a new profile/version has no committed snapshot yet, selectors/UI should expose and render an elegant skeleton instead of plain placeholders.
+   - Tests:
+     - done: refresh with partial/missing quote does not overwrite an existing committed snapshot;
+     - done: refresh with complete quote set swaps all selected values atomically;
+     - done: no committed snapshot keeps a draft pending state without publishing visible current values;
+     - still to add: changing transaction counts invalidates the old committed snapshot for the new version;
+     - main/crypto/investment selectors for the same snapshot return matching shared aggregate values.
+
+2. Orchestrator as current-value owner:
+   - Active user warmup must fetch all current valuation inputs independent of visible dashboard:
+     - dashboard stage data for checking/investment/crypto holdings;
+     - Binance balances when credentials exist;
+     - all required live quotes for investment, TR crypto and Binance.
+   - Fetch active-user valuation inputs in parallel where possible, then commit once.
+   - Keep inactive profiles as lower-priority background valuation refreshes for the home aggregate.
+   - Use the same orchestration entry points:
+     - login warmup;
+     - app boot/F5;
+     - profile select prefetch while selection overlay is closing;
+     - dashboard navigation;
+     - focus/reconnect;
+     - daily rollover;
+     - import approval;
+     - Binance connect/delete/sync.
+   - Diagnostics should report committed snapshot version, refresh state, pending version, missing/unavailable keys, quote ages and whether UI is showing committed or pending state.
+
+3. UI readiness gate and skeleton:
+   - Create reusable current-value skeleton components:
+     - topbar pill skeleton matching the dark rounded animated style;
+     - compact card value skeleton;
+     - chart current-point skeleton/placeholder where needed.
+   - Replace visible `--` for loading current money values with skeletons.
+   - Do not show skeleton on dashboard navigation when a committed snapshot exists.
+   - Stage reveal rule:
+     - if historical/stage data and chart frame are ready but current snapshot is pending, show skeleton values in the real layout;
+     - if no usable stage data exists, keep the existing dashboard loading overlay;
+     - when committed snapshot exists, render topbar/cards/current chart point immediately from it.
+   - Topbar/cards/chart should appear visually synchronized on cold login/F5: either skeleton together, or committed values together.
+
+4. Binance current policy cleanup:
+   - Remove visible current fallback from `balance.eurValue`.
+   - In valuation:
+     - Binance token with live quote: include in Binance/crypto/heritage current;
+     - Binance token without valid live quote: exclude from current totals and current card rows;
+     - diagnostics list excluded tokens/keys and reason.
+   - Binance balances may still be used for names/quantities or sync diagnostics, but not as unmarked current money.
+   - Tests:
+     - missing Binance quote excludes token and records diagnostics;
+     - missing Binance quote does not block TR crypto quote refresh;
+     - no-Binance profile still computes `crypto = TR crypto`;
+     - Binance total/topbar/card/today point all come from the same committed snapshot.
+
+5. Final current fallback cleanup:
+   - Re-audit remaining `balance.eurValue`, `livePrices`, local current and topbar publishers.
+   - Keep local logic only for historical reconstruction, tooltip values, chart transforms, synced balance metadata and diagnostics.
+   - Remove or quarantine helpers that can publish current money outside the committed valuation path.
+
+6. Regression smoke checklist for every slice:
+   - F5 on dashboard/checking/investment/crypto/Binance:
+     - no fake `0,00`;
+     - skeleton only if no committed snapshot exists;
+     - once values appear, topbar/cards/today point match.
+   - Dashboard switching with committed snapshot:
+     - no skeleton;
+     - main crypto and crypto dashboard total match;
+     - investment total matches between main and investment;
+     - checking total/provider order stays stable.
+   - Stay on one dashboard for 5-10 seconds, then switch:
+     - no previous-stage topbar flash;
+     - no mismatch between old and new dashboard current values.
+   - Hover historical chart:
+     - historical tooltip/topbar values appear only during hover;
+     - leaving hover restores committed current snapshot.
+   - Refresh/focus/reconnect:
+     - old committed snapshot stays visible while refreshing;
+     - new snapshot swaps in everywhere together.
+   - Import/new document:
+     - old version is not shown as current for the new version;
+     - skeleton appears only until the post-import committed snapshot is ready.
+   - Multi-profile:
+     - one profile: home Heritage equals main dashboard Heritage;
+     - multiple profiles: home equals the sum of committed profile snapshots;
+     - inactive profile live quotes refresh in background without mounting its dashboards.
+   - Binance:
+     - no quote fallback current from `balance.eurValue`;
+     - unpriced Binance tokens hidden/excluded from current and visible in diagnostics;
+     - Binance remains current-only in charts until historical sync.
+
+7. Binance historical sync remains a separate future project.
 
 ### Phase 1: Stabilize Central Current Valuation
 

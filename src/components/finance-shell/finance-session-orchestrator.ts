@@ -18,11 +18,10 @@ import {
 } from "./dashboard-stage-data-cache";
 import {
   ensureCurrentValuation,
-  getCurrentValuationSnapshot,
+  getCurrentValuationState,
   invalidateCurrentValuation,
   refreshCurrentValuationFromCaches,
-  resetCurrentValuationsStore,
-  type CurrentValuationSnapshot
+  resetCurrentValuationsStore
 } from "./current-valuations-store";
 import {
   getDashboardStageDataVersion,
@@ -258,16 +257,30 @@ function publishFinanceSessionDiagnostics() {
   }));
 }
 
-function getValuationDiagnostics(snapshot: CurrentValuationSnapshot | null) {
-  return snapshot
+function getValuationDiagnostics(profileId: string) {
+  const state = getCurrentValuationState(profileId);
+  const snapshot = state.committedSnapshot;
+  const draftSnapshot = state.draftSnapshot;
+  const visibleSnapshot = snapshot ?? draftSnapshot;
+
+  return visibleSnapshot
     ? {
-        lastFetchAt: snapshot.diagnostics.lastFetchAt,
-        maxQuoteAgeMs: snapshot.diagnostics.maxQuoteAgeMs,
-        missingKeys: snapshot.diagnostics.missingKeys,
-        status: snapshot.status,
-        unavailableKeys: snapshot.diagnostics.unavailableKeys,
-        updatedAt: snapshot.updatedAt,
-        version: snapshot.version
+        committedStatus: snapshot?.status ?? null,
+        committedUpdatedAt: snapshot?.updatedAt ?? null,
+        committedVersion: snapshot?.version ?? null,
+        draftStatus: draftSnapshot?.status ?? null,
+        draftUpdatedAt: draftSnapshot?.updatedAt ?? null,
+        draftVersion: draftSnapshot?.version ?? null,
+        isRefreshing: state.isRefreshing,
+        lastError: state.lastError,
+        lastFetchAt: visibleSnapshot.diagnostics.lastFetchAt,
+        maxQuoteAgeMs: visibleSnapshot.diagnostics.maxQuoteAgeMs,
+        missingKeys: visibleSnapshot.diagnostics.missingKeys,
+        pendingVersion: state.pendingVersion,
+        status: snapshot?.status ?? draftSnapshot?.status ?? null,
+        unavailableKeys: visibleSnapshot.diagnostics.unavailableKeys,
+        updatedAt: visibleSnapshot.updatedAt,
+        version: visibleSnapshot.version
       }
     : null;
 }
@@ -807,7 +820,7 @@ export function getFinanceSessionDiagnostics() {
     const livePriceDiagnostics = entry.livePriceDiagnostics
       ? getLivePriceDiagnostics(entry.livePriceDiagnostics.requested)
       : null;
-    const valuationDiagnostics = getValuationDiagnostics(getCurrentValuationSnapshot(entry.userId));
+    const valuationDiagnostics = getValuationDiagnostics(entry.userId);
 
     return {
       dataFetchedAt: entry.dataFetchedAt,

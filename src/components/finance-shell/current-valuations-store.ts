@@ -173,6 +173,14 @@ export type CurrentValuationHeritageAggregate = {
   value: ValuationValue;
 };
 
+export type CurrentValuationStoreState = {
+  committedSnapshot: CurrentValuationSnapshot | null;
+  draftSnapshot: CurrentValuationSnapshot | null;
+  isRefreshing: boolean;
+  lastError: string | null;
+  pendingVersion: CurrentValuationVersion | null;
+};
+
 type MutableQuoteKeys = {
   cryptos: Set<string>;
   isins: Set<string>;
@@ -180,6 +188,10 @@ type MutableQuoteKeys = {
 
 type CurrentValuationEntry = {
   promise?: Promise<CurrentValuationSnapshot>;
+  draftSnapshot: CurrentValuationSnapshot | null;
+  isRefreshing: boolean;
+  lastError: string | null;
+  pendingVersion: CurrentValuationVersion | null;
   snapshot: CurrentValuationSnapshot | null;
 };
 
@@ -190,6 +202,23 @@ const currentValuationSnapshotMapCache = new Map<string, {
   snapshots: Array<CurrentValuationSnapshot | null>;
   value: CurrentValuationSnapshotsByProfile;
 }>();
+
+function createCurrentValuationEntry(
+  overrides: Partial<CurrentValuationEntry> = {}
+): CurrentValuationEntry {
+  return {
+    draftSnapshot: null,
+    isRefreshing: false,
+    lastError: null,
+    pendingVersion: null,
+    snapshot: null,
+    ...overrides
+  };
+}
+
+function getCurrentValuationEntry(profileId: string) {
+  return currentValuationEntries.get(profileId) ?? createCurrentValuationEntry();
+}
 
 function createQuoteKeySets(): MutableQuoteKeys {
   return {
@@ -531,6 +560,10 @@ function getSnapshotStatus(totals: CurrentValuationSnapshot["totals"]): CurrentV
   return "ready";
 }
 
+function isCurrentValuationSnapshotComplete(snapshot: CurrentValuationSnapshot) {
+  return snapshot.status === "ready";
+}
+
 function createEmptyDashboardData(): DashboardData {
   return {
     accountTotals: {
@@ -798,14 +831,27 @@ export function buildCurrentValuationSnapshot({
 }
 
 function emitCurrentValuationChange(profileId: string) {
+  currentValuationSnapshotMapCache.clear();
   const snapshot = getCurrentValuationSnapshot(profileId);
   currentValuationListeners.get(profileId)?.forEach((listener) => listener(snapshot));
 }
 
 function publishCurrentValuationSnapshot(snapshot: CurrentValuationSnapshot) {
-  currentValuationEntries.set(snapshot.profileId, {
-    snapshot
-  });
+  const currentEntry = getCurrentValuationEntry(snapshot.profileId);
+  const nextEntry = isCurrentValuationSnapshotComplete(snapshot)
+    ? createCurrentValuationEntry({
+        ...currentEntry,
+        draftSnapshot: null,
+        lastError: null,
+        snapshot
+      })
+    : createCurrentValuationEntry({
+        ...currentEntry,
+        draftSnapshot: snapshot,
+        lastError: null
+      });
+
+  currentValuationEntries.set(snapshot.profileId, nextEntry);
   emitCurrentValuationChange(snapshot.profileId);
 
   return snapshot;
@@ -910,21 +956,31 @@ export async function ensureCurrentValuation(
         });
       }
 
-      return publishCurrentValuationSnapshot(buildCurrentValuationSnapshot({
+      const snapshot = buildCurrentValuationSnapshot({
         binancePayload,
         binanceRefreshKey: options.binanceRefreshKey ?? 0,
         dashboardData,
         dateKey: options.dateKey,
         profile
-      }));
+      });
+
+      publishCurrentValuationSnapshot(snapshot);
+
+      return getCurrentValuationSnapshot(profile.id) ?? snapshot;
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       const previousSnapshot = currentValuationEntries.get(profile.id)?.snapshot;
       if (previousSnapshot) {
+        const entry = getCurrentValuationEntry(profile.id);
+        currentValuationEntries.set(profile.id, createCurrentValuationEntry({
+          ...entry,
+          lastError: error instanceof Error ? error.message : "Could not refresh current valuation."
+        }));
+        emitCurrentValuationChange(profile.id);
         return previousSnapshot;
       }
 
-      return publishCurrentValuationSnapshot({
+      const errorSnapshot = {
         ...buildLoadingSnapshot(
           profile,
           options.binanceRefreshKey ?? 0,
@@ -932,21 +988,45 @@ export async function ensureCurrentValuation(
           Date.now()
         ),
         status: "error"
-      });
+      } satisfies CurrentValuationSnapshot;
+      publishCurrentValuationSnapshot(errorSnapshot);
+      const entry = getCurrentValuationEntry(profile.id);
+      currentValuationEntries.set(profile.id, createCurrentValuationEntry({
+        ...entry,
+        lastError: error instanceof Error ? error.message : "Could not refresh current valuation."
+      }));
+      emitCurrentValuationChange(profile.id);
+
+      return errorSnapshot;
     })
     .finally(() => {
       const entry = currentValuationEntries.get(profile.id);
       if (entry?.promise === promise) {
-        currentValuationEntries.set(profile.id, {
+        currentValuationEntries.set(profile.id, createCurrentValuationEntry({
+          draftSnapshot: entry.draftSnapshot,
+          isRefreshing: false,
+          lastError: entry.lastError,
+          pendingVersion: null,
           snapshot: entry.snapshot
-        });
+        }));
+        emitCurrentValuationChange(profile.id);
       }
     });
 
-  currentValuationEntries.set(profile.id, {
+  currentValuationEntries.set(profile.id, createCurrentValuationEntry({
+    ...getCurrentValuationEntry(profile.id),
+    draftSnapshot: existingEntry?.draftSnapshot ?? null,
+    isRefreshing: true,
+    lastError: null,
+    pendingVersion: createVersion(
+      profile,
+      options.binanceRefreshKey ?? 0,
+      options.dateKey ?? getUtcDateKey()
+    ),
     promise,
     snapshot: existingEntry?.snapshot ?? null
-  });
+  }));
+  emitCurrentValuationChange(profile.id);
 
   return promise;
 }
@@ -974,7 +1054,9 @@ export function refreshCurrentValuationFromCaches(
     profile
   });
 
-  return publishCurrentValuationSnapshot(snapshot);
+  publishCurrentValuationSnapshot(snapshot);
+
+  return getCurrentValuationSnapshot(profile.id);
 }
 
 export function subscribeCurrentValuation(
@@ -995,6 +1077,18 @@ export function subscribeCurrentValuation(
 
 export function getCurrentValuationSnapshot(profileId: string) {
   return currentValuationEntries.get(profileId)?.snapshot ?? null;
+}
+
+export function getCurrentValuationState(profileId: string): CurrentValuationStoreState {
+  const entry = getCurrentValuationEntry(profileId);
+
+  return {
+    committedSnapshot: entry.snapshot,
+    draftSnapshot: entry.draftSnapshot,
+    isRefreshing: entry.isRefreshing,
+    lastError: entry.lastError,
+    pendingVersion: entry.pendingVersion
+  };
 }
 
 export function useCurrentValuationSnapshot(profileId: string | null) {
@@ -1073,6 +1167,7 @@ export function invalidateCurrentValuation(profileId: string) {
 export function resetCurrentValuationsStore() {
   const profileIds = [...currentValuationEntries.keys()];
   currentValuationEntries.clear();
+  currentValuationSnapshotMapCache.clear();
   profileIds.forEach((profileId) => emitCurrentValuationChange(profileId));
 }
 
