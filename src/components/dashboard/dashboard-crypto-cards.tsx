@@ -3,6 +3,7 @@ import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import type { CurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
 
 import { DashboardBinanceCard } from "./dashboard-binance-card";
+import { getBinanceCardAssetValueCentsByKey } from "./dashboard-binance-card-total";
 import {
   DashboardAssetHeader,
   DashboardCardShell,
@@ -151,6 +152,8 @@ export function DashboardCryptoCards({
 
       <DashboardBinanceCard
         balances={binanceBalances}
+        currentAssetValueCentsByKey={getBinanceCardAssetValueCentsByKey(currentValuationSnapshot)}
+        currentValueCents={currentValuationSnapshot?.totals.binance.cents}
         filterSmallBalances={filterSmallBinance}
         isSyncing={isBinanceSyncing}
         listRef={binanceListRef}

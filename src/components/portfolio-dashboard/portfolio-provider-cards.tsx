@@ -6,6 +6,7 @@ import { SlotValue } from "@/components/finance-shell/slot-value";
 import type { CurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { DashboardBinanceCard } from "@/components/dashboard/dashboard-binance-card";
+import { getBinanceCardAssetValueCentsByKey } from "@/components/dashboard/dashboard-binance-card-total";
 import type { BinanceBalanceRow } from "@/components/dashboard/types";
 import { scheduleIdleTask, useDeferredTransactionRows } from "@/hooks/use-deferred-transaction-rows";
 import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transaction-rows";
@@ -277,6 +278,8 @@ export function PortfolioProviderCards({
         <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
           <DashboardBinanceCard
             balances={binanceBalances}
+            currentAssetValueCentsByKey={getBinanceCardAssetValueCentsByKey(currentValuationSnapshot)}
+            currentValueCents={currentValuationSnapshot?.totals.binance.cents}
             filterSmallBalances={filterSmallBinance}
             isSyncing={isBinanceSyncing}
             listRef={binanceListRef}

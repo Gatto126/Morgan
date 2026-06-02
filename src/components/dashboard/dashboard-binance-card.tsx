@@ -8,11 +8,17 @@ import {
   DashboardAssetHeader,
   DashboardMetricRow
 } from "./dashboard-card-parts";
-import { euroFormatter } from "./formatters";
+import {
+  getBinanceCardBalanceValueLabel,
+  getBinanceCardTotalLabel,
+  type BinanceCardAssetValueMap
+} from "./dashboard-binance-card-total";
 import type { BinanceBalanceRow } from "./types";
 
 type DashboardBinanceCardProps = {
   balances: BinanceBalanceRow[];
+  currentAssetValueCentsByKey?: BinanceCardAssetValueMap;
+  currentValueCents?: number | null;
   isSyncing: boolean;
   filterSmallBalances: boolean;
   setFilterSmallBalances: Dispatch<SetStateAction<boolean>>;
@@ -21,6 +27,8 @@ type DashboardBinanceCardProps = {
 
 export function DashboardBinanceCard({
   balances,
+  currentAssetValueCentsByKey,
+  currentValueCents,
   isSyncing,
   filterSmallBalances,
   setFilterSmallBalances,
@@ -33,7 +41,7 @@ export function DashboardBinanceCard({
   const visibleBalances = filterSmallBalances
     ? balances.filter((balance) => balance.eurValue > BINANCE_VISIBLE_VALUE_THRESHOLD_EUR)
     : balances;
-  const totalValue = balances.reduce((sum, balance) => sum + balance.eurValue, 0);
+  const totalLabel = getBinanceCardTotalLabel(balances, currentValueCents);
 
   return (
     <div className="flex flex-col gap-4 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4">
@@ -70,7 +78,7 @@ export function DashboardBinanceCard({
               : <Eye className="h-3.5 w-3.5" strokeWidth={2.2} />}
           </div>
           <span className="text-sm font-bold text-[color:var(--text-main)]">
-            <SlotValue animateChanges value={euroFormatter.format(totalValue)} />
+            <SlotValue animateChanges value={totalLabel} />
           </span>
         </div>
       </div>
@@ -78,6 +86,7 @@ export function DashboardBinanceCard({
         {visibleBalances.map((token) => {
           const total = token.freeAmount + token.lockedAmount;
           const isPartialLock = token.lockedAmount > 0 && token.freeAmount > 0;
+          const valueLabel = getBinanceCardBalanceValueLabel(token, currentAssetValueCentsByKey);
 
           return (
             <div key={token.tokenSymbol}>
@@ -85,7 +94,7 @@ export function DashboardBinanceCard({
               <DashboardAssetHeader
                 animateValueChanges
                 name={token.tokenName ? `${token.tokenName} (${token.tokenSymbol})` : token.tokenSymbol}
-                value={euroFormatter.format(token.eurValue)}
+                value={valueLabel}
               />
               <div className="space-y-1.5 text-sm">
                 <DashboardMetricRow
@@ -98,7 +107,7 @@ export function DashboardBinanceCard({
                     value={token.lockedAmount.toLocaleString("it-IT", { maximumFractionDigits: 8 })}
                   />
                 )}
-                <DashboardMetricRow animateValueChanges label="Current Value" value={euroFormatter.format(token.eurValue)} />
+                <DashboardMetricRow animateValueChanges label="Current Value" value={valueLabel} />
               </div>
             </div>
           );
