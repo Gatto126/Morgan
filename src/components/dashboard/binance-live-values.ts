@@ -13,12 +13,19 @@ export function getBinanceBalanceLivePriceKey(balance: BinanceBalanceRow) {
   return normalizeCryptoSymbol(balance.tokenSymbol);
 }
 
+export function isOpenBinanceBalance(balance: BinanceBalanceRow) {
+  return Math.abs(getBinanceBalanceQuantity(balance)) > NON_ZERO_THRESHOLD;
+}
+
+export function isMaterialBinanceBalance(balance: BinanceBalanceRow) {
+  return isOpenBinanceBalance(balance)
+    && balance.eurValue > BINANCE_VISIBLE_VALUE_THRESHOLD_EUR;
+}
+
 export function getBinanceLivePriceKeys(balances: BinanceBalanceRow[] | undefined) {
   const keys = new Set<string>();
-  const openBalances = [...balances ?? []]
-    .filter((balance) =>
-      Math.abs(getBinanceBalanceQuantity(balance)) > NON_ZERO_THRESHOLD
-    )
+  const materialBalances = [...balances ?? []]
+    .filter(isMaterialBinanceBalance)
     .sort((a, b) => {
       const valueDelta = b.eurValue - a.eurValue;
       return valueDelta !== 0
@@ -26,7 +33,7 @@ export function getBinanceLivePriceKeys(balances: BinanceBalanceRow[] | undefine
         : (getBinanceBalanceLivePriceKey(a) ?? "").localeCompare(getBinanceBalanceLivePriceKey(b) ?? "");
     });
 
-  for (const balance of openBalances) {
+  for (const balance of materialBalances) {
     const key = getBinanceBalanceLivePriceKey(balance);
     if (key) {
       keys.add(key);

@@ -5,7 +5,8 @@ import { useMemo, useSyncExternalStore } from "react";
 import {
   getBinanceBalanceLivePriceKey,
   getBinanceBalanceQuantity,
-  getBinanceLivePriceKeys
+  getBinanceLivePriceKeys,
+  isMaterialBinanceBalance
 } from "@/components/dashboard/binance-live-values";
 import type { DashboardChartPoint } from "@/components/dashboard/dashboard-chart-types";
 import type {
@@ -715,6 +716,10 @@ function buildBinanceValuation(
   const balances = binancePayload.balances ?? [];
 
   for (const balance of balances) {
+    if (!isMaterialBinanceBalance(balance)) {
+      continue;
+    }
+
     const quantity = getBinanceBalanceQuantity(balance);
     if (!isOpenQuantity(quantity)) {
       continue;

@@ -1,9 +1,9 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `eac7d58` (current pushed baseline before the active-profile warmup slice)
-Last fully Vercel-smoked checkpoint: `4fd1966`
-Current slice pending Vercel smoke: active-profile parallel warmup + historical-hover pending distinction
+Current baseline commit: `4cf0420` (current pushed baseline before Binance material quote filtering)
+Last fully Vercel-smoked checkpoint: `4cf0420`
+Current slice pending Vercel smoke: Binance material quote filtering after 68-symbol diagnostic
 Next implementation phase: diagnostics deepening and remaining current-value fallback audit
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
@@ -77,8 +77,9 @@ Binance current policy:
 
 - Binance remains current-only until the separate Binance historical sync project.
 - Binance balances are input data, not authoritative live current values.
-- Binance token with a valid live quote: include in Binance/crypto/heritage current and show in Binance card.
-- Binance token with missing/unavailable/invalid quote: exclude from current totals and hide from current-value card rows; record the token/key in diagnostics. Do not use `balance.eurValue` as an unmarked current fallback.
+- Binance token above the materiality threshold (`balance.eurValue > 0.49`) with a valid live quote: include in Binance/crypto/heritage current and show in Binance card.
+- Binance token below/equal the materiality threshold: do not request a live quote during current valuation and do not include it in current totals. The synced EUR value is only a materiality filter, not a visible current value.
+- Binance token above threshold with missing/unavailable/invalid quote: exclude from current totals and hide from current-value card rows; record the token/key in diagnostics. Do not use `balance.eurValue` as an unmarked current fallback.
 - Token name/quantity may be shown as synced balance data only if the UI clearly separates it from current valuation. For the current valuation card, prefer hiding unpriced token rows.
 
 ## Target Architecture
@@ -463,8 +464,11 @@ Implemented so far:
   - `src/components/portfolio-dashboard/portfolio-provider-cards.tsx`
 - Binance dashboard total/topbar/flat current chart line now prefer the Binance total from the central valuation snapshot:
   - `src/components/binance-dashboard.tsx`
-- Binance balances now use the synced Binance EUR value as a valid fallback inside the central valuation when a Binance live quote key is missing or unavailable:
+- Binance current valuation no longer uses the synced Binance EUR value as visible current fallback:
   - `src/components/finance-shell/current-valuations-store.ts`
+  - `balance.eurValue` is used only as a materiality filter for live quote refresh;
+  - current valuation requests and includes only Binance balances above `0.49 EUR`;
+  - balances below/equal threshold are ignored in current totals until a future Binance sync/history project gives them an explicit policy.
 - The main dashboard resting topbar now prefers the central valuation chart point before falling back to the legacy local current snapshot:
   - `src/components/dashboard.tsx`
 - Binance dashboard manual current sync now seeds the Binance stage cache and forces a profile valuation refresh after balances are synced:
@@ -787,7 +791,7 @@ Until then:
 
 ## Implementation Plan
 
-Current next execution order after `eac7d58`:
+Current next execution order after `4cf0420`:
 
 0. Previous pushed slice status:
    - UI readiness and visible Binance fallback cleanup are pushed in `eac7d58`.
@@ -812,7 +816,7 @@ Current next execution order after `eac7d58`:
      - still to add: changing transaction counts invalidates the old committed snapshot for the new version;
      - main/crypto/investment selectors for the same snapshot return matching shared aggregate values.
 
-2. Orchestrator as current-value owner: current local slice.
+2. Orchestrator as current-value owner: implemented and pushed.
    - Active user warmup must fetch all current valuation inputs independent of visible dashboard:
      - dashboard stage data for checking/investment/crypto holdings;
      - Binance balances when credentials exist;
@@ -853,13 +857,21 @@ Current next execution order after `eac7d58`:
 
 4. Binance current policy cleanup: implemented locally, pending Vercel smoke.
    - Done: remove visible current fallback from `balance.eurValue`.
+   - Done: restore materiality filtering for Binance live quote requests after diagnostics showed 68 requested crypto symbols and quote refresh around 2.7s.
    - In valuation:
-     - Binance token with live quote: include in Binance/crypto/heritage current;
-     - Done: Binance token without valid live quote is excluded from current totals and current card rows;
-     - Current diagnostics list missing/unavailable quote keys; next diagnostics slice should also list excluded token symbols/reasons.
-   - Binance balances may still be used for names/quantities or sync diagnostics, but not as unmarked current money.
+     - Binance token above `0.49 EUR` with live quote: include in Binance/crypto/heritage current;
+     - Done: Binance token below/equal `0.49 EUR` is not requested and is excluded from current totals;
+     - Done: Binance token above threshold without valid live quote is excluded from current totals and current card rows;
+     - Current diagnostics list missing/unavailable quote keys; next diagnostics slice should also list excluded token symbols/reasons and material/dust counts.
+   - Binance balances may still be used for names/quantities, sync diagnostics and materiality filtering, but not as unmarked current money.
+   - Future Binance first-sync/history work:
+     - classify balances at sync time into material versus dust;
+     - avoid persisting or refreshing tiny balances as current-value candidates unless the UI intentionally exposes them;
+     - keep the threshold policy centralized so quote warmup does not regress to all open balances.
    - Tests:
      - done: missing Binance quote excludes token and records diagnostics;
+     - done: balances below materiality threshold are ignored even if a quote is cached;
+     - done: Binance quote-key collector requests only material open balances;
      - missing Binance quote does not block TR crypto quote refresh;
      - no-Binance profile still computes `crypto = TR crypto`;
      - Binance total/topbar/card/today point all come from the same committed snapshot.
@@ -897,6 +909,8 @@ Current next execution order after `eac7d58`:
      - inactive profile live quotes refresh in background without mounting its dashboards.
    - Binance:
      - no quote fallback current from `balance.eurValue`;
+     - `balance.eurValue` can filter out balances at/below `0.49 EUR` from live quote requests;
+     - diagnostics should show a small material quote-key set, not every open dust token;
      - unpriced Binance tokens hidden/excluded from current and visible in diagnostics;
      - Binance remains current-only in charts until historical sync.
 

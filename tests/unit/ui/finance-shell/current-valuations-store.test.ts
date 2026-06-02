@@ -583,7 +583,7 @@ describe("current valuations store", () => {
     });
   });
 
-  it("values Binance open balances from live quotes even when synced EUR value is zero", () => {
+  it("ignores Binance balances below the materiality threshold even when a quote is cached", () => {
     const now = 1_000;
     const snapshot = buildCurrentValuationSnapshot({
       binancePayload: {
@@ -633,17 +633,14 @@ describe("current valuations store", () => {
     });
 
     expect(snapshot.status).toBe("ready");
-    expect(snapshot.quoteKeys.cryptos).toEqual(["BTC", "SOL"]);
+    expect(snapshot.quoteKeys.cryptos).toEqual(["BTC"]);
     expect(snapshot.totals).toMatchObject({
-      binance: { cents: 30_000, status: "ready" },
-      crypto: { cents: 1_030_000, status: "ready" },
-      heritage: { cents: 1_060_000, status: "ready" }
+      binance: { cents: 0, status: "ready" },
+      crypto: { cents: 1_000_000, status: "ready" },
+      heritage: { cents: 1_030_000, status: "ready" }
     });
-    expect(snapshot.providers.BINANCE?.hasBinance).toBe(true);
-    expect(selectCurrentValuationTopbar(snapshot, "crypto").map((item) => [item.id, item.value.cents])).toContainEqual([
-      "crypto:BINANCE",
-      30_000
-    ]);
+    expect(snapshot.providers.BINANCE).toBeUndefined();
+    expect(selectCurrentValuationTopbar(snapshot, "crypto").map((item) => item.id)).not.toContain("crypto:BINANCE");
   });
 
   it("publishes cached snapshots to subscribers and invalidates by profile", () => {

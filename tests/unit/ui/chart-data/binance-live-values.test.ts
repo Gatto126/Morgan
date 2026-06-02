@@ -46,8 +46,8 @@ const balances: BinanceBalanceRow[] = [
 ];
 
 describe("Binance live values", () => {
-  it("collects live price keys for all open balances without trusting synced EUR values", () => {
-    expect(getBinanceLivePriceKeys(balances)).toEqual(["BTC", "DOGE", "UNPRICED", "USDC"]);
+  it("collects live price keys only for material open balances", () => {
+    expect(getBinanceLivePriceKeys(balances)).toEqual(["BTC", "USDC"]);
   });
 
   it("revalues Binance balances with live prices while preserving fallback values", () => {
