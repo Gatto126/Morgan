@@ -420,14 +420,20 @@ export function getFinanceStageRequestKey({
 export function getPrioritizedProfileStageWarmupOrder(
   user: UserRecord,
   activeStage: DashboardStageKey = "dashboard"
-) {
+): DashboardStageKey[] {
   const visibleStages = getVisibleDashboardStageKeys(user);
   const resolvedActiveStage = visibleStages.includes(activeStage) ? activeStage : "dashboard";
-
-  return [
+  const candidateStages: DashboardStageKey[] = [
     resolvedActiveStage,
+    "dashboard",
+    "binance",
     ...visibleStages.filter((stageKey) => stageKey !== resolvedActiveStage)
-  ].filter((stageKey, index, stages) => stages.indexOf(stageKey) === index);
+  ];
+
+  return candidateStages.filter((stageKey, index, stages) => (
+    visibleStages.includes(stageKey)
+    && stages.indexOf(stageKey) === index
+  ));
 }
 
 export function getActiveProfileStageWarmupOrder(user: UserRecord) {
@@ -718,9 +724,8 @@ export async function preloadFinanceProfileStages({
   user
 }: PreloadFinanceProfileStagesOptions) {
   const stageOrder = getPrioritizedProfileStageWarmupOrder(user, activeStage);
-
-  for (const stage of stageOrder) {
-    await ensureFinanceStageReady({
+  const stageWarmups = stageOrder.map((stage) => (
+    ensureFinanceStageReady({
       binanceRefreshKey,
       event,
       force,
@@ -728,17 +733,21 @@ export async function preloadFinanceProfileStages({
       priority: stage === activeStage ? getHigherPriority(priority, "active") : priority,
       stage,
       user
-    });
-  }
-
-  await ensureFinanceCurrentValuation({
+    })
+  ));
+  const currentValuationWarmup = ensureFinanceCurrentValuation({
     binanceRefreshKey,
     event,
     force,
-    livePriceMaxAgeMs: activeStage === "dashboard" ? 0 : backgroundLivePriceMaxAgeMs,
+    livePriceMaxAgeMs: 0,
     priority: getHigherPriority(priority, "active"),
     user
   });
+
+  await Promise.allSettled([
+    ...stageWarmups,
+    currentValuationWarmup
+  ]);
 }
 
 async function runFinanceSessionWarmup() {
@@ -760,25 +769,14 @@ async function runFinanceSessionWarmup() {
     return;
   }
 
-  await ensureFinanceStageReady({
-    event: "login",
-    priority: "user",
-    stage: "dashboard",
-    user: primaryProfile
-  });
-  await ensureFinanceCurrentValuation({
+  await preloadFinanceProfileStages({
+    activeStage: "dashboard",
     event: "login",
     priority: "user",
     user: primaryProfile
   });
 
   await Promise.allSettled([
-    preloadFinanceProfileStages({
-      activeStage: "dashboard",
-      event: "login",
-      priority: "background",
-      user: primaryProfile
-    }),
     ensureFinanceProfilesCurrentValuations({
       activeUserId: primaryProfile.id,
       event: "login",

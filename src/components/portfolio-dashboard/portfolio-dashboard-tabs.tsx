@@ -35,9 +35,8 @@ export function PortfolioDashboardTabs({
     () => tabs.map((tab) => {
         const isSelected = activeTab === tab.key;
         const pointValue = getPortfolioPointValue(activePoint, tab.key);
-        const value = valuesKnown && pointValue !== null
-          ? formatEuroCents(pointValue)
-          : "--";
+        const hasPointValue = valuesKnown && pointValue !== null;
+        const value = hasPointValue ? formatEuroCents(pointValue) : "";
 
         return {
           active: isSelected,
@@ -47,7 +46,8 @@ export function PortfolioDashboardTabs({
           label: tab.key === "ALL" ? undefined : getAbbreviatedLabel(tab.label),
           onClick: () => onSelectTab(tab.key),
           suppressInitialChanges: !isTooltipActive,
-          value
+          value,
+          valuePending: !isTooltipActive && !hasPointValue
         };
       }),
     [RootIcon, activePoint, activeTab, isTooltipActive, onSelectTab, stage, tabs, valuesKnown]

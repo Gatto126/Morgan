@@ -54,7 +54,8 @@ describe("dashboard topbar store", () => {
       id: "heritage",
       label: undefined,
       suppressInitialChanges: true,
-      value: ""
+      value: "",
+      valuePending: true
     }]);
   });
 
@@ -469,6 +470,30 @@ describe("dashboard topbar store", () => {
     store.clearTransientDashboardTopbar("dashboard", "user-1");
 
     expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("123,45 \u20ac");
+  });
+
+  it("keeps historical empty tooltip values distinct from loading placeholders", async () => {
+    vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
+    const store = await loadTopbarStoreModule();
+
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "123,45 \u20ac"
+    }]);
+    store.publishDashboardTopbar("dashboard", "user-1", [{
+      active: false,
+      id: "investment",
+      value: "",
+      valuePending: false
+    }], { transient: true });
+
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")[0]).toMatchObject({
+      id: "investment",
+      value: "",
+      valuePending: false
+    });
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")[0]?.value).toBe("--");
   });
 
   it("clears transient values when a resting publish is dropped as unready", async () => {

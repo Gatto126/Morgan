@@ -1,9 +1,10 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `4fd1966` (last Vercel-smoked)
-Current slice pending Vercel smoke: active-user atomic committed valuation store + UI readiness/Binance visible fallback cleanup
-Next implementation phase: orchestrator warmup/readiness hardening and diagnostics deepening
+Current baseline commit: `eac7d58` (current pushed baseline before the active-profile warmup slice)
+Last fully Vercel-smoked checkpoint: `4fd1966`
+Current slice pending Vercel smoke: active-profile parallel warmup + historical-hover pending distinction
+Next implementation phase: diagnostics deepening and remaining current-value fallback audit
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -18,6 +19,7 @@ Morgan must behave like a trustworthy personal finance and portfolio aggregator:
 - make dashboard navigation feel instant because data is already warm and values are already current.
 - for the active user, every dashboard must show the same committed current snapshot at the same time. Dashboard navigation changes only the visible slice, not the underlying current money state.
 - use an elegant animated skeleton for current money values only when there is no valid committed snapshot yet. Once a committed snapshot exists, dashboard switching must not show skeletons; refreshes keep the last committed snapshot visible until a new complete snapshot is ready.
+- do not show skeleton for historical hover gaps. If a chart point predates investment/crypto/Binance values, that is historical absence, not a current loading state.
 
 The key product rule is:
 
@@ -61,6 +63,15 @@ Skeleton policy:
 - dashboard switch with a committed snapshot: do not show skeleton, render the new dashboard from the same committed snapshot;
 - focus/reconnect/daily refresh with a committed snapshot: keep values visible until the new snapshot commits;
 - import/Binance connect/delete can invalidate the old profile version. If there is no committed snapshot for the new version, show skeleton until the post-change valuation commits.
+- historical tooltip/topbar gaps: render as absent/empty values, not animated loading skeletons.
+
+Active-profile warmup policy:
+
+- when the active profile is known, start the whole current valuation input set immediately;
+- stage data, Binance balances and current valuation should be launched in parallel and rely on cache/in-flight de-duplication;
+- the active stage remains first priority, but dashboard and Binance must be started before auxiliary checking/investment/crypto stage preloads because they are the critical inputs for the committed current snapshot;
+- inactive profiles refresh as background work for the home aggregate, but they must not block or delay the active profile snapshot;
+- even with parallel warmup, visible current values still swap only through a complete committed snapshot.
 
 Binance current policy:
 
@@ -515,6 +526,11 @@ Known mismatch found during production smoke and current mitigation:
   - main and portfolio dashboards no longer add local live today points when the committed valuation point is missing;
   - Binance current valuation excludes unpriced Binance balances instead of using synced `balance.eurValue`;
   - Binance current card rows hide tokens without valuation values and the card total stays pending until valuation is available.
+- Current local slice after `eac7d58` hardens active-profile warmup/readiness:
+  - active profile stage warmups and `ensureFinanceCurrentValuation(...)` now start in parallel;
+  - warmup order starts active stage, dashboard and Binance before auxiliary stages;
+  - focus/reconnect and dashboard navigation use the full active-profile preload instead of only the visible stage;
+  - topbar current skeletons are controlled by an explicit pending flag, so historical hover gaps stay empty instead of looking like loading current values.
 
 ## Gaps To Close
 
@@ -589,6 +605,11 @@ Remaining work:
   - dashboard navigation with committed values does not show skeleton;
   - no local live today point appears before committed valuation;
   - Binance card/topbar/today point do not use synced `balance.eurValue`;
+- smoke the active-profile parallel warmup after deploy:
+  - cold login/F5 starts dashboard and Binance requests together;
+  - Binance skeleton duration should be shorter and should not trail auxiliary stage preloads;
+  - once values appear, topbar/cards/current chart point still swap together from one committed snapshot;
+  - chart hover on dates before investment/crypto/Binance existed does not show animated skeletons for those missing historical values;
 - smoke the shell-owned multi-profile valuation refresh after deploy:
   - one profile: home Heritage equals main dashboard Heritage after visiting dashboards and returning home;
   - multiple profiles: home Heritage equals the sum of profile Heritage snapshots;
@@ -762,14 +783,15 @@ Until then:
 
 ## Implementation Plan
 
-Current next execution order after `76dd695`:
+Current next execution order after `eac7d58`:
 
-0. Smoke current pushed slice:
-   - Vercel: crypto dashboard Binance topbar/card total must match exactly, including cents.
-   - Vercel: Binance card token current values must not visibly disagree with the valuation total once valuation is ready.
-   - Vercel: main dashboard crypto and crypto dashboard crypto must still match at rest.
+0. Previous pushed slice status:
+   - UI readiness and visible Binance fallback cleanup are pushed in `eac7d58`.
+   - Early smoke found the expected no-committed-snapshot skeleton state on cold login/F5.
+   - Follow-up issue: Binance can still appear later than checking/dashboard because active-profile warmup was not aggressive enough at the orchestrator level.
+   - Follow-up UI detail: while hovering an old chart point, missing investment/crypto values should not render as loading skeletons.
 
-1. Active-user atomic valuation store: implemented locally, pending Vercel smoke.
+1. Active-user atomic valuation store: implemented and pushed, smoke continuing.
    - Add per-profile valuation state with at least:
      - `committedSnapshot`: last complete coherent snapshot for the current profile/version/date;
      - `refreshing`: whether a draft refresh is in progress;
@@ -786,12 +808,18 @@ Current next execution order after `76dd695`:
      - still to add: changing transaction counts invalidates the old committed snapshot for the new version;
      - main/crypto/investment selectors for the same snapshot return matching shared aggregate values.
 
-2. Orchestrator as current-value owner:
+2. Orchestrator as current-value owner: current local slice.
    - Active user warmup must fetch all current valuation inputs independent of visible dashboard:
      - dashboard stage data for checking/investment/crypto holdings;
      - Binance balances when credentials exist;
      - all required live quotes for investment, TR crypto and Binance.
    - Fetch active-user valuation inputs in parallel where possible, then commit once.
+   - Implementation plan for this slice:
+     - make `preloadFinanceProfileStages(...)` launch stage warmups and `ensureFinanceCurrentValuation(...)` together instead of waiting stage-by-stage;
+     - prioritize stage order as active stage, dashboard, Binance, then auxiliary stages;
+     - use `preloadFinanceProfileStages(...)` for app boot/F5, profile prefetch, dashboard navigation, focus/reconnect and daily rollover active-profile refresh;
+     - keep `ensureFinanceProfilesCurrentValuations(...)` for all profiles/home aggregate, but rely on in-flight de-duplication so the active valuation is not recomputed separately;
+     - preserve stale-while-refresh and committed-only visibility.
    - Keep inactive profiles as lower-priority background valuation refreshes for the home aggregate.
    - Use the same orchestration entry points:
      - login warmup;
@@ -804,7 +832,7 @@ Current next execution order after `76dd695`:
      - Binance connect/delete/sync.
    - Diagnostics should report committed snapshot version, refresh state, pending version, missing/unavailable keys, quote ages and whether UI is showing committed or pending state.
 
-3. UI readiness gate and skeleton: implemented locally, pending Vercel smoke.
+3. UI readiness gate and skeleton: implemented and pushed, with one local follow-up in this slice.
    - Create reusable current-value skeleton components:
      - topbar pill skeleton matching the dark rounded animated style;
      - compact card value skeleton;
@@ -816,6 +844,7 @@ Current next execution order after `76dd695`:
      - if no usable stage data exists, keep the existing dashboard loading overlay;
      - when committed snapshot exists, render topbar/cards/current chart point immediately from it.
    - Done locally for chart current points: main/portfolio charts do not add a local live today point when the committed valuation point is missing.
+   - Current local follow-up: topbar publishers now distinguish current pending from historical hover absence via an explicit pending flag. Empty historical tooltip values must not show the animated skeleton.
    - Smoke target: topbar/cards/chart should appear visually synchronized on cold login/F5: either skeleton together, or committed values together.
 
 4. Binance current policy cleanup: implemented locally, pending Vercel smoke.

@@ -15,6 +15,7 @@ export type DashboardTopbarItem = {
   onClick?: () => void;
   suppressInitialChanges?: boolean;
   value: string;
+  valuePending?: boolean;
 };
 
 type DashboardTopbarEntry = {
@@ -278,7 +279,8 @@ function mergeTopbarUiState(
       return {
         ...item,
         suppressInitialChanges: previousItem?.suppressInitialChanges ?? item.suppressInitialChanges,
-        value: previousItem?.value ?? pendingTopbarValue
+        value: previousItem?.value ?? pendingTopbarValue,
+        valuePending: previousItem?.valuePending ?? item.valuePending ?? true
       };
     })
   );
@@ -343,7 +345,7 @@ export function readStoredDashboardTopbarItems(
     const items = parsedItems
       .filter((item): item is StoredDashboardTopbarItem => typeof item.id === "string")
       .map((item) => {
-        return {
+        const topbarItem: DashboardTopbarItem = {
           active: !!item.active,
           animateChanges: !!item.animateChanges,
           ariaLabel: item.ariaLabel,
@@ -352,6 +354,12 @@ export function readStoredDashboardTopbarItems(
           suppressInitialChanges: true,
           value: placeholderValues ? "" : pendingTopbarValue
         };
+
+        if (placeholderValues) {
+          topbarItem.valuePending = true;
+        }
+
+        return topbarItem;
       });
 
     return normalizeDashboardTopbarItems(stage, items);

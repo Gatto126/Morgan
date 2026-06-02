@@ -57,7 +57,8 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
         ariaLabel: "HERITAGE dashboard tab",
         icon: ChartPie,
         id: "heritage",
-        value: fallbackValue
+        value: fallbackValue,
+        valuePending: true
       }
     ];
 
@@ -67,7 +68,8 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
         ariaLabel: "CHECKING dashboard tab",
         icon: Landmark,
         id: "checking",
-        value: fallbackValue
+        value: fallbackValue,
+        valuePending: true
       });
     }
 
@@ -77,7 +79,8 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
         ariaLabel: "INVESTMENT dashboard tab",
         icon: Wallet,
         id: "investment",
-        value: fallbackValue
+        value: fallbackValue,
+        valuePending: true
       });
     }
 
@@ -87,7 +90,8 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
         ariaLabel: "CRYPTO dashboard tab",
         icon: Coins,
         id: "crypto",
-        value: fallbackValue
+        value: fallbackValue,
+        valuePending: true
       });
     }
 
@@ -100,7 +104,8 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
       icon: Bitcoin,
       id: "binance",
       label: "BINANCE",
-      value: fallbackValue
+      value: fallbackValue,
+      valuePending: true
     }];
   }
 
@@ -108,7 +113,8 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
     active: true,
     icon: fallbackIcons[activeStage],
     id: activeStage,
-    value: fallbackValue
+    value: fallbackValue,
+    valuePending: true
   }];
 }
 
@@ -269,6 +275,7 @@ export function DashboardTopbarShell({
           value={item.value}
           animateChanges={item.animateChanges}
           valueIdentity={item.id}
+          valuePending={item.valuePending}
         />
       ))}
     </div>

@@ -52,9 +52,8 @@ export function DashboardTabs({
           valuesKnown
         });
         const pointValue = getDashboardPointValue(activePoint, tab.key);
-        const value = tabValuesKnown && pointValue !== null
-          ? formatEuroCents(pointValue)
-          : "--";
+        const hasPointValue = tabValuesKnown && pointValue !== null;
+        const value = hasPointValue ? formatEuroCents(pointValue) : "";
 
         return {
           active: tabIsActive,
@@ -64,7 +63,8 @@ export function DashboardTabs({
           id: tab.key,
           onClick: () => onActiveTabChange(tab.key),
           suppressInitialChanges: !isChartInteraction,
-          value
+          value,
+          valuePending: !isChartInteraction && !hasPointValue
         };
       }),
     [

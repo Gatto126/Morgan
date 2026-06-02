@@ -30,7 +30,6 @@ import { dashboardStages, getStageTitle } from "./finance-shell/stage-title";
 import { warmImportedProfileData } from "./finance-shell/import-data-warmup";
 import {
   ensureFinanceProfilesCurrentValuations,
-  ensureFinanceStageReady,
   preloadFinanceProfileStages
 } from "./finance-shell/finance-session-orchestrator";
 import { getMillisecondsUntilNextUtcDate } from "@/shared/date-keys";
@@ -443,12 +442,11 @@ export function FinanceShell({
           ? resolveVisibleDashboardStage(stage, activeUser)
           : "dashboard";
 
-        refreshTasks.unshift(ensureFinanceStageReady({
+        refreshTasks.unshift(preloadFinanceProfileStages({
+          activeStage,
           binanceRefreshKey,
           event,
-          livePriceMaxAgeMs: 0,
           priority: "user",
-          stage: activeStage,
           user: activeUser
         }));
       }
@@ -565,12 +563,11 @@ export function FinanceShell({
     const stageKey = resolveVisibleDashboardStage(newStage, activeUser);
 
     void Promise.allSettled([
-      ensureFinanceStageReady({
+      preloadFinanceProfileStages({
+        activeStage: stageKey,
         binanceRefreshKey,
         event: "dashboard-change",
-        livePriceMaxAgeMs: 0,
         priority: "user",
-        stage: stageKey,
         user: activeUser
       }),
       ensureFinanceProfilesCurrentValuations({

@@ -8,6 +8,7 @@ import {
   getFinanceStageRequestKey,
   getFinanceSessionDiagnostics,
   getPrioritizedProfileStageWarmupOrder,
+  preloadFinanceProfileStages,
   resetFinanceSessionOrchestrator
 } from "@/components/finance-shell/finance-session-orchestrator";
 import { getCurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
@@ -64,9 +65,9 @@ describe("finance session orchestrator", () => {
     expect(getPrioritizedProfileStageWarmupOrder(user, "crypto")).toEqual([
       "crypto",
       "dashboard",
+      "binance",
       "checking",
-      "investment",
-      "binance"
+      "investment"
     ]);
   });
 
@@ -123,6 +124,87 @@ describe("finance session orchestrator", () => {
       cryptos: ["BTC"],
       isins: []
     });
+  });
+
+  it("starts active profile stage and Binance requests without waiting for the first stage response", async () => {
+    const warmupUser: UserRecord = {
+      ...user,
+      id: "profile-parallel-warmup"
+    };
+    type DeferredResponse = {
+      promise: Promise<{
+        json: () => Promise<unknown>;
+        ok: boolean;
+      }>;
+      resolve: (value: {
+        json: () => Promise<unknown>;
+        ok: boolean;
+      }) => void;
+    };
+    const pendingResponses = new Map<string, DeferredResponse>();
+    const createDeferredResponse = (): DeferredResponse => {
+      let resolve!: DeferredResponse["resolve"];
+      const promise = new Promise<{
+        json: () => Promise<unknown>;
+        ok: boolean;
+      }>((next) => {
+        resolve = next;
+      });
+
+      return { promise, resolve };
+    };
+    const getStageFromUrl = (url: string) => {
+      if (url.startsWith("/api/binance/balances?")) return "binance";
+      if (url.startsWith("/api/transactions/checking?")) return "checking";
+      if (url.startsWith("/api/transactions/crypto?")) return "crypto";
+      if (url.startsWith("/api/transactions/dashboard?")) return "dashboard";
+      if (url.startsWith("/api/transactions/investment?")) return "investment";
+      return "unknown";
+    };
+    const payloadByStage: Record<string, unknown> = {
+      binance: { balances: [], hasApiKey: true, isStale: false, syncedAt: null },
+      checking: { dailyData: [], monthlyData: [], providers: [] },
+      crypto: { dailyData: [], monthlyData: [], providers: [] },
+      dashboard: {
+        accountTotals: { checking: 0, crypto: 0, heritage: 0, investment: 0 },
+        dailyData: [],
+        monthlyData: [],
+        providerSummaries: []
+      },
+      investment: { dailyData: [], monthlyData: [], providers: [] }
+    };
+    const fetchMock = vi.fn((url: string) => {
+      const stage = getStageFromUrl(url);
+      const deferred = createDeferredResponse();
+      pendingResponses.set(stage, deferred);
+      return deferred.promise;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const warmup = preloadFinanceProfileStages({
+      activeStage: "dashboard",
+      event: "app-boot",
+      priority: "active",
+      user: warmupUser
+    });
+
+    expect([...pendingResponses.keys()]).toEqual([
+      "dashboard",
+      "binance",
+      "checking",
+      "investment",
+      "crypto"
+    ]);
+
+    for (const [stage, deferred] of pendingResponses.entries()) {
+      deferred.resolve({
+        json: async () => payloadByStage[stage],
+        ok: true
+      });
+    }
+
+    await warmup;
+    expect(getCurrentValuationSnapshot(warmupUser.id)?.status).toBe("ready");
   });
 
   it("records diagnostics for stage data and live quotes", async () => {

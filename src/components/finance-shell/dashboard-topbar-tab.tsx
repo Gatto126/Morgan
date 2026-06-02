@@ -22,6 +22,7 @@ type DashboardTopbarTabProps = {
   suppressInitialChanges?: boolean;
   value: string;
   valueIdentity?: string;
+  valuePending?: boolean;
 };
 
 export function DashboardTopbarTab({
@@ -33,7 +34,8 @@ export function DashboardTopbarTab({
   onClick,
   suppressInitialChanges = true,
   value,
-  valueIdentity
+  valueIdentity,
+  valuePending
 }: DashboardTopbarTabProps) {
   const hoverIdentity = `${active ? "active" : "idle"}:${label ?? ""}:${valueIdentity ?? ""}`;
   const [pointerHoverState, setPointerHoverState] = useState({ hovered: false, identity: hoverIdentity });
@@ -52,20 +54,21 @@ export function DashboardTopbarTab({
         : current
     ));
   };
-  const valuePending = value.trim() === "" || value === "--" || value === "-";
-  const displayValue = valuePending ? "" : value;
+  const valueIsPlaceholder = value.trim() === "" || value === "--" || value === "-";
+  const isValuePending = valuePending ?? valueIsPlaceholder;
+  const displayValue = valueIsPlaceholder ? "" : value;
   const { amount, currency } = getDashboardTopbarValueParts(displayValue);
   const showEuroIcon = currency === "EUR" || currency === "\u20ac";
   const hasTextIdentity = !!label;
   const valueClassName = cn(
     "dashboard-topbar-value flex h-5 shrink-0 items-center justify-end overflow-hidden whitespace-nowrap text-right font-extrabold leading-none text-white tabular-nums",
     hasTextIdentity ? "w-[72px]" : "w-[82px] sm:w-[86px]",
-    valuePending && "opacity-0",
+    isValuePending && "opacity-0",
     getDashboardTopbarValueTextClass(displayValue)
   );
   const currencyClassName = cn(
     "dashboard-topbar-currency flex h-5 w-4 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap text-[11px] font-extrabold leading-none text-white",
-    valuePending && "opacity-0"
+    isValuePending && "opacity-0"
   );
 
   return (
@@ -97,7 +100,7 @@ export function DashboardTopbarTab({
           ) : null}
         </span>
         <span className={cn("dashboard-topbar-money flex h-5 shrink-0 items-center justify-end gap-1.5", hasTextIdentity ? "w-[94px]" : "w-[104px] sm:w-[108px]")}>
-          {valuePending ? (
+          {isValuePending ? (
             <CurrentValueSkeleton className={cn("h-5", hasTextIdentity ? "w-[86px]" : "w-[100px]")} />
           ) : (
             <>

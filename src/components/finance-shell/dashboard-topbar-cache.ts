@@ -68,13 +68,15 @@ export function getCachedStageTopbarItems(activeUser: UserRecord, activeStage: D
         active: true,
         icon: RootIcon,
         id: activeStage,
-        value: fallbackValue
+        value: fallbackValue,
+        valuePending: true
       },
       ...providers.map((provider) => ({
         active: false,
         id: `${activeStage}:${provider.sourceInstitution}`,
         label: getAbbreviatedLabel(provider.sourceInstitution),
-        value: fallbackValue
+        value: fallbackValue,
+        valuePending: true
       }))
     ];
   }
