@@ -3,9 +3,9 @@
 Last updated: 2026-06-02
 Current baseline commit: `c9c56b2` (pushed central Binance current sync ownership)
 Last fully Vercel-smoked checkpoint: `4cf0420`
-Latest Vercel smoke note: Binance sync ownership is centralized, but live quote updates can still publish visible intermediate values during dashboard changes.
-Current local slice: centralize live quote commit ownership for current totals. Topbar/cards/today point must not rebuild totals from partial live-price cache events.
-Next implementation phase after this slice: smoke live quote commit ownership, then continue final current fallback cleanup before archive/daily snapshots.
+Latest Vercel smoke note: committed-only live quote ownership stopped partial topbar publishers, but values became too static and only refreshed on navigation.
+Current local slice: add active-profile central live valuation ticker. Values should refresh periodically through committed snapshots, not through dashboard-local quote events.
+Next implementation phase after this slice: smoke active live valuation ticker, then continue final current fallback cleanup before archive/daily snapshots.
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -66,6 +66,8 @@ Live quote commit policy:
 - Dashboard stage warmups can preload data and quote caches, but they must not call cache-only valuation publishing after each stage quote refresh.
 - This prevents mixed snapshots such as BTC new + ETH old + ETF old from becoming visible during dashboard navigation.
 - Detail rows can still show local live prices temporarily, but totals, provider tabs and current chart point must read the committed valuation snapshot.
+- A central active-profile live ticker should call `ensureFinanceCurrentValuation(...)` periodically while the document is visible. That ticker restores live movement without exposing partial quote-cache snapshots.
+- The ticker should not refresh inactive profiles every few seconds; inactive/home profile aggregates refresh on boot/focus/profile changes unless product requirements change.
 
 Skeleton policy:
 
@@ -1135,8 +1137,14 @@ Current next execution order after `4cf0420`:
      - remove the topbar `LIVE_PRICES_UPDATED_EVENT` listener that reseeds topbars from cache;
      - remove cache-only valuation publishing from `ensureFinanceStageReady(...)`;
      - keep `ensureFinanceCurrentValuation(...)` as the only path that fetches the complete quote set and commits visible current totals;
+     - add a visible-document active-profile valuation ticker that calls `ensureFinanceCurrentValuation(...)` on a controlled interval;
      - keep local live price hooks for row/card details only, not as current-total publishers;
      - keep committed snapshot visible while new quotes are being fetched.
+   - Local implementation status:
+     - topbar live-price event reseeding removed;
+     - stage warmup cache-only valuation publishing removed;
+     - active profile central valuation refresh interval added at 10 seconds while `document.hidden === false`;
+     - crypto/investment dashboard cards prefer committed valuation values over local `livePrices` when valuation is available.
    - Tests:
      - topbar shell must not reseed values when `LIVE_PRICES_UPDATED_EVENT` fires;
      - stage ready warmup must not publish current valuation from partial quote caches;
@@ -1144,6 +1152,7 @@ Current next execution order after `4cf0420`:
    - Vercel smoke:
      - main -> crypto -> main should not show current totals jumping through multiple intermediate values;
      - BTC price shown in current total cards should match the committed valuation everywhere;
+     - values should update while staying on one dashboard, approximately on the central valuation interval, without requiring navigation;
      - detail row prices may update, but topbar/cards/today current totals should swap only once per complete valuation refresh.
    - Rollback:
      - baseline before this slice is `c9c56b2`;

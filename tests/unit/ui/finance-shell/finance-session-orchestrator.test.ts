@@ -606,7 +606,7 @@ describe("finance session orchestrator", () => {
     btcPrice = 61_000;
 
     const second = await ensureFinanceCurrentValuation({
-      event: "dashboard-change",
+      event: "live-price-refresh",
       livePriceMaxAgeMs: 0,
       priority: "user",
       user: valuationUser

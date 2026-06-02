@@ -49,6 +49,7 @@ export type FinanceSessionEvent =
   | "import"
   | "login"
   | "logout"
+  | "live-price-refresh"
   | "network-reconnect"
   | "profile-change"
   | "profile-delete"

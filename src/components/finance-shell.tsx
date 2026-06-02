@@ -29,6 +29,7 @@ import { useTransactionImport, type ImportedTransactionCounts } from "./finance-
 import { dashboardStages, getStageTitle } from "./finance-shell/stage-title";
 import { warmImportedProfileData } from "./finance-shell/import-data-warmup";
 import {
+  ensureFinanceCurrentValuation,
   ensureFinanceProfilesCurrentValuations,
   preloadFinanceProfileStages
 } from "./finance-shell/finance-session-orchestrator";
@@ -47,6 +48,8 @@ export type FinanceShellProps = {
   initialSelection?: PersistedFinanceSelection | null;
   initialUsers: UserRecord[];
 };
+
+const activeCurrentValuationRefreshIntervalMs = 10_000;
 
 function getSuggestedFirstProfileName(accountName: string) {
   const trimmedName = accountName.trim();
@@ -474,6 +477,35 @@ export function FinanceShell({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [activeUser, binanceRefreshKey, hasRestoredClientState, stage, users]);
+  useEffect(() => {
+    if (!activeUser || !hasRestoredClientState) {
+      return;
+    }
+
+    let refreshInFlight = false;
+    const refreshActiveCurrentValuation = () => {
+      if (refreshInFlight || document.hidden) {
+        return;
+      }
+
+      refreshInFlight = true;
+      void ensureFinanceCurrentValuation({
+        binanceRefreshKey,
+        event: "live-price-refresh",
+        livePriceMaxAgeMs: 0,
+        priority: "active",
+        user: activeUser
+      }).finally(() => {
+        refreshInFlight = false;
+      });
+    };
+    const interval = window.setInterval(
+      refreshActiveCurrentValuation,
+      activeCurrentValuationRefreshIntervalMs
+    );
+
+    return () => window.clearInterval(interval);
+  }, [activeUser, binanceRefreshKey, hasRestoredClientState]);
   useEffect(() => {
     if (!hasRestoredClientState || users.length === 0) {
       return;
