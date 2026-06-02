@@ -15,7 +15,6 @@ import { formatProviderLabel } from "./formatters";
 import { mergePortfolioDataWithBinance } from "./binance-portfolio-provider";
 import { PortfolioChart } from "./portfolio-chart";
 import { getPortfolioPointValue } from "./portfolio-current-point";
-import { buildPortfolioCurrentSnapshot } from "./portfolio-current-snapshot";
 import { selectPortfolioCurrentValuationPoint } from "./portfolio-current-valuation";
 import { PortfolioDashboardTabs } from "./portfolio-dashboard-tabs";
 import { PortfolioProviderCards } from "./portfolio-provider-cards";
@@ -161,33 +160,7 @@ export function PortfolioDashboard({
       todayKey
     });
   }, [activeProvider, activeTab, cryptoValuesKnown, currentValuationPoint, dataForDisplay, isCryptoDashboard, livePrices, pricesReady, timeRange, todayKey]);
-  const localCurrentSnapshot = useMemo(
-    () => dataFresh && !currentValuationPoint
-      ? buildPortfolioCurrentSnapshot({
-          activeProvider,
-          activeTab,
-          blockRootTotal: isCryptoDashboard && hasBinancePortfolio && !binanceBalancesKnown,
-          data: dataForDisplay,
-          livePrices,
-          priceQueryParam: config.priceQueryParam,
-          pricesReady
-        })
-      : null,
-    [
-      activeProvider,
-      activeTab,
-      binanceBalancesKnown,
-      config.priceQueryParam,
-      currentValuationPoint,
-      dataForDisplay,
-      dataFresh,
-      hasBinancePortfolio,
-      isCryptoDashboard,
-      livePrices,
-      pricesReady
-    ]
-  );
-  const currentSnapshot = currentValuationPoint ?? localCurrentSnapshot;
+  const currentSnapshot = currentValuationPoint;
   const currentDisplayPoint = activeChartPoint ?? currentSnapshot;
   const currentValuesKnown = dataFresh && !!currentSnapshot;
 
