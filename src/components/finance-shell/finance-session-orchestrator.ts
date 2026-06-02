@@ -21,7 +21,8 @@ import {
   ensureCurrentValuation,
   getCurrentValuationState,
   invalidateCurrentValuation,
-  resetCurrentValuationsStore
+  resetCurrentValuationsStore,
+  type CurrentValuationSnapshot
 } from "./current-valuations-store";
 import {
   getDashboardStageDataVersion,
@@ -35,6 +36,8 @@ import { fetchDashboardPreviewData } from "./use-account-portfolio-preview-data"
 declare global {
   interface Window {
     __MORGAN_FINANCE_DIAGNOSTICS__?: ReturnType<typeof getFinanceSessionDiagnostics>;
+    __MORGAN_FINANCE_COHERENCE_DIAGNOSTICS__?: ReturnType<typeof getFinanceSessionCoherenceDiagnostics>;
+    morganFinanceCoherenceDiagnostics?: () => ReturnType<typeof getFinanceSessionCoherenceDiagnostics>;
     morganFinanceDiagnostics?: () => ReturnType<typeof getFinanceSessionDiagnostics>;
   }
 }
@@ -277,12 +280,16 @@ function publishFinanceSessionDiagnostics() {
   registerLivePriceDiagnosticsListener();
 
   const diagnostics = getFinanceSessionDiagnostics();
+  const coherenceDiagnostics = getFinanceSessionCoherenceDiagnostics(diagnostics);
   const diagnosticsPayload = JSON.stringify({
+    coherence: coherenceDiagnostics,
     stages: diagnostics,
     updatedAt: Date.now()
   });
   window.morganFinanceDiagnostics = () => getFinanceSessionDiagnostics();
+  window.morganFinanceCoherenceDiagnostics = () => getFinanceSessionCoherenceDiagnostics();
   window.__MORGAN_FINANCE_DIAGNOSTICS__ = diagnostics;
+  window.__MORGAN_FINANCE_COHERENCE_DIAGNOSTICS__ = coherenceDiagnostics;
 
   try {
     window.sessionStorage.setItem("morgan:finance-session-diagnostics:v1", diagnosticsPayload);
@@ -319,35 +326,82 @@ function installFinanceSessionDiagnosticsHook() {
   }
 
   window.morganFinanceDiagnostics = () => getFinanceSessionDiagnostics();
+  window.morganFinanceCoherenceDiagnostics = () => getFinanceSessionCoherenceDiagnostics();
   window.__MORGAN_FINANCE_DIAGNOSTICS__ ??= getFinanceSessionDiagnostics();
+  window.__MORGAN_FINANCE_COHERENCE_DIAGNOSTICS__ ??= getFinanceSessionCoherenceDiagnostics();
 }
 
 installFinanceSessionDiagnosticsHook();
+
+function getSnapshotDiagnosticsId(snapshot: CurrentValuationSnapshot | null) {
+  if (!snapshot) {
+    return null;
+  }
+
+  const version = snapshot.version;
+  return [
+    snapshot.profileId,
+    version.dateKey,
+    version.transactionCount,
+    version.checkingCount,
+    version.investmentCount,
+    version.cryptoCount,
+    version.binanceRefreshKey,
+    snapshot.updatedAt
+  ].join(":");
+}
+
+function getSnapshotTotalsCents(snapshot: CurrentValuationSnapshot | null) {
+  if (!snapshot) {
+    return null;
+  }
+
+  return {
+    binance: snapshot.totals.binance.cents,
+    checking: snapshot.totals.checking.cents,
+    crypto: snapshot.totals.crypto.cents,
+    heritage: snapshot.totals.heritage.cents,
+    investment: snapshot.totals.investment.cents
+  };
+}
 
 function getValuationDiagnostics(profileId: string) {
   const state = getCurrentValuationState(profileId);
   const snapshot = state.committedSnapshot;
   const draftSnapshot = state.draftSnapshot;
   const visibleSnapshot = snapshot ?? draftSnapshot;
+  const now = Date.now();
 
   return visibleSnapshot
     ? {
+        committedSnapshotId: getSnapshotDiagnosticsId(snapshot),
         committedStatus: snapshot?.status ?? null,
+        committedTotalsCents: getSnapshotTotalsCents(snapshot),
         committedUpdatedAt: snapshot?.updatedAt ?? null,
         committedVersion: snapshot?.version ?? null,
+        currentRefreshAgeMs: state.refreshStartedAt === null ? null : now - state.refreshStartedAt,
+        draftSnapshotId: getSnapshotDiagnosticsId(draftSnapshot),
         draftStatus: draftSnapshot?.status ?? null,
+        draftTotalsCents: getSnapshotTotalsCents(draftSnapshot),
         draftUpdatedAt: draftSnapshot?.updatedAt ?? null,
         draftVersion: draftSnapshot?.version ?? null,
         isRefreshing: state.isRefreshing,
         lastError: state.lastError,
         lastFetchAt: visibleSnapshot.diagnostics.lastFetchAt,
+        lastRefreshDurationMs: state.lastRefreshDurationMs,
+        lastRefreshFinishedAt: state.lastRefreshFinishedAt,
+        lastRefreshStartedAt: state.lastRefreshStartedAt,
         maxQuoteAgeMs: visibleSnapshot.diagnostics.maxQuoteAgeMs,
         missingKeys: visibleSnapshot.diagnostics.missingKeys,
         pendingVersion: state.pendingVersion,
+        refreshStartedAt: state.refreshStartedAt,
         status: snapshot?.status ?? draftSnapshot?.status ?? null,
         unavailableKeys: visibleSnapshot.diagnostics.unavailableKeys,
         updatedAt: visibleSnapshot.updatedAt,
-        version: visibleSnapshot.version
+        version: visibleSnapshot.version,
+        visibleSnapshotId: getSnapshotDiagnosticsId(visibleSnapshot),
+        visibleSnapshotKind: snapshot ? "committed" : "draft",
+        visibleTotalsCents: getSnapshotTotalsCents(visibleSnapshot)
       }
     : null;
 }
@@ -1154,4 +1208,65 @@ export function getFinanceSessionDiagnostics() {
       version: entry.version
     };
   });
+}
+
+export function getFinanceSessionCoherenceDiagnostics(
+  stageDiagnostics = getFinanceSessionDiagnostics()
+) {
+  const profiles = new Map<string, {
+    binanceCurrentSync: ReturnType<typeof getBinanceCurrentSyncDiagnostics>;
+    stages: Array<{
+      event: FinanceSessionEvent;
+      key: string;
+      stage: DashboardStageKey;
+      status: FinanceStageRequestEntry["status"];
+      valuationSnapshotId: string | null;
+      valuationStatus: string | null;
+    }>;
+    userId: string;
+    valuationDiagnostics: ReturnType<typeof getValuationDiagnostics>;
+    visibleSnapshotIds: Set<string>;
+  }>();
+
+  for (const entry of stageDiagnostics) {
+    const existing = profiles.get(entry.userId) ?? {
+      binanceCurrentSync: entry.binanceCurrentSync,
+      stages: [],
+      userId: entry.userId,
+      valuationDiagnostics: entry.valuationDiagnostics,
+      visibleSnapshotIds: new Set<string>()
+    };
+    const visibleSnapshotId = entry.valuationDiagnostics?.visibleSnapshotId ?? null;
+
+    if (visibleSnapshotId) {
+      existing.visibleSnapshotIds.add(visibleSnapshotId);
+    }
+
+    existing.binanceCurrentSync = existing.binanceCurrentSync ?? entry.binanceCurrentSync;
+    existing.valuationDiagnostics = existing.valuationDiagnostics ?? entry.valuationDiagnostics;
+    existing.stages.push({
+      event: entry.event,
+      key: entry.key,
+      stage: entry.stage,
+      status: entry.status,
+      valuationSnapshotId: visibleSnapshotId,
+      valuationStatus: entry.valuationStatus
+    });
+    profiles.set(entry.userId, existing);
+  }
+
+  return {
+    profiles: [...profiles.values()].map((profile) => ({
+      binanceCurrentSync: profile.binanceCurrentSync,
+      stageCount: profile.stages.length,
+      stages: profile.stages,
+      userId: profile.userId,
+      valuationDiagnostics: profile.valuationDiagnostics,
+      visibleSnapshotId: profile.valuationDiagnostics?.visibleSnapshotId ?? null,
+      visibleSnapshotIds: [...profile.visibleSnapshotIds],
+      visibleSnapshotIsCoherentAcrossStages: profile.visibleSnapshotIds.size <= 1,
+      visibleTotalsCents: profile.valuationDiagnostics?.visibleTotalsCents ?? null
+    })),
+    updatedAt: Date.now()
+  };
 }

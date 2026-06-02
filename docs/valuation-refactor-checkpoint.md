@@ -1,11 +1,11 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `2492b62` (pushed active-profile central live valuation ticker)
-Last fully Vercel-smoked checkpoint: `2492b62`
-Latest Vercel smoke note: central live ticker restored periodic current updates, but dashboard navigation still forced live valuation refreshes and could make Binance/crypto values change on every dashboard click.
-Current local slice: make dashboard navigation view-only for current valuation. Stage data can still preload, but `dashboard-change` must not force a new live valuation snapshot.
-Next implementation phase after this slice: smoke dashboard-change stability, then continue Binance connect/current-sync naming cleanup before archive/daily snapshots.
+Current baseline commit: `a230f98` (pushed dashboard navigation valuation view-only)
+Last Vercel-smoked checkpoint: `a230f98` (dashboard-change stability smoke, partial)
+Latest Vercel smoke note: dashboard switching is more stable and no longer appears to refresh Binance/crypto because of the click itself. Current updates can appear later than exactly 10s because the interval only starts the refresh; the visible swap waits for the full committed snapshot.
+Current local slice: improve valuation/coherence diagnostics before deeper real-Binance smoke.
+Next implementation phase after this slice: final coherence audit for detail rows/diagnostics, then Binance API connect/current-sync naming cleanup before archive/daily snapshots.
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -39,6 +39,45 @@ Binance = BTC + ETH + SOL + XRP + other synced Binance balances
 
 All topbar, card and current chart values must come from the same current valuation snapshot. Main dashboard, checking, investment, crypto and Binance dashboards may show different slices, but they must not create different current totals for the same profile/date/version.
 
+## Current Coherence Status
+
+As of pushed commit `a230f98`:
+
+- primary topbar/current totals are valuation-driven;
+- main, investment, crypto and Binance current cards prefer the committed valuation snapshot;
+- main and crypto dashboards follow the same Binance current-only chart policy;
+- dashboard navigation no longer forces live valuation refresh;
+- historical hover values are transient and do not replace resting current values;
+- active live refresh is centralized through committed snapshots.
+
+Remaining coherence work is narrower:
+
+- audit detail asset/token rows that may still read local live quote caches while totals read the committed valuation;
+- confirm inactive mounted dashboards can warm data without publishing current totals or expensive hidden rendering work;
+- clarify home multi-profile refresh expectations: active profile refreshes on the live ticker, inactive profiles refresh on boot/focus/profile changes unless a future requirement asks for full multi-profile live ticking;
+- improve diagnostics so a production value can be traced to a specific committed snapshot, refresh attempt and quote set;
+- keep Binance historical snapshots/backfill separate from current valuation coherence.
+
+## Real Binance Smoke Protocol
+
+Real Binance credentials may be needed because current balances and account products cannot be tested faithfully with public market data alone.
+
+Rules:
+
+- use only temporary read-only Binance API keys;
+- no trading, withdrawal or transfer permissions;
+- do not commit credentials, screenshots containing secrets, shell history snippets or `.env` files;
+- prefer process environment variables or manual entry in the Vercel settings UI;
+- after the smoke, revoke the key in Binance;
+- tests should record diagnostics and behavior, not the secret values.
+
+For real-Binance coherence smoke, capture:
+
+- `window.morganFinanceCoherenceDiagnostics?.()`;
+- visible topbar/card totals across main, crypto and Binance;
+- whether `visibleSnapshotId` stays stable while switching dashboards under the ticker interval;
+- whether a later refresh swaps `visibleSnapshotId` and totals together.
+
 ## Atomic Current Valuation Policy
 
 Target behavior for the active user:
@@ -68,6 +107,8 @@ Live quote commit policy:
 - Detail rows can still show local live prices temporarily, but totals, provider tabs and current chart point must read the committed valuation snapshot.
 - A central active-profile live ticker should call `ensureFinanceCurrentValuation(...)` periodically while the document is visible. That ticker restores live movement without exposing partial quote-cache snapshots.
 - The ticker should not refresh inactive profiles every few seconds; inactive/home profile aggregates refresh on boot/focus/profile changes unless product requirements change.
+- The ticker interval is a scheduling cadence, not a guaranteed visible update time. The UI updates only after the complete valuation snapshot finishes fetching and commits.
+- Active-profile live refresh must not overlap. If a scheduled refresh is still in flight when the next tick fires, skip that tick and keep the last committed snapshot visible.
 - Dashboard navigation is not a live-price event. `dashboard-change` may preload the destination stage, but it must not force `ensureFinanceCurrentValuation(... livePriceMaxAgeMs: 0)` or refresh all profile valuations.
 - Current valuation refresh owners are boot/F5, profile selection, import, Binance connect/delete/current-sync, focus/reconnect, daily rollover and the active-profile live ticker.
 
@@ -697,6 +738,16 @@ Current progress:
 
 Remaining work:
 
+- close the final active-dashboard coherence audit:
+  - topbar totals, provider cards and today/current chart point must continue to match across main/checking/investment/crypto/Binance;
+  - detail asset/token rows that still read local quote caches must be either migrated to committed valuation values or explicitly documented as non-authoritative detail;
+  - inactive dashboard hooks may warm caches but must not publish current totals;
+  - dashboard switching under the ticker interval must not create visible refresh sequences;
+- improve valuation diagnostics:
+  - show committed snapshot id/version/date/age;
+  - show refresh in-flight state, startedAt, duration and skipped ticker ticks;
+  - show which quote keys were requested/missing/unavailable and which Binance tokens were excluded;
+  - make `window.morganFinanceDiagnostics?.()` useful enough to explain a stale/missing value without reading code;
 - smoke active-user atomic current valuation with stale-while-refresh after deploy:
   - committed values stay visible while a refresh is partial;
   - complete refreshes swap all selected values together;
@@ -847,6 +898,13 @@ Then close the loader.
 - unavailable quote keys;
 - stale stage data keys;
 - pending promises.
+
+Current local diagnostics slice:
+
+- keep `window.morganFinanceDiagnostics()` as the stage-level array for backward compatibility;
+- add `window.morganFinanceCoherenceDiagnostics()` grouped by profile;
+- expose `visibleSnapshotId`, `visibleSnapshotKind`, `visibleTotalsCents`, committed/draft ids, refresh timing and coherence status across mounted stages;
+- keep credentials out of diagnostics.
 
 The goal is to identify in seconds whether a stale value is caused by:
 
@@ -1160,6 +1218,11 @@ Current next execution order after `4cf0420`:
      - `preloadFinanceProfileStages(...)` can now warm destination stage data with `refreshCurrentValuation: false`;
      - `FinanceShell` uses that mode for `dashboard-change`;
      - expected behavior: switching main -> crypto -> Binance -> main within the 10 second ticker window keeps the same committed current values until the next central snapshot commits.
+   - Vercel smoke after `a230f98`:
+     - dashboard switching looks more stable than before;
+     - current values no longer appear to refresh just because the user clicked another dashboard;
+     - visible updates may take more than 10 seconds because the 10 second ticker only starts a refresh and the UI waits for the complete snapshot;
+     - overlap is not expected from the ticker because `refreshInFlight` skips ticks while a refresh is still running.
    - Tests:
      - topbar shell must not reseed values when `LIVE_PRICES_UPDATED_EVENT` fires;
      - stage ready warmup must not publish current valuation from partial quote caches;
@@ -1231,7 +1294,11 @@ Current next execution order after `4cf0420`:
      - main crypto and crypto dashboard total match;
      - investment total matches between main and investment;
      - checking total/provider order stays stable.
-   - Stay on one dashboard for 5-10 seconds, then switch:
+     - switching dashboards repeatedly in less than one ticker interval does not trigger visible value refreshes by itself.
+   - Stay on one dashboard until the next central snapshot commits, then switch:
+     - values may update after the interval plus fetch/valuation time;
+     - if a refresh takes longer than the interval, it must not overlap with a second ticker refresh;
+     - the new committed snapshot swaps into topbar/cards/today point together;
      - no previous-stage topbar flash;
      - no mismatch between old and new dashboard current values.
    - Hover historical chart:

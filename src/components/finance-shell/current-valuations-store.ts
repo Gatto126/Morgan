@@ -179,7 +179,11 @@ export type CurrentValuationStoreState = {
   draftSnapshot: CurrentValuationSnapshot | null;
   isRefreshing: boolean;
   lastError: string | null;
+  lastRefreshDurationMs: number | null;
+  lastRefreshFinishedAt: number | null;
+  lastRefreshStartedAt: number | null;
   pendingVersion: CurrentValuationVersion | null;
+  refreshStartedAt: number | null;
 };
 
 type MutableQuoteKeys = {
@@ -192,7 +196,11 @@ type CurrentValuationEntry = {
   draftSnapshot: CurrentValuationSnapshot | null;
   isRefreshing: boolean;
   lastError: string | null;
+  lastRefreshDurationMs: number | null;
+  lastRefreshFinishedAt: number | null;
+  lastRefreshStartedAt: number | null;
   pendingVersion: CurrentValuationVersion | null;
+  refreshStartedAt: number | null;
   snapshot: CurrentValuationSnapshot | null;
 };
 
@@ -211,7 +219,11 @@ function createCurrentValuationEntry(
     draftSnapshot: null,
     isRefreshing: false,
     lastError: null,
+    lastRefreshDurationMs: null,
+    lastRefreshFinishedAt: null,
+    lastRefreshStartedAt: null,
     pendingVersion: null,
+    refreshStartedAt: null,
     snapshot: null,
     ...overrides
   };
@@ -858,11 +870,24 @@ function emitCurrentValuationChange(profileId: string) {
 
 function publishCurrentValuationSnapshot(snapshot: CurrentValuationSnapshot) {
   const currentEntry = getCurrentValuationEntry(snapshot.profileId);
+  const finishedAt = Date.now();
+  const completedRefreshStartedAt = currentEntry.refreshStartedAt;
   const nextEntry = isCurrentValuationSnapshotComplete(snapshot)
     ? createCurrentValuationEntry({
         ...currentEntry,
         draftSnapshot: null,
+        isRefreshing: false,
         lastError: null,
+        lastRefreshDurationMs: completedRefreshStartedAt === null
+          ? currentEntry.lastRefreshDurationMs
+          : finishedAt - completedRefreshStartedAt,
+        lastRefreshFinishedAt: completedRefreshStartedAt === null
+          ? currentEntry.lastRefreshFinishedAt
+          : finishedAt,
+        lastRefreshStartedAt: completedRefreshStartedAt ?? currentEntry.lastRefreshStartedAt,
+        pendingVersion: null,
+        promise: undefined,
+        refreshStartedAt: null,
         snapshot
       })
     : createCurrentValuationEntry({
@@ -967,6 +992,7 @@ export async function ensureCurrentValuation(
     return existingEntry.snapshot;
   }
 
+  const refreshStartedAt = Date.now();
   const promise = fetchCurrentValuationStageData(profile, options)
     .then(async ({ binancePayload, dashboardData }) => {
       const quoteKeys = collectCurrentValuationQuoteKeys(dashboardData, binancePayload);
@@ -1022,11 +1048,19 @@ export async function ensureCurrentValuation(
     .finally(() => {
       const entry = currentValuationEntries.get(profile.id);
       if (entry?.promise === promise) {
+        const finishedAt = Date.now();
+        const startedAt = entry.refreshStartedAt ?? refreshStartedAt;
         currentValuationEntries.set(profile.id, createCurrentValuationEntry({
+          ...entry,
           draftSnapshot: entry.draftSnapshot,
           isRefreshing: false,
           lastError: entry.lastError,
+          lastRefreshDurationMs: finishedAt - startedAt,
+          lastRefreshFinishedAt: finishedAt,
+          lastRefreshStartedAt: startedAt,
           pendingVersion: null,
+          promise: undefined,
+          refreshStartedAt: null,
           snapshot: entry.snapshot
         }));
         emitCurrentValuationChange(profile.id);
@@ -1044,6 +1078,7 @@ export async function ensureCurrentValuation(
       options.dateKey ?? getUtcDateKey()
     ),
     promise,
+    refreshStartedAt,
     snapshot: existingEntry?.snapshot ?? null
   }));
   emitCurrentValuationChange(profile.id);
@@ -1107,7 +1142,11 @@ export function getCurrentValuationState(profileId: string): CurrentValuationSto
     draftSnapshot: entry.draftSnapshot,
     isRefreshing: entry.isRefreshing,
     lastError: entry.lastError,
-    pendingVersion: entry.pendingVersion
+    lastRefreshDurationMs: entry.lastRefreshDurationMs,
+    lastRefreshFinishedAt: entry.lastRefreshFinishedAt,
+    lastRefreshStartedAt: entry.lastRefreshStartedAt,
+    pendingVersion: entry.pendingVersion,
+    refreshStartedAt: entry.refreshStartedAt
   };
 }
 

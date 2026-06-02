@@ -6,6 +6,7 @@ import {
   ensureFinanceCurrentValuation,
   ensureFinanceProfilesCurrentValuations,
   ensureFinanceStageReady,
+  getFinanceSessionCoherenceDiagnostics,
   getFinanceStageRequestKey,
   getFinanceSessionDiagnostics,
   getPrioritizedProfileStageWarmupOrder,
@@ -207,6 +208,21 @@ describe("finance session orchestrator", () => {
 
     await warmup;
     expect(getCurrentValuationSnapshot(warmupUser.id)?.status).toBe("ready");
+    expect(getFinanceSessionCoherenceDiagnostics().profiles).toEqual([
+      expect.objectContaining({
+        stageCount: 5,
+        userId: warmupUser.id,
+        visibleSnapshotIsCoherentAcrossStages: true,
+        visibleTotalsCents: expect.objectContaining({
+          heritage: 0
+        }),
+        valuationDiagnostics: expect.objectContaining({
+          committedSnapshotId: expect.any(String),
+          lastRefreshDurationMs: expect.any(Number),
+          visibleSnapshotKind: "committed"
+        })
+      })
+    ]);
   });
 
   it("can preload dashboard navigation without publishing a new current valuation", async () => {
