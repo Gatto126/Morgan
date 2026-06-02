@@ -22,11 +22,13 @@ import {
 import { EmptyChartAction } from "./finance-shell/empty-chart-action";
 import {
   fetchDashboardStageData,
-  readDashboardStageDataCache,
-  seedDashboardStageDataCache
+  readDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
 import { CurrentValueSkeleton } from "./finance-shell/current-value-skeleton";
-import { ensureFinanceCurrentValuation } from "./finance-shell/finance-session-orchestrator";
+import {
+  ensureFinanceBinanceCurrentBalances,
+  ensureFinanceCurrentValuation
+} from "./finance-shell/finance-session-orchestrator";
 import { useCurrentValuationSnapshot } from "./finance-shell/current-valuations-store";
 import { usePublishDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
 import { useDashboardLivePrices } from "./dashboard/use-dashboard-live-prices";
@@ -165,37 +167,27 @@ export function BinanceDashboard({
     setSyncNotice(null);
 
     try {
-      const response = await fetch("/api/binance/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
+      const valuationUser = {
+        binanceApiKeyPreview: null,
+        checkingCount,
+        cryptoCount,
+        hasBinanceCredentials,
+        id: userId,
+        investmentCount,
+        name: "",
+        transactionCount
+      };
+      const syncResult = await ensureFinanceBinanceCurrentBalances({
+        binanceRefreshKey,
+        event: "binance-sync",
+        force: true,
+        priority: "user",
+        throwOnError: true,
+        user: valuationUser
       });
-      const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error ?? "Binance sync failed.");
-      }
-
-      let syncedBalances: BinanceBalance[] = [];
-      const syncedAt = typeof data.syncedAt === "string" ? data.syncedAt : new Date().toISOString();
-
-      if (Array.isArray(data.balances)) {
-        syncedBalances = data.balances;
-        setBalances(syncedBalances);
-        setBalancesKnown(true);
-      } else {
-        const loadedData = await loadBalances({ force: true });
-        syncedBalances = Array.isArray(loadedData.balances)
-          ? loadedData.balances as BinanceBalance[]
-          : [];
-      }
-
-      seedDashboardStageDataCache("binance", userId, binanceRefreshKey, {
-        balances: syncedBalances,
-        hasApiKey: typeof data.hasApiKey === "boolean" ? data.hasApiKey : true,
-        isStale: typeof data.isStale === "boolean" ? data.isStale : false,
-        syncedAt
-      });
+      setBalances(syncResult.balances as BinanceBalance[]);
+      setBalancesKnown(true);
 
       await ensureFinanceCurrentValuation({
         binanceRefreshKey,
@@ -203,16 +195,7 @@ export function BinanceDashboard({
         force: true,
         livePriceMaxAgeMs: 0,
         priority: "user",
-        user: {
-          binanceApiKeyPreview: null,
-          checkingCount,
-          cryptoCount,
-          hasBinanceCredentials,
-          id: userId,
-          investmentCount,
-          name: "",
-          transactionCount
-        }
+        user: valuationUser
       });
 
       setSyncNotice("Sync complete.");

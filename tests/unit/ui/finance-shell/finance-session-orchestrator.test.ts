@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   collectStageLivePriceKeys,
+  ensureFinanceBinanceCurrentBalances,
   ensureFinanceCurrentValuation,
   ensureFinanceProfilesCurrentValuations,
   ensureFinanceStageReady,
@@ -12,6 +13,7 @@ import {
   resetFinanceSessionOrchestrator
 } from "@/components/finance-shell/finance-session-orchestrator";
 import { getCurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
+import { readDashboardStageDataCache } from "@/components/finance-shell/dashboard-stage-data-cache";
 import type { UserRecord } from "@/components/finance-shell/types";
 import {
   globalLivePricesCache,
@@ -334,6 +336,166 @@ describe("finance session orchestrator", () => {
       investment: { cents: 20_000 }
     });
     expect(getCurrentValuationSnapshot(valuationUser.id)).toBe(result.snapshot);
+  });
+
+  it("syncs stale Binance current balances through the orchestrator once", async () => {
+    const binanceUser: UserRecord = {
+      ...user,
+      id: "profile-central-binance-sync"
+    };
+    const staleBalance = {
+      eurValue: 1_000,
+      freeAmount: 1,
+      lockedAmount: 0,
+      tokenName: "Bitcoin",
+      tokenSymbol: "BTC"
+    };
+    const syncedBalance = {
+      eurValue: 2_000,
+      freeAmount: 1,
+      lockedAmount: 0,
+      tokenName: "Ethereum",
+      tokenSymbol: "ETH"
+    };
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith("/api/binance/balances?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            balances: [staleBalance],
+            hasApiKey: true,
+            isStale: true,
+            syncedAt: "2026-06-01T08:00:00.000Z"
+          })
+        };
+      }
+
+      if (url === "/api/binance/sync" && init?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            balances: [syncedBalance],
+            syncedAt: "2026-06-01T08:10:00.000Z"
+          })
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [first, second] = await Promise.all([
+      ensureFinanceBinanceCurrentBalances({
+        binanceRefreshKey: 2,
+        event: "tab-focus",
+        priority: "active",
+        user: binanceUser
+      }),
+      ensureFinanceBinanceCurrentBalances({
+        binanceRefreshKey: 2,
+        event: "tab-focus",
+        priority: "active",
+        user: binanceUser
+      })
+    ]);
+
+    expect(first).toMatchObject({
+      didSync: true,
+      syncedAt: "2026-06-01T08:10:00.000Z"
+    });
+    expect(second).toBe(first);
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/binance/sync")).toHaveLength(1);
+    expect(readDashboardStageDataCache("binance", binanceUser.id, 2)).toMatchObject({
+      balances: [syncedBalance],
+      hasApiKey: true,
+      isStale: false,
+      syncedAt: "2026-06-01T08:10:00.000Z"
+    });
+  });
+
+  it("refreshes stale Binance balances before committing current valuation", async () => {
+    const valuationUser: UserRecord = {
+      ...user,
+      id: "profile-current-valuation-stale-binance"
+    };
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith("/api/binance/balances?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            balances: [{
+              eurValue: 1_000,
+              freeAmount: 1,
+              lockedAmount: 0,
+              tokenName: "Bitcoin",
+              tokenSymbol: "BTC"
+            }],
+            hasApiKey: true,
+            isStale: true,
+            syncedAt: "2026-06-01T08:00:00.000Z"
+          })
+        };
+      }
+
+      if (url === "/api/binance/sync" && init?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            balances: [{
+              eurValue: 2_000,
+              freeAmount: 1,
+              lockedAmount: 0,
+              tokenName: "Ethereum",
+              tokenSymbol: "ETH"
+            }],
+            syncedAt: "2026-06-01T08:10:00.000Z"
+          })
+        };
+      }
+
+      if (url.startsWith("/api/transactions/dashboard?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            accountTotals: { checking: 10_000, crypto: 0, heritage: 10_000, investment: 0 },
+            dailyData: [],
+            monthlyData: [],
+            providerSummaries: [{
+              checking: { cashback: 0, expenses: 0, income: 0, interest: 0, tax: 0, total: 10_000 },
+              cryptoTokens: [],
+              investmentProducts: [],
+              sourceInstitution: "trade_republic",
+              total: 10_000
+            }]
+          })
+        };
+      }
+
+      if (url === "/api/prices?cryptos=ETH") {
+        return {
+          ok: true,
+          json: async () => ({ ETH: 2_000 })
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await ensureFinanceCurrentValuation({
+      binanceRefreshKey: 3,
+      event: "login",
+      priority: "user",
+      user: valuationUser
+    });
+
+    expect(result.snapshot.status).toBe("ready");
+    expect(result.snapshot.totals).toMatchObject({
+      binance: { cents: 200_000 },
+      crypto: { cents: 200_000 },
+      heritage: { cents: 210_000 }
+    });
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/binance/sync")).toHaveLength(1);
   });
 
   it("refreshes Trade Republic crypto valuation without Binance credentials", async () => {

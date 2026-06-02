@@ -14,7 +14,8 @@ import {
 
 import {
   fetchDashboardStageData,
-  getDashboardStageCacheDateKey
+  getDashboardStageCacheDateKey,
+  seedDashboardStageDataCache
 } from "./dashboard-stage-data-cache";
 import {
   ensureCurrentValuation,
@@ -114,6 +115,16 @@ type EnsureFinanceCurrentValuationOptions = {
   user: UserRecord;
 };
 
+type EnsureFinanceBinanceCurrentBalancesOptions = {
+  binanceRefreshKey?: number;
+  event?: FinanceSessionEvent;
+  force?: boolean;
+  priority?: FinanceSessionPriority;
+  seedVersions?: number[];
+  throwOnError?: boolean;
+  user: UserRecord;
+};
+
 type EnsureFinanceProfilesCurrentValuationsOptions = {
   activeUserId?: string | null;
   binanceRefreshKey?: number;
@@ -128,6 +139,47 @@ type WarmFinanceSessionOptions = {
   maxWaitMs?: number;
 };
 
+type BinanceCurrentBalancesPayload = {
+  balances?: BinanceBalanceRow[];
+  hasApiKey?: boolean;
+  isStale?: boolean;
+  syncedAt?: string | null;
+};
+
+type BinanceCurrentSyncStatus = "idle" | "loading" | "syncing" | "ready" | "error";
+
+type BinanceCurrentSyncDiagnostics = {
+  balanceCount: number | null;
+  dataFetchedAt: number | null;
+  dataFetchDurationMs: number | null;
+  dataRequestedAt: number;
+  didSync: boolean;
+  errorMessage: string | null;
+  event: FinanceSessionEvent;
+  hasApiKey: boolean | null;
+  isStale: boolean | null;
+  priority: FinanceSessionPriority;
+  requestedAt: number;
+  status: BinanceCurrentSyncStatus;
+  syncDurationMs: number | null;
+  syncFetchedAt: number | null;
+  syncRequestedAt: number | null;
+  syncedAt: string | null;
+  userId: string;
+  version: number;
+};
+
+type BinanceCurrentSyncResult = {
+  balances: BinanceBalanceRow[];
+  didSync: boolean;
+  errorMessage: string | null;
+  hasApiKey: boolean;
+  isStale: boolean;
+  status: BinanceCurrentSyncStatus;
+  syncedAt: string | null;
+  userId: string;
+};
+
 const defaultWarmupMaxWaitMs = 1_500;
 const backgroundLivePriceMaxAgeMs = 0;
 const priorityRank = {
@@ -136,6 +188,8 @@ const priorityRank = {
   user: 2
 } satisfies Record<FinanceSessionPriority, number>;
 const financeStageRequests = new Map<string, FinanceStageRequestEntry>();
+const binanceCurrentSyncRequests = new Map<string, Promise<BinanceCurrentSyncResult>>();
+const binanceCurrentSyncDiagnostics = new Map<string, BinanceCurrentSyncDiagnostics>();
 let livePriceDiagnosticsListenerRegistered = false;
 const loginWarmupFetchOptions: RequestInit = {
   cache: "no-store",
@@ -295,6 +349,57 @@ function getValuationDiagnostics(profileId: string) {
         version: visibleSnapshot.version
       }
     : null;
+}
+
+function getBinanceCurrentSyncRequestKey({
+  binanceRefreshKey = 0,
+  force = false,
+  user
+}: {
+  binanceRefreshKey?: number;
+  force?: boolean;
+  user: UserRecord;
+}) {
+  return `${user.id}:binance-current:${binanceRefreshKey}:${force ? "force" : "stale"}`;
+}
+
+function toErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function getBinanceCurrentSyncDiagnostics(userId: string) {
+  return binanceCurrentSyncDiagnostics.get(userId) ?? null;
+}
+
+function createBinanceCurrentSyncDiagnostics({
+  binanceRefreshKey,
+  event,
+  force,
+  priority,
+  user
+}: Required<Pick<EnsureFinanceBinanceCurrentBalancesOptions, "binanceRefreshKey" | "event" | "force" | "priority" | "user">>): BinanceCurrentSyncDiagnostics {
+  const requestedAt = Date.now();
+
+  return {
+    balanceCount: null,
+    dataFetchedAt: null,
+    dataFetchDurationMs: null,
+    dataRequestedAt: requestedAt,
+    didSync: false,
+    errorMessage: null,
+    event,
+    hasApiKey: user.hasBinanceCredentials,
+    isStale: null,
+    priority,
+    requestedAt,
+    status: force ? "syncing" : "loading",
+    syncDurationMs: null,
+    syncFetchedAt: null,
+    syncRequestedAt: force ? requestedAt : null,
+    syncedAt: null,
+    userId: user.id,
+    version: binanceRefreshKey
+  };
 }
 
 function getHigherPriority(
@@ -625,6 +730,180 @@ export async function ensureFinanceStageReady(options: EnsureFinanceStageReadyOp
   };
 }
 
+export async function ensureFinanceBinanceCurrentBalances({
+  binanceRefreshKey = 0,
+  event = "dashboard-change",
+  force = false,
+  priority = "active",
+  seedVersions = [],
+  throwOnError = false,
+  user
+}: EnsureFinanceBinanceCurrentBalancesOptions) {
+  const requestKey = getBinanceCurrentSyncRequestKey({ binanceRefreshKey, force, user });
+  const existingRequest = binanceCurrentSyncRequests.get(requestKey);
+
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const diagnostics = createBinanceCurrentSyncDiagnostics({
+    binanceRefreshKey,
+    event,
+    force,
+    priority,
+    user
+  });
+  binanceCurrentSyncDiagnostics.set(user.id, diagnostics);
+  publishFinanceSessionDiagnostics();
+
+  const request = (async (): Promise<BinanceCurrentSyncResult> => {
+    if (!user.hasBinanceCredentials) {
+      diagnostics.balanceCount = 0;
+      diagnostics.dataFetchedAt = Date.now();
+      diagnostics.dataFetchDurationMs = diagnostics.dataFetchedAt - diagnostics.dataRequestedAt;
+      diagnostics.hasApiKey = false;
+      diagnostics.isStale = false;
+      diagnostics.status = "ready";
+      publishFinanceSessionDiagnostics();
+      return {
+        balances: [],
+        didSync: false,
+        errorMessage: null,
+        hasApiKey: false,
+        isStale: false,
+        status: "ready",
+        syncedAt: null,
+        userId: user.id
+      };
+    }
+
+    let payload: BinanceCurrentBalancesPayload | null = null;
+    if (!force) {
+      const dataRequestedAt = Date.now();
+      diagnostics.dataRequestedAt = dataRequestedAt;
+      diagnostics.status = "loading";
+      publishFinanceSessionDiagnostics();
+
+      payload = await fetchDashboardStageData("binance", user.id, {
+        force: false,
+        version: binanceRefreshKey
+      });
+
+      diagnostics.dataFetchedAt = Date.now();
+      diagnostics.dataFetchDurationMs = diagnostics.dataFetchedAt - dataRequestedAt;
+      diagnostics.balanceCount = Array.isArray(payload.balances) ? payload.balances.length : 0;
+      diagnostics.hasApiKey = payload.hasApiKey ?? user.hasBinanceCredentials;
+      diagnostics.isStale = payload.isStale ?? false;
+      diagnostics.syncedAt = payload.syncedAt ?? null;
+    }
+
+    const shouldSync = force || (
+      !!(payload?.hasApiKey ?? user.hasBinanceCredentials)
+      && payload?.isStale === true
+    );
+    if (!shouldSync) {
+      const balances = Array.isArray(payload?.balances) ? payload.balances : [];
+      diagnostics.status = "ready";
+      publishFinanceSessionDiagnostics();
+      return {
+        balances,
+        didSync: false,
+        errorMessage: null,
+        hasApiKey: payload?.hasApiKey ?? user.hasBinanceCredentials,
+        isStale: payload?.isStale ?? false,
+        status: "ready",
+        syncedAt: payload?.syncedAt ?? null,
+        userId: user.id
+      };
+    }
+
+    const syncRequestedAt = Date.now();
+    diagnostics.status = "syncing";
+    diagnostics.syncRequestedAt = syncRequestedAt;
+    publishFinanceSessionDiagnostics();
+
+    const response = await fetch("/api/binance/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id })
+    });
+    const syncPayload = (await response.json().catch(() => ({}))) as BinanceCurrentBalancesPayload & { error?: string };
+
+    if (!response.ok) {
+      throw new Error(syncPayload.error ?? "Binance sync failed.");
+    }
+
+    const syncedAt = typeof syncPayload.syncedAt === "string"
+      ? syncPayload.syncedAt
+      : new Date().toISOString();
+    const balances = Array.isArray(syncPayload.balances) ? syncPayload.balances : [];
+    const cachePayload: BinanceCurrentBalancesPayload = {
+      balances,
+      hasApiKey: syncPayload.hasApiKey ?? true,
+      isStale: syncPayload.isStale ?? false,
+      syncedAt
+    };
+    const fetchedAt = Date.now();
+    const versions = new Set([binanceRefreshKey, ...seedVersions]);
+    for (const version of versions) {
+      seedDashboardStageDataCache("binance", user.id, version, cachePayload, fetchedAt);
+    }
+
+    diagnostics.balanceCount = balances.length;
+    diagnostics.dataFetchedAt = diagnostics.dataFetchedAt ?? fetchedAt;
+    diagnostics.dataFetchDurationMs = diagnostics.dataFetchDurationMs ?? fetchedAt - diagnostics.dataRequestedAt;
+    diagnostics.didSync = true;
+    diagnostics.hasApiKey = cachePayload.hasApiKey ?? true;
+    diagnostics.isStale = cachePayload.isStale ?? false;
+    diagnostics.status = "ready";
+    diagnostics.syncFetchedAt = fetchedAt;
+    diagnostics.syncDurationMs = fetchedAt - syncRequestedAt;
+    diagnostics.syncedAt = syncedAt;
+    publishFinanceSessionDiagnostics();
+
+    return {
+      balances,
+      didSync: true,
+      errorMessage: null,
+      hasApiKey: cachePayload.hasApiKey ?? true,
+      isStale: cachePayload.isStale ?? false,
+      status: "ready",
+      syncedAt,
+      userId: user.id
+    };
+  })()
+    .catch((error: unknown) => {
+      const errorMessage = toErrorMessage(error, "Binance sync failed.");
+      const now = Date.now();
+      diagnostics.errorMessage = errorMessage;
+      diagnostics.status = "error";
+      diagnostics.syncFetchedAt = diagnostics.syncRequestedAt ? now : diagnostics.syncFetchedAt;
+      diagnostics.syncDurationMs = diagnostics.syncRequestedAt ? now - diagnostics.syncRequestedAt : diagnostics.syncDurationMs;
+      publishFinanceSessionDiagnostics();
+
+      if (throwOnError) {
+        throw error instanceof Error ? error : new Error(errorMessage);
+      }
+
+      return {
+        balances: [] as BinanceBalanceRow[],
+        didSync: false,
+        errorMessage,
+        hasApiKey: user.hasBinanceCredentials,
+        isStale: true,
+        status: "error" as const,
+        syncedAt: null,
+        userId: user.id
+      };
+    })
+    .finally(() => {
+      binanceCurrentSyncRequests.delete(requestKey);
+    });
+
+  binanceCurrentSyncRequests.set(requestKey, request);
+  return request;
+}
+
 export async function ensureFinanceCurrentValuation({
   binanceRefreshKey = 0,
   event = "dashboard-change",
@@ -633,6 +912,15 @@ export async function ensureFinanceCurrentValuation({
   priority = "active",
   user
 }: EnsureFinanceCurrentValuationOptions) {
+  if (user.hasBinanceCredentials) {
+    await ensureFinanceBinanceCurrentBalances({
+      binanceRefreshKey,
+      event,
+      priority,
+      user
+    });
+  }
+
   const snapshot = await ensureCurrentValuation(user, {
     binanceRefreshKey,
     force,
@@ -815,12 +1103,15 @@ export function invalidateFinanceProfile(userId: string) {
       financeStageRequests.delete(key);
     }
   }
+  binanceCurrentSyncDiagnostics.delete(userId);
   invalidateCurrentValuation(userId);
   publishFinanceSessionDiagnostics();
 }
 
 export function resetFinanceSessionOrchestrator() {
   financeStageRequests.clear();
+  binanceCurrentSyncRequests.clear();
+  binanceCurrentSyncDiagnostics.clear();
   resetCurrentValuationsStore();
   publishFinanceSessionDiagnostics();
 }
@@ -831,8 +1122,11 @@ export function getFinanceSessionDiagnostics() {
       ? getLivePriceDiagnostics(entry.livePriceDiagnostics.requested)
       : null;
     const valuationDiagnostics = getValuationDiagnostics(entry.userId);
+    const binanceCurrentSync = getBinanceCurrentSyncDiagnostics(entry.userId);
 
     return {
+      binanceCurrentSync,
+      binanceCurrentSyncStatus: binanceCurrentSync?.status ?? null,
       dataFetchedAt: entry.dataFetchedAt,
       dataFetchDurationMs: entry.dataFetchDurationMs,
       dataRequestedAt: entry.dataRequestedAt,

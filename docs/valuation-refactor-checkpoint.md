@@ -1,11 +1,11 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `2d1dbaf` (inactive dashboard visual render gate on top of atomic Binance current valuation)
+Current baseline commit: `2633534` (pushed Binance/crypto batch price refresh with 5s ticker cache)
 Last fully Vercel-smoked checkpoint: `4cf0420`
-Latest Vercel smoke note: inactive-stage visual render gate reduced `content-visibility` verbose output substantially; remaining messages appear mostly during dashboard changes.
-Current slice pending Vercel smoke: Binance/crypto price refresh batch optimization with 5s max cache
-Next implementation phase: diagnostics deepening and remaining current-value fallback audit
+Latest Vercel smoke note: Binance batch pricing feels faster, remaining `content-visibility` verbose messages are reduced and mostly appear during dashboard changes.
+Current local slice pending approval/Vercel smoke: centralize Binance current sync ownership. Rollback target is `2633534` plus the checkpoint context before this local code spike.
+Next implementation phase after approval: smoke central Binance current sync ownership, then decide whether to keep or revert before touching archive/daily snapshots.
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -92,6 +92,57 @@ Binance current policy:
 - Binance token above threshold whose quote has not arrived yet: keep the new valuation snapshot pending so the visible current total does not grow in steps.
 - Binance token above threshold with attempted unavailable/invalid quote: exclude from current totals and hide from current-value card rows; record the token/key in diagnostics. Do not use `balance.eurValue` as an unmarked current fallback.
 - Token name/quantity may be shown as synced balance data only if the UI clearly separates it from current valuation. For the current valuation card, prefer hiding unpriced token rows.
+
+Binance sync ownership policy:
+
+- Binance has two separate concerns and they must not be mixed:
+  - current balance sync: get the freshest known quantities for the current valuation;
+  - daily snapshot history: save an immutable day-level record for historical charts.
+- Sync persistence should save the full Binance portfolio, including dust, locked balances and tokens currently worth `0 EUR`. Materiality must not decide what data we preserve.
+- Materiality (`> 0.49 EUR` today) applies only to live current pricing/display decisions: which tokens request live quotes for current valuation and which token rows are shown as current-value rows.
+- Current valuation may use the latest synced quantities plus live prices, but it must publish only through the committed valuation snapshot.
+- Current balance auto-sync must be owned by the shell/orchestrator, not by an individual dashboard hook.
+- A dashboard can expose a manual user action, but it should call an orchestrator/service path that dedupes sync, updates caches, refreshes valuation and optionally writes a daily snapshot.
+- No dashboard should independently decide to call `/api/binance/sync` on boot/focus/stale state. That creates hidden coupling where main dashboard can change Binance quantities while crypto/Binance/home are rendering another snapshot.
+- Stale policy for current balances:
+  - if API key exists and saved balances are stale, sync in background during app boot/F5/focus/reconnect;
+  - dedupe concurrent sync reasons so login, focus and dashboard preload do not launch multiple Binance syncs;
+  - while sync is running, keep the last committed current valuation visible;
+  - after sync succeeds, seed Binance stage cache, bump/record the Binance input version and force a new current valuation refresh;
+  - after sync fails, keep the last committed valuation and expose diagnostics.
+- There is no current Binance-dashboard manual sync button in the intended product flow. Future user-initiated sync/capture belongs to the Binance historical/past-sync section, not to the current dashboard itself.
+- The API connect flow should become a two-lane process:
+  - fast current lane: save API credentials, fetch balances, apply materiality for current pricing, publish the committed current valuation as quickly as possible;
+  - full archive lane: save the full raw portfolio without materiality filtering, create/update today's provisional daily snapshot, and prepare the future history/backfill anchor.
+- The full archive lane must not block the first visible current valuation.
+- Diagnostics must expose at least: `hasApiKey`, `isStale`, `lastSyncedAt`, `syncInFlight`, `syncReason`, `lastSyncError`, balance count and material/dust counts.
+
+Binance daily snapshot history policy:
+
+- Current values, raw synced balances and historical values are different products:
+  - current Binance = latest synced quantities * live prices now;
+  - raw synced balances = full observed portfolio state, including dust/zero-value tokens;
+  - daily Binance snapshot = quantities and/or values saved for a specific day.
+- Binance historical charts should not invent Binance history before the user connected API.
+- From the API connection date forward, Binance can become a historical provider by saving daily snapshots.
+- Daily snapshots are one record per `userId + dateKey`; use upsert, never duplicate rows for the same day.
+- API connect and future user capture from the historical/past-sync section should save/update a provisional snapshot for the current UTC date.
+- A future scheduled job should run shortly after UTC midnight and close the day that just ended:
+  - example: at `2026-06-03 00:05 UTC`, upsert `dateKey=2026-06-02`;
+  - mark it as `status=final`, `source=scheduled-close`.
+- Recommended snapshot fields include `source` and `status`:
+  - `source = connect | user-capture | scheduled-close | backfill`;
+  - `status = provisional | final`;
+  - scheduled close can replace/upgrade the provisional snapshot for the same `dateKey`;
+  - future backfill can replace scheduled/manual snapshots with a more authoritative reconstruction.
+- The first connect/user-capture snapshot is also a backfill anchor:
+  - it records the first observed Binance portfolio state inside Morgan;
+  - future order/trade backfill can start from this anchor and reconstruct earlier daily balances backwards or forwards.
+- Historical chart reconstruction should read Binance daily snapshots for past days, while the today/current point continues to read the committed current valuation snapshot.
+- Missing historical Binance snapshot policy must be explicit:
+  - initial safe option: no point for missing Binance days, do not backfill silently;
+  - future option: backfill from Binance account history if/when implemented and clearly marked.
+- The daily snapshot path must not update visible topbar/current totals directly. It can trigger valuation refresh, but the UI still swaps only through committed current valuation.
 
 Binance/crypto live price performance policy:
 
@@ -959,12 +1010,156 @@ Current next execution order after `4cf0420`:
      - TR crypto and Binance common tokens should update together from the same quote keys;
      - no visible current fallback from synced `eurValue`.
 
-7. Final current fallback cleanup:
+7. Centralize Binance current sync ownership: implemented locally, pending user approval and Vercel smoke.
+   - Problem:
+     - `useBinanceBalances(...)` in the main dashboard currently performs hidden auto-sync when balances are stale;
+     - this means the main dashboard can update Binance quantities independently from the valuation orchestrator;
+     - cold login/F5, focus, dashboard switch and home/multi-profile refresh can observe different timing depending on which dashboard hook is mounted.
+   - Local implementation status:
+     - `ensureFinanceBinanceCurrentBalances(...)` now lives in `finance-session-orchestrator`;
+     - stale/forced Binance balance refreshes are deduped by profile/version/reason;
+     - successful sync seeds the Binance stage cache and records central sync diagnostics;
+     - `ensureFinanceCurrentValuation(...)` checks the central Binance current path before committing valuation for profiles with Binance credentials;
+     - `useBinanceBalances(...)` no longer calls `/api/binance/sync` directly on stale/focus/interval;
+     - Binance API key save/connect uses the central fast-current path;
+     - the existing Binance dashboard empty-state sync action, if reached, uses the same central path;
+     - no archive/full raw portfolio persistence, daily snapshot table, scheduled close, backfill, or new historical UI has been implemented.
+   - Rollback note:
+     - this slice is intentionally unpushed until approved;
+     - if Vercel smoke shows slower bootstrap, stale values, topbar/card mismatch, unexpected Binance sync calls or worse navigation feel, revert only the central sync ownership code slice and return to commit `2633534`.
+   - Goal:
+     - one current Binance sync owner;
+     - one deduped sync per profile/reason;
+     - one cache invalidation path;
+     - one valuation refresh after sync;
+     - no dashboard-specific hidden sync side effects.
+   - Scope boundary for the next slice:
+     - implement only the fast/current sync lane;
+     - preserve the existing current performance wins: materiality for live pricing, Binance batch quote fetch, committed valuation swap;
+     - do not implement full raw archive persistence;
+     - do not add daily snapshot tables/services;
+     - do not add the future historical/past-sync UI section;
+     - document hooks/placeholders for archive/snapshot, but leave them inactive.
+   - Implementation plan:
+     - add an orchestrator/service entry point, e.g. `ensureFinanceBinanceCurrentBalances(...)`;
+     - return a structured result:
+       - `balances`;
+       - `hasApiKey`;
+       - `isStale`;
+       - `syncedAt`;
+       - `didSync`;
+       - `syncReason`;
+       - `errorMessage`;
+     - track in-flight sync requests by `profileId + force/stale/current date` so boot/focus/dashboard preload dedupe to one call;
+     - load `/api/binance/balances` first to know `hasApiKey`, `isStale`, `syncedAt`, balance count;
+     - if `force` or `isStale && hasApiKey`, call `/api/binance/sync` through that central path;
+     - preserve fast-current semantics:
+       - current valuation still sees only the material/current balances exposed by existing `/api/binance/balances` policy;
+       - live quote requests still use materiality and the Binance batch price map;
+       - visible values still publish only through committed valuation snapshots.
+     - after sync success:
+       - seed dashboard stage cache for Binance with returned balances;
+       - update a central Binance sync state/diagnostic record;
+       - force `ensureFinanceCurrentValuation(...)` for the profile;
+       - keep committed current snapshot visible until ready snapshot commits.
+     - after sync failure:
+       - retain previous cached balances and committed valuation;
+       - expose `lastSyncError` diagnostics;
+       - do not publish fake zero/partial values.
+     - move focus/reconnect/stale auto-sync calls from `useBinanceBalances(...)` into `FinanceShell`/orchestrator refresh flows;
+     - do not add current-dashboard-only sync ownership; future user-initiated sync/capture should live in the Binance historical/past-sync flow and call the centralized path;
+     - keep dashboard components as consumers of balances/sync state only.
+   - File-level plan:
+     - `src/components/finance-shell/finance-session-orchestrator.ts`:
+       - add central Binance current balance ensure function and diagnostics;
+       - integrate it into app boot/F5, focus/reconnect and active-profile preload before/alongside current valuation.
+     - `src/components/dashboard/use-binance-balances.ts`:
+       - remove direct stale-triggered `/api/binance/sync`;
+       - keep cache hydration/loading and display state only;
+       - optionally expose central sync state if needed for UI.
+     - `src/components/binance-dashboard.tsx`:
+       - keep it as a consumer of current valuation/balance data;
+       - do not introduce a new manual current sync button in this slice.
+     - `src/components/finance-shell/use-finance-binance-actions.ts`:
+       - API key save/connect should use the central fast-current path after credentials are saved;
+       - full archive/snapshot work remains TODO.
+     - diagnostics:
+       - extend `window.morganFinanceDiagnostics?.()` with Binance current sync state.
+   - Code migration targets:
+     - remove `/api/binance/sync` auto-call from `src/components/dashboard/use-binance-balances.ts`;
+     - reuse central sync path from:
+       - future Binance history/user-capture action;
+       - Binance API key save/connect;
+       - app boot/F5 active-user warmup;
+       - focus/reconnect;
+       - daily rollover;
+       - profile switch.
+   - Tests to add/update:
+     - stale balances on app boot trigger one central sync and one valuation refresh;
+     - main dashboard no longer calls `/api/binance/sync` directly;
+     - concurrent focus + dashboard preload + valuation warmup dedupe to one sync;
+     - failed sync keeps previous committed valuation visible;
+     - future user-capture forces sync even when not stale;
+     - no-API profile never calls sync and computes crypto as TR crypto only.
+   - Vercel smoke:
+     - cold login/F5 with stale Binance: no stepwise Binance growth, final values coherent;
+     - switch main/crypto/Binance while sync is running: no mismatch and no topbar flash;
+     - focus tab after >10 minutes: one background sync, old values stay visible until new committed snapshot;
+     - no full archive/daily snapshot side effects exist yet;
+     - future user-capture is not implemented in this slice.
+   - Performance guardrails:
+     - do not reintroduce quote requests for all Binance tokens in the current path;
+     - current path must continue to use materiality + batch Binance prices + 5s price cache;
+     - central sync should reduce duplicate `/api/binance/sync` calls, not add new ones;
+     - dashboard switching must not trigger a fresh sync unless the central stale policy says it is needed.
+
+8. Binance daily snapshot history: separate follow-up after current sync ownership.
+   - Goal:
+     - make Binance a historical provider from the day API is connected onward;
+     - eliminate the current-only Binance spike in historical charts once enough snapshots exist.
+   - Data model plan:
+     - add a daily snapshot table keyed by `userId + dateKey`:
+       - syncedAt;
+       - dateKey;
+       - totalEurCents or totalEur;
+       - per-token rows or JSON payload with token symbol/name/free/locked/quantity/value/price/source;
+       - snapshotSource: `connect`, `user-capture`, `scheduled-close`, later `backfill`;
+       - snapshotStatus: `provisional` or `final`;
+       - materiality threshold/version used.
+     - raw snapshot payload should preserve every synced token, including dust and zero-value balances;
+     - material/display totals can be stored separately from raw token payload if the chart should exclude dust from current-looking totals.
+     - decide whether per-token rows live in a separate table or JSON. Start with the simplest queryable shape that chart reconstruction and future backfill anchors need.
+   - Service/API plan:
+     - create `saveBinanceDailySnapshot(userId, balances, valuation/prices, dateKey, source)`;
+     - API key connect starts with a fast current lane that applies the materiality threshold for pricing/display and publishes current values quickly;
+     - after fast current is usable, the full archive lane persists the complete raw Binance portfolio without the materiality threshold and upserts today's provisional snapshot;
+     - future user capture from the historical/past-sync section calls current sync, persists full raw balances and upserts today's provisional snapshot;
+     - future scheduled job runs after UTC midnight and upserts the day that just ended as final (`scheduled-close`);
+     - unique key is `userId + dateKey`, so repeated connect/user-capture/scheduled closes never create duplicates;
+     - first observed snapshot becomes the anchor date for future historical order/trade backfill;
+     - expose read API for chart reconstruction.
+   - Chart integration plan:
+     - past main/crypto chart points read Binance daily snapshots;
+     - before first Binance snapshot, Binance contributes nothing to historical crypto/heritage;
+     - today/current point still comes from current valuation snapshot;
+     - do not silently backfill missing days in the first version.
+   - Tests:
+     - connect creates today's snapshot;
+     - user capture updates today's snapshot idempotently;
+     - daily snapshot does not directly mutate current topbar values;
+     - chart history includes Binance only on/after first snapshot date;
+     - missing snapshot day does not create fake zero or fake carry-forward unless policy changes.
+   - Vercel smoke:
+     - after connect/user-capture, today's Binance remains coherent in topbar/card;
+     - historical chart gains Binance only from snapshot date onward;
+     - refresh/login does not duplicate daily snapshots.
+
+9. Final current fallback cleanup:
    - Re-audit remaining `balance.eurValue`, `livePrices`, local current and topbar publishers.
    - Keep local logic only for historical reconstruction, tooltip values, chart transforms, synced balance metadata and diagnostics.
    - Remove or quarantine helpers that can publish current money outside the committed valuation path.
 
-8. Regression smoke checklist for every slice:
+10. Regression smoke checklist for every slice:
    - F5 on dashboard/checking/investment/crypto/Binance:
      - no fake `0,00`;
      - skeleton only if no committed snapshot exists;

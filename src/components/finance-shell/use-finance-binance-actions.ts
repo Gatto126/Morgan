@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
-import type { BinanceBalanceRow } from "@/components/dashboard/types";
-
-import { seedDashboardStageDataCache } from "./dashboard-stage-data-cache";
 import {
+  ensureFinanceBinanceCurrentBalances,
   ensureFinanceCurrentValuation,
   ensureFinanceStageReady,
   invalidateFinanceProfile
@@ -16,14 +14,6 @@ import type { UserRecord } from "./types";
 type UpdateProfileBinancePayload = {
   error?: string;
   user?: Pick<UserRecord, "hasBinanceCredentials" | "binanceApiKeyPreview">;
-};
-
-type BinanceSyncPayload = {
-  balances?: BinanceBalanceRow[];
-  error?: string;
-  hasApiKey?: boolean;
-  isStale?: boolean;
-  syncedAt?: string | null;
 };
 
 type UseFinanceBinanceActionsParams = {
@@ -114,38 +104,25 @@ export function useFinanceBinanceActions({
       setIsTesting(true);
       setNotice("Testing endpoint...");
 
-      const syncResponse = await fetch("/api/binance/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: activeUser.id })
+      const nextRefreshKey = binanceRefreshKey + 1;
+      const syncResult = await ensureFinanceBinanceCurrentBalances({
+        binanceRefreshKey: nextRefreshKey,
+        event: "binance-connect",
+        force: true,
+        priority: "user",
+        seedVersions: [binanceRefreshKey],
+        throwOnError: true,
+        user: updatedUser
       });
-
-      const syncPayload = (await syncResponse.json()) as BinanceSyncPayload;
-
-      if (!syncResponse.ok) {
-        throw new Error(syncPayload.error ?? "Binance connection failed.");
-      }
-
-      const balances = Array.isArray(syncPayload.balances) ? syncPayload.balances : [];
+      const balances = syncResult.balances;
       const tokenCount = balances.length;
-      const syncedAt = syncPayload.syncedAt ?? new Date().toISOString();
       setNotice(
         tokenCount > 0
           ? `Connected! ${tokenCount} token${tokenCount !== 1 ? "s" : ""} found.`
           : "Connected! Empty wallet."
       );
       keepApiSettingsOpen();
-      const nextRefreshKey = binanceRefreshKey + 1;
-      const fetchedAt = Date.now();
-      const cachePayload = {
-        balances,
-        hasApiKey: syncPayload.hasApiKey ?? true,
-        isStale: syncPayload.isStale ?? false,
-        syncedAt
-      };
 
-      seedDashboardStageDataCache("binance", activeUser.id, binanceRefreshKey, cachePayload, fetchedAt);
-      seedDashboardStageDataCache("binance", activeUser.id, nextRefreshKey, cachePayload, fetchedAt);
       setBinanceRefreshKey(nextRefreshKey);
       setActiveUser(updatedUser);
       clearApiKeyDraft();

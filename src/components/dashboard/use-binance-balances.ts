@@ -30,7 +30,7 @@ export function useBinanceBalances({
   const [hasFreshBinanceBalances, setHasFreshBinanceBalances] = useState(false);
   const [freshBinanceRefreshKey, setFreshBinanceRefreshKey] = useState(binanceRefreshKey);
   const [isBinanceNew, setIsBinanceNew] = useState(false);
-  const [isBinanceSyncing, setIsBinanceSyncing] = useState(false);
+  const isBinanceSyncing = false;
   const [filterSmallBinance, setFilterSmallBinance] = useState(true);
   const prevBinanceCountRef = useRef(0);
   const binanceListRef = useRef<HTMLDivElement>(null);
@@ -63,32 +63,13 @@ export function useBinanceBalances({
     return payload as { isStale?: boolean; hasApiKey?: boolean };
   }, [applyBinancePayload, binanceRefreshKey, userId]);
 
-  const fetchBinanceBalances = useCallback(async (syncIfStale = true) => {
+  const fetchBinanceBalances = useCallback(async (force = false) => {
     try {
-      const payload = await loadBinanceBalances({ force: syncIfStale });
-      if (!payload) {
-        return;
-      }
-
-      if (syncIfStale && payload.isStale && payload.hasApiKey) {
-        setIsBinanceSyncing(true);
-        try {
-          await fetch("/api/binance/sync", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId })
-          });
-          await loadBinanceBalances({ force: true });
-        } catch {
-          // Sync failures leave the last cached Binance balances visible.
-        } finally {
-          setIsBinanceSyncing(false);
-        }
-      }
+      await loadBinanceBalances({ force });
     } catch {
       // Network errors leave the current Binance state untouched.
     }
-  }, [loadBinanceBalances, userId]);
+  }, [loadBinanceBalances]);
 
   useEffect(() => {
     const cachedPayload = readDashboardStageDataCache("binance", userId, binanceRefreshKey);
