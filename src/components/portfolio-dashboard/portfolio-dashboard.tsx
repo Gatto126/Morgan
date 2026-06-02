@@ -197,6 +197,7 @@ export function PortfolioDashboard({
     !!dataForDisplay && !loading && (isPanelOpen || (effectiveChartReady && hasRenderableChartData));
   const importRefreshSettled =
     !loading && (error !== null || (!!dataForDisplay && effectiveChartReady && hasRenderableChartData));
+  const shouldRenderVisuals = isActive;
 
   useEffect(() => {
     if (!initialVisualReady || firstLoadCompletedRef.current) {
@@ -250,83 +251,87 @@ export function PortfolioDashboard({
       className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
       style={getDashboardStageVisibilityStyle(isActive)}
     >
-      <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
-      <PortfolioDashboardTabs
-        tabs={tabs}
-        activeTab={activeTab}
-        activePoint={currentDisplayPoint}
-        isTooltipActive={!!activeChartPoint}
-        rootIcon={config.rootIcon}
-        valuesKnown={currentValuesKnown}
-        stage={dashboardStage}
-        userId={userId}
-        onSelectTab={setActiveTab}
-      />
-
-      <div
-        className="relative flex w-full flex-1 flex-col min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px] justify-center"
-        style={{
-          opacity: contentVisible ? 1 : 0,
-          transform: contentVisible ? "none" : "translateY(10px)",
-          transition: contentVisible ? "opacity 0.5s ease-out 0.06s, transform 0.5s ease-out 0.06s" : "none"
-        }}
-      >
-        <DashboardPanelHost
-          showUploadView={showUploadView}
-          isClosingUpload={isClosingUpload}
-          onCloseUpload={onCloseUpload}
-          uploadElement={uploadElement}
-          reviewElement={reviewElement}
-          previewTransactionsCount={previewTransactionsCount}
-          showSettingsView={showSettingsView}
-          isClosingSettings={isClosingSettings}
-          onCloseSettings={onCloseSettings}
-          settingsElement={settingsElement}
-          showUserSelectView={showUserSelectView}
-          isClosingUserSelect={isClosingUserSelect}
-          onCloseUserSelect={onCloseUserSelect}
-          userSelectElement={userSelectElement}
-        >
-          <PortfolioChart
-            data={dataForDisplay}
-            activeProvider={activeProvider}
+      {shouldRenderVisuals ? (
+        <>
+          <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
+          <PortfolioDashboardTabs
+            tabs={tabs}
             activeTab={activeTab}
-            chartData={chartData}
-            xAxisTicks={xAxisTicks}
-            timeRange={timeRange}
-            selectedPoint={selectedPoint}
-            hiddenSeries={hiddenSeries}
-            showSoldAssets={showSoldAssets}
-            isMobile={isMobile}
-            transactionCount={transactionCount}
-            onSetTimeRange={setTimeRange}
-            onSelectPoint={setSelectedPoint}
-            onToggleSeries={toggleSeries}
-            onToggleSoldAssets={() => setShowSoldAssets(prev => !prev)}
-            onSetActiveChartPoint={setActiveChartPoint}
-            onChartReadyChange={setChartReady}
+            activePoint={currentDisplayPoint}
+            isTooltipActive={!!activeChartPoint}
+            rootIcon={config.rootIcon}
+            valuesKnown={currentValuesKnown}
+            stage={dashboardStage}
+            userId={userId}
+            onSelectTab={setActiveTab}
           />
-        </DashboardPanelHost>
-      </div>
 
-      <PortfolioProviderCards
-        portalNode={cardsPortalNode}
-        providers={data?.providers ?? []}
-        config={config}
-        currentPoint={currentSnapshot}
-        currentValuationSnapshot={currentValuationPoint ? valuationSnapshot : null}
-        valuesKnown={currentValuesKnown}
-        livePrices={livePrices}
-        isActive={isActive}
-        shouldPreloadRows={shouldLoad}
-        transactionRowsEndpoint={`${config.endpoint}/rows`}
-        userId={userId}
-        binanceBalances={liveBinanceBalances}
-        isBinanceSyncing={isBinanceSyncing}
-        filterSmallBinance={filterSmallBinance}
-        setFilterSmallBinance={setFilterSmallBinance}
-        binanceListRef={binanceListRef}
-      />
+          <div
+            className="relative flex w-full flex-1 flex-col min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px] justify-center"
+            style={{
+              opacity: contentVisible ? 1 : 0,
+              transform: contentVisible ? "none" : "translateY(10px)",
+              transition: contentVisible ? "opacity 0.5s ease-out 0.06s, transform 0.5s ease-out 0.06s" : "none"
+            }}
+          >
+            <DashboardPanelHost
+              showUploadView={showUploadView}
+              isClosingUpload={isClosingUpload}
+              onCloseUpload={onCloseUpload}
+              uploadElement={uploadElement}
+              reviewElement={reviewElement}
+              previewTransactionsCount={previewTransactionsCount}
+              showSettingsView={showSettingsView}
+              isClosingSettings={isClosingSettings}
+              onCloseSettings={onCloseSettings}
+              settingsElement={settingsElement}
+              showUserSelectView={showUserSelectView}
+              isClosingUserSelect={isClosingUserSelect}
+              onCloseUserSelect={onCloseUserSelect}
+              userSelectElement={userSelectElement}
+            >
+              <PortfolioChart
+                data={dataForDisplay}
+                activeProvider={activeProvider}
+                activeTab={activeTab}
+                chartData={chartData}
+                xAxisTicks={xAxisTicks}
+                timeRange={timeRange}
+                selectedPoint={selectedPoint}
+                hiddenSeries={hiddenSeries}
+                showSoldAssets={showSoldAssets}
+                isMobile={isMobile}
+                transactionCount={transactionCount}
+                onSetTimeRange={setTimeRange}
+                onSelectPoint={setSelectedPoint}
+                onToggleSeries={toggleSeries}
+                onToggleSoldAssets={() => setShowSoldAssets(prev => !prev)}
+                onSetActiveChartPoint={setActiveChartPoint}
+                onChartReadyChange={setChartReady}
+              />
+            </DashboardPanelHost>
+          </div>
+
+          <PortfolioProviderCards
+            portalNode={cardsPortalNode}
+            providers={data?.providers ?? []}
+            config={config}
+            currentPoint={currentSnapshot}
+            currentValuationSnapshot={currentValuationPoint ? valuationSnapshot : null}
+            valuesKnown={currentValuesKnown}
+            livePrices={livePrices}
+            isActive={isActive}
+            shouldPreloadRows={shouldLoad}
+            transactionRowsEndpoint={`${config.endpoint}/rows`}
+            userId={userId}
+            binanceBalances={liveBinanceBalances}
+            isBinanceSyncing={isBinanceSyncing}
+            filterSmallBinance={filterSmallBinance}
+            setFilterSmallBinance={setFilterSmallBinance}
+            binanceListRef={binanceListRef}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

@@ -230,6 +230,7 @@ export function Dashboard({
     shouldShowUploadPanel,
     transactionCount
   });
+  const shouldRenderVisuals = isActive;
 
   if (!loading && error) {
     return <DashboardErrorState error={error} isActive={isActive} />;
@@ -240,74 +241,78 @@ export function Dashboard({
       className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
       style={getDashboardStageVisibilityStyle(isActive)}
     >
-      <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
-      <DashboardTabs
-        visibleTabs={visibleTabs}
-        activeTab={activeTab}
-        activePoint={data ? topbarPoint : null}
-        isTooltipActive={!!activeChartPoint}
-        cryptoValuesKnown={topbarCryptoValuesKnown}
-        investmentValuesKnown={topbarInvestmentValuesKnown}
-        valuesKnown={dashboardValuesKnown}
-        userId={userId}
-        onActiveTabChange={setActiveTab}
-      />
-      {data ? (
+      {shouldRenderVisuals ? (
         <>
-          <DashboardChart
-            showSettingsView={showSettingsView}
-            isClosingSettings={isClosingSettings}
-            onCloseSettings={onCloseSettings}
-            settingsElement={settingsElement}
-            showUserSelectView={showUserSelectView}
-            isClosingUserSelect={isClosingUserSelect}
-            onCloseUserSelect={onCloseUserSelect}
-            userSelectElement={userSelectElement}
-            shouldShowUploadPanel={shouldShowUploadPanel}
-            isClosingUpload={isClosingUpload}
-            onCloseUpload={onCloseUpload}
-            uploadElement={uploadElement}
-            emptyStateElement={requiresInitialUpload ? emptyStateElement : undefined}
-            reviewElement={reviewElement}
-            previewTransactionsCount={previewTransactionsCount}
+          <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
+          <DashboardTabs
+            visibleTabs={visibleTabs}
             activeTab={activeTab}
-            showSoldAssets={showSoldAssets}
-            onShowSoldAssetsChange={setShowSoldAssets}
-            timeRange={timeRange}
-            onTimeRangeChange={setTimeRange}
-            processedChartData={processedChartData}
-            marginLeft={marginLeft}
-            marginRight={marginRight}
-            isMobile={isMobile}
-            xAxisTicks={xAxisTicks}
-            yAxisWidth={yAxisWidth}
-            setActiveChartPoint={setActiveChartPoint}
-            chartConfig={chartConfig}
-            hiddenSeries={hiddenSeries}
-            toggleSeries={toggleSeries}
-            selectedValue={selectedValue}
-            setSelectedMonth={setSelectedMonth}
-            setSelectedSeriesKey={setSelectedSeriesKey}
-            transactionCount={transactionCount}
-            onChartReadyChange={setChartReady}
-          />
-          <DashboardCards
-            cardsPortalNode={cardsPortalNode}
-            isActive={isActive}
-            contentVisible={contentVisible}
-            data={data}
-            timeRange={timeRange}
-            currentPoint={currentPoint}
-            currentValuationSnapshot={currentValuationSnapshot}
+            activePoint={data ? topbarPoint : null}
+            isTooltipActive={!!activeChartPoint}
             cryptoValuesKnown={topbarCryptoValuesKnown}
             investmentValuesKnown={topbarInvestmentValuesKnown}
-            livePrices={livePrices}
-            binanceBalances={liveBinanceBalances}
-            isBinanceSyncing={isBinanceSyncing}
-            filterSmallBinance={filterSmallBinance}
-            setFilterSmallBinance={setFilterSmallBinance}
-            binanceListRef={binanceListRef}
+            valuesKnown={dashboardValuesKnown}
+            userId={userId}
+            onActiveTabChange={setActiveTab}
           />
+          {data ? (
+            <>
+              <DashboardChart
+                showSettingsView={showSettingsView}
+                isClosingSettings={isClosingSettings}
+                onCloseSettings={onCloseSettings}
+                settingsElement={settingsElement}
+                showUserSelectView={showUserSelectView}
+                isClosingUserSelect={isClosingUserSelect}
+                onCloseUserSelect={onCloseUserSelect}
+                userSelectElement={userSelectElement}
+                shouldShowUploadPanel={shouldShowUploadPanel}
+                isClosingUpload={isClosingUpload}
+                onCloseUpload={onCloseUpload}
+                uploadElement={uploadElement}
+                emptyStateElement={requiresInitialUpload ? emptyStateElement : undefined}
+                reviewElement={reviewElement}
+                previewTransactionsCount={previewTransactionsCount}
+                activeTab={activeTab}
+                showSoldAssets={showSoldAssets}
+                onShowSoldAssetsChange={setShowSoldAssets}
+                timeRange={timeRange}
+                onTimeRangeChange={setTimeRange}
+                processedChartData={processedChartData}
+                marginLeft={marginLeft}
+                marginRight={marginRight}
+                isMobile={isMobile}
+                xAxisTicks={xAxisTicks}
+                yAxisWidth={yAxisWidth}
+                setActiveChartPoint={setActiveChartPoint}
+                chartConfig={chartConfig}
+                hiddenSeries={hiddenSeries}
+                toggleSeries={toggleSeries}
+                selectedValue={selectedValue}
+                setSelectedMonth={setSelectedMonth}
+                setSelectedSeriesKey={setSelectedSeriesKey}
+                transactionCount={transactionCount}
+                onChartReadyChange={setChartReady}
+              />
+              <DashboardCards
+                cardsPortalNode={cardsPortalNode}
+                isActive={isActive}
+                contentVisible={contentVisible}
+                data={data}
+                timeRange={timeRange}
+                currentPoint={currentPoint}
+                currentValuationSnapshot={currentValuationSnapshot}
+                cryptoValuesKnown={topbarCryptoValuesKnown}
+                investmentValuesKnown={topbarInvestmentValuesKnown}
+                livePrices={livePrices}
+                binanceBalances={liveBinanceBalances}
+                isBinanceSyncing={isBinanceSyncing}
+                filterSmallBinance={filterSmallBinance}
+                setFilterSmallBinance={setFilterSmallBinance}
+                binanceListRef={binanceListRef}
+              />
+            </>
+          ) : null}
         </>
       ) : null}
     </div>

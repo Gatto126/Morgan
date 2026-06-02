@@ -129,6 +129,7 @@ export function CheckingDashboard({
     !!data && !loading && (isPanelOpen || (effectiveChartReady && hasRenderableChartData));
   const importRefreshSettled =
     !loading && (error !== null || (!!data && effectiveChartReady && hasRenderableChartData));
+  const shouldRenderVisuals = isActive;
 
   useEffect(() => {
     if (!initialVisualReady || firstLoadCompletedRef.current) {
@@ -185,69 +186,73 @@ export function CheckingDashboard({
       className={cn("absolute inset-0 flex h-full w-full flex-col gap-4", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}
       style={getDashboardStageVisibilityStyle(isActive)}
     >
-      <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
-      <CheckingDashboardTabs
-        tabs={tabs}
-        activeTab={activeTab}
-        activePoint={currentDisplayPoint}
-        isTooltipActive={!!activeChartPoint}
-        valuesKnown={!!data && dataFresh}
-        userId={userId}
-        onSelectTab={setActiveTab}
-      />
-
-      <div
-        className="flex-1 min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px] relative w-full flex flex-col justify-center"
-        style={{
-          opacity: contentVisible ? 1 : 0,
-          transform: contentVisible ? "none" : "translateY(10px)",
-          transition: contentVisible ? "opacity 0.5s ease-out 0.06s, transform 0.5s ease-out 0.06s" : "none"
-        }}
-      >
-        <DashboardPanelHost
-          showUploadView={showUploadView}
-          isClosingUpload={isClosingUpload}
-          onCloseUpload={onCloseUpload}
-          uploadElement={uploadElement}
-          reviewElement={reviewElement}
-          previewTransactionsCount={previewTransactionsCount}
-          showSettingsView={showSettingsView}
-          isClosingSettings={isClosingSettings}
-          onCloseSettings={onCloseSettings}
-          settingsElement={settingsElement}
-          showUserSelectView={showUserSelectView}
-          isClosingUserSelect={isClosingUserSelect}
-          onCloseUserSelect={onCloseUserSelect}
-          userSelectElement={userSelectElement}
-        >
-          <CheckingChart
-            data={data}
+      {shouldRenderVisuals ? (
+        <>
+          <DashboardLoadingOverlay showLoadingOverlay={showLoadingOverlay} />
+          <CheckingDashboardTabs
+            tabs={tabs}
             activeTab={activeTab}
-            chartData={chartData}
-            xAxisTicks={xAxisTicks}
-            timeRange={timeRange}
-            selectedPoint={selectedPoint}
-            hiddenSeries={hiddenSeries}
-            isMobile={isMobile}
-            transactionCount={transactionCount}
-            onSetTimeRange={setTimeRange}
-            onSelectPoint={setSelectedPoint}
-            onToggleSeries={toggleSeries}
-            onSetActiveChartPoint={setActiveChartPoint}
-            onChartReadyChange={setChartReady}
+            activePoint={currentDisplayPoint}
+            isTooltipActive={!!activeChartPoint}
+            valuesKnown={!!data && dataFresh}
+            userId={userId}
+            onSelectTab={setActiveTab}
           />
-        </DashboardPanelHost>
-      </div>
 
-      <CheckingProviderCards
-        portalNode={cardsPortalNode}
-        providers={data.providers}
-        currentPoint={todayChartPoint}
-        valuesKnown={!!data && dataFresh}
-        userId={userId}
-        isActive={isActive}
-        shouldPreloadRows={shouldLoad}
-      />
+          <div
+            className="flex-1 min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px] relative w-full flex flex-col justify-center"
+            style={{
+              opacity: contentVisible ? 1 : 0,
+              transform: contentVisible ? "none" : "translateY(10px)",
+              transition: contentVisible ? "opacity 0.5s ease-out 0.06s, transform 0.5s ease-out 0.06s" : "none"
+            }}
+          >
+            <DashboardPanelHost
+              showUploadView={showUploadView}
+              isClosingUpload={isClosingUpload}
+              onCloseUpload={onCloseUpload}
+              uploadElement={uploadElement}
+              reviewElement={reviewElement}
+              previewTransactionsCount={previewTransactionsCount}
+              showSettingsView={showSettingsView}
+              isClosingSettings={isClosingSettings}
+              onCloseSettings={onCloseSettings}
+              settingsElement={settingsElement}
+              showUserSelectView={showUserSelectView}
+              isClosingUserSelect={isClosingUserSelect}
+              onCloseUserSelect={onCloseUserSelect}
+              userSelectElement={userSelectElement}
+            >
+              <CheckingChart
+                data={data}
+                activeTab={activeTab}
+                chartData={chartData}
+                xAxisTicks={xAxisTicks}
+                timeRange={timeRange}
+                selectedPoint={selectedPoint}
+                hiddenSeries={hiddenSeries}
+                isMobile={isMobile}
+                transactionCount={transactionCount}
+                onSetTimeRange={setTimeRange}
+                onSelectPoint={setSelectedPoint}
+                onToggleSeries={toggleSeries}
+                onSetActiveChartPoint={setActiveChartPoint}
+                onChartReadyChange={setChartReady}
+              />
+            </DashboardPanelHost>
+          </div>
+
+          <CheckingProviderCards
+            portalNode={cardsPortalNode}
+            providers={data.providers}
+            currentPoint={todayChartPoint}
+            valuesKnown={!!data && dataFresh}
+            userId={userId}
+            isActive={isActive}
+            shouldPreloadRows={shouldLoad}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

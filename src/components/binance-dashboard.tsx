@@ -280,116 +280,118 @@ export function BinanceDashboard({
   }], [topbarValue]);
 
   usePublishDashboardTopbar("binance", userId, topbarItems, { uiOnly: true });
+  const shouldRenderVisuals = isActive;
 
   return (
     <div className={cn("absolute inset-0 flex h-full w-full flex-col gap-4 overflow-hidden", isActive ? "z-10 opacity-100 visible" : "z-0 pointer-events-none opacity-0 invisible")}>
-      {/* Chart Area */}
-      <div className="relative flex w-full flex-1 flex-col justify-center overflow-hidden rounded-[18px] min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px]">
-        <div
-          className={cn("chart-content-reveal absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", isPanelOpen && "pointer-events-none")}
-          data-visible={shouldRevealChartContent ? "true" : "false"}
-        >
-          {isCurrentValuationPending ? (
-            <div className="flex h-full w-full items-center justify-center">
-              <CurrentValueSkeleton className="h-10 w-40 rounded-[18px]" />
-            </div>
-          ) : !hasRenderableChartData ? (
-            <div className="flex h-full w-full items-center justify-center">
-              <EmptyChartAction
-                actionLabel={isSyncing ? "Loading" : "Sync"}
-                disabled={isSyncing}
-                error={syncError}
-                notice={syncNotice}
-                onAction={() => void handleSyncBalances()}
-                title="Binance"
-              />
-            </div>
-          ) : (
-            <>
-              <ChartTimeRangeControls
-                onTimeRangeChange={(range) => setTimeRange(range)}
-                ranges={BINANCE_TIME_RANGES}
-                timeRange={timeRange}
-              />
-
-              <div className="mt-10 flex-1 min-h-0 w-full outline-none" onClick={() => setSelectedPoint(null)}>
-                <div ref={chartContainerRef} className="relative h-full w-full">
-                  <div id="chart-reference-overlay" className="pointer-events-none absolute inset-0 z-10" />
-                  <LineChart
-                    width={renderedChartSize.width}
-                    height={renderedChartSize.height}
-                    data={chartData}
-                    margin={{ top: 8, right: baseMargin, bottom: 0, left: baseMargin }}
-                    accessibilityLayer={false}
-                  >
-                    <XAxis
-                      dataKey="rawMonth"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#666666", fontSize: isMobile ? 9 : 11 }}
-                      dy={8}
-                      padding={{ left: isMobile ? 16 : 0, right: isMobile ? 16 : 0 }}
-                      minTickGap={isMobile ? 20 : 10}
-                      ticks={xAxisTicks}
-                      tickFormatter={(value) => formatBinanceXAxisTick(String(value ?? ""))}
-                    />
-                    <YAxis
-                      tick={{ fill: "#a8a8a8", fontSize: isMobile ? 9 : 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                      mirror={isMobile}
-                      tickFormatter={(value) => formatBinanceEuroCents(value).replace(/\s/g, "").replace(",00", "")}
-                      width={yAxisWidth}
-                    />
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,154,154,0.12)" vertical={false} />
-                    <Tooltip
-                      content={<BinanceChartTooltip />}
-                      cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1, fill: "transparent" }}
-                    />
-                    {seriesReady ? (
-                      <Line
-                        type="linear"
-                        dataKey="balance"
-                        name="balance"
-                        stroke="#ffffff"
-                        strokeWidth={2.5}
-                        isAnimationActive={false}
-                        activeDot={(props: ActiveDotProps) => (
-                          <SelectableChartDot
-                            {...props}
-                            color="#ffffff"
-                            onSelectPoint={setSelectedPoint}
-                            seriesKey="balance"
-                          />
-                        )}
-                        dot={false}
-                      />
-                    ) : null}
-                    {seriesReady && selectedPoint ? (
-                      <ReferenceLine
-                        y={selectedPoint.value}
-                        stroke="rgba(254,254,254,0.5)"
-                        strokeWidth={1.5}
-                        strokeDasharray="6 4"
-                        label={<ChartReferenceLabel selectedValue={selectedPoint.value} />}
-                      />
-                    ) : null}
-                  </LineChart>
-                </div>
+      {shouldRenderVisuals ? (
+        <div className="relative flex w-full flex-1 flex-col justify-center overflow-hidden rounded-[18px] min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px]">
+          <div
+            className={cn("chart-content-reveal absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", isPanelOpen && "pointer-events-none")}
+            data-visible={shouldRevealChartContent ? "true" : "false"}
+          >
+            {isCurrentValuationPending ? (
+              <div className="flex h-full w-full items-center justify-center">
+                <CurrentValueSkeleton className="h-10 w-40 rounded-[18px]" />
               </div>
+            ) : !hasRenderableChartData ? (
+              <div className="flex h-full w-full items-center justify-center">
+                <EmptyChartAction
+                  actionLabel={isSyncing ? "Loading" : "Sync"}
+                  disabled={isSyncing}
+                  error={syncError}
+                  notice={syncNotice}
+                  onAction={() => void handleSyncBalances()}
+                  title="Binance"
+                />
+              </div>
+            ) : (
+              <>
+                <ChartTimeRangeControls
+                  onTimeRangeChange={(range) => setTimeRange(range)}
+                  ranges={BINANCE_TIME_RANGES}
+                  timeRange={timeRange}
+                />
 
-              <ChartLegend
-                className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar"
-                hiddenSeries={{}}
-                items={BINANCE_CHART_LEGEND_ITEMS}
-                onToggleSeries={() => undefined}
-                transactionCount={hasRenderableChartData ? 1 : 0}
-              />
-            </>
-          )}
+                <div className="mt-10 flex-1 min-h-0 w-full outline-none" onClick={() => setSelectedPoint(null)}>
+                  <div ref={chartContainerRef} className="relative h-full w-full">
+                    <div id="chart-reference-overlay" className="pointer-events-none absolute inset-0 z-10" />
+                    <LineChart
+                      width={renderedChartSize.width}
+                      height={renderedChartSize.height}
+                      data={chartData}
+                      margin={{ top: 8, right: baseMargin, bottom: 0, left: baseMargin }}
+                      accessibilityLayer={false}
+                    >
+                      <XAxis
+                        dataKey="rawMonth"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#666666", fontSize: isMobile ? 9 : 11 }}
+                        dy={8}
+                        padding={{ left: isMobile ? 16 : 0, right: isMobile ? 16 : 0 }}
+                        minTickGap={isMobile ? 20 : 10}
+                        ticks={xAxisTicks}
+                        tickFormatter={(value) => formatBinanceXAxisTick(String(value ?? ""))}
+                      />
+                      <YAxis
+                        tick={{ fill: "#a8a8a8", fontSize: isMobile ? 9 : 10 }}
+                        axisLine={false}
+                        tickLine={false}
+                        mirror={isMobile}
+                        tickFormatter={(value) => formatBinanceEuroCents(value).replace(/\s/g, "").replace(",00", "")}
+                        width={yAxisWidth}
+                      />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,154,154,0.12)" vertical={false} />
+                      <Tooltip
+                        content={<BinanceChartTooltip />}
+                        cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1, fill: "transparent" }}
+                      />
+                      {seriesReady ? (
+                        <Line
+                          type="linear"
+                          dataKey="balance"
+                          name="balance"
+                          stroke="#ffffff"
+                          strokeWidth={2.5}
+                          isAnimationActive={false}
+                          activeDot={(props: ActiveDotProps) => (
+                            <SelectableChartDot
+                              {...props}
+                              color="#ffffff"
+                              onSelectPoint={setSelectedPoint}
+                              seriesKey="balance"
+                            />
+                          )}
+                          dot={false}
+                        />
+                      ) : null}
+                      {seriesReady && selectedPoint ? (
+                        <ReferenceLine
+                          y={selectedPoint.value}
+                          stroke="rgba(254,254,254,0.5)"
+                          strokeWidth={1.5}
+                          strokeDasharray="6 4"
+                          label={<ChartReferenceLabel selectedValue={selectedPoint.value} />}
+                        />
+                      ) : null}
+                    </LineChart>
+                  </div>
+                </div>
+
+                <ChartLegend
+                  className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar"
+                  hiddenSeries={{}}
+                  items={BINANCE_CHART_LEGEND_ITEMS}
+                  onToggleSeries={() => undefined}
+                  transactionCount={hasRenderableChartData ? 1 : 0}
+                />
+              </>
+            )}
+          </div>
+          {panelOverlay}
         </div>
-        {panelOverlay}
-      </div>
+      ) : null}
 
     </div>
   );

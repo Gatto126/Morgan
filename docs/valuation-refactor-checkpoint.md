@@ -1,10 +1,11 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `efd4f11` (current pushed baseline before server-side Binance material filtering)
+Current baseline commit: `87829f0` (server-side Binance material filtering + atomic Binance current commit)
 Last fully Vercel-smoked checkpoint: `4cf0420`
-Current slice pending Vercel smoke: server-side Binance material filtering + atomic Binance current commit
-Next implementation phase: diagnostics deepening and remaining current-value fallback audit
+Latest Vercel smoke note: `87829f0` looks better for Binance loading, but console verbose output shows repeated `content-visibility` hidden-subtree renders.
+Current slice pending Vercel smoke: inactive-stage visual render gate spike
+Next implementation phase: inactive-stage render cleanup, diagnostics deepening and remaining current-value fallback audit
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -72,6 +73,15 @@ Active-profile warmup policy:
 - the active stage remains first priority, but dashboard and Binance must be started before auxiliary checking/investment/crypto stage preloads because they are the critical inputs for the committed current snapshot;
 - inactive profiles refresh as background work for the home aggregate, but they must not block or delay the active profile snapshot;
 - even with parallel warmup, visible current values still swap only through a complete committed snapshot.
+
+Inactive dashboard stage render policy:
+
+- Morgan currently keeps dashboard/checking/investment/crypto/Binance stage roots mounted so dashboard switches preserve state and do not restart loaders.
+- Inactive stage roots use `content-visibility: hidden` and containment via `getDashboardStageVisibilityStyle(...)`.
+- Chrome DevTools can log `Rendering was performed in a subtree hidden by content-visibility` when React/Recharts/table/layout code still forces work inside those hidden roots.
+- These messages are not application errors and do not mean the valuation is wrong. They are `verbose` browser diagnostics.
+- Repeated messages are still a performance signal: hidden dashboards should not be doing chart measurement, interval refresh rendering, or expensive card/table updates unless needed for cache warmup.
+- Target: keep current valuation/data warm in central stores, but reduce or eliminate rendering work inside inactive dashboard DOM subtrees.
 
 Binance current policy:
 
@@ -886,12 +896,35 @@ Current next execution order after `4cf0420`:
      - no-Binance profile still computes `crypto = TR crypto`;
      - Binance total/topbar/card/today point all come from the same committed snapshot.
 
-5. Final current fallback cleanup:
+5. Inactive-stage render cleanup: next concrete performance/UI slice.
+   - Problem observed on Vercel after Binance material filtering:
+     - Console shows many Chrome verbose messages: `Rendering was performed in a subtree hidden by content-visibility`.
+     - Source is inactive dashboard roots using `getDashboardStageVisibilityStyle(false)` with `contentVisibility: "hidden"`.
+     - This is not a red runtime error, but it means some hidden stage subtree is still being forced to render/measure.
+   - Working hypothesis:
+     - Hidden chart/card/table components remain mounted and still receive live price, valuation, hover/topbar or interval updates.
+     - Some chart/layout code may measure or render even when its root has `content-visibility: hidden`.
+   - Implementation plan:
+     - inventory which inactive stages emit the verbose messages most often;
+     - gate expensive chart/card/table work behind `isActive` or a lighter `shouldRenderVisuals` flag;
+     - keep central valuation, stage cache and live quote warmup running outside the hidden DOM rendering path;
+     - keep inactive stage UI state only where it matters (active tab/time range), not full visual render loops;
+     - consider replacing `content-visibility: hidden` with conditional rendering/unmounting for heavy chart/table bodies if gating is not enough;
+     - add a smoke checklist item: dashboard switching must remain instant and stateful, while console verbose output should drop sharply.
+   - Local spike now implemented:
+     - `Dashboard`, `CheckingDashboard`, `PortfolioDashboard` and `BinanceDashboard` keep parent state/hooks mounted;
+     - visual JSX for tabs, charts, cards and panel bodies renders only while the stage is active;
+     - valuation, stage cache and live quote warmup are intentionally left untouched.
+   - Rollback plan:
+     - baseline before this spike is pushed commit `87829f0`;
+     - if smoke shows flash, lost UI state, delayed dashboard switching, broken panel overlays or worse perceived performance, revert only this inactive-stage render gate commit/slice and return to `87829f0` behavior.
+
+6. Final current fallback cleanup:
    - Re-audit remaining `balance.eurValue`, `livePrices`, local current and topbar publishers.
    - Keep local logic only for historical reconstruction, tooltip values, chart transforms, synced balance metadata and diagnostics.
    - Remove or quarantine helpers that can publish current money outside the committed valuation path.
 
-6. Regression smoke checklist for every slice:
+7. Regression smoke checklist for every slice:
    - F5 on dashboard/checking/investment/crypto/Binance:
      - no fake `0,00`;
      - skeleton only if no committed snapshot exists;
@@ -923,8 +956,13 @@ Current next execution order after `4cf0420`:
      - diagnostics should show a small material quote-key set, not every open dust token;
      - unpriced Binance tokens hidden/excluded from current and visible in diagnostics;
      - Binance remains current-only in charts until historical sync.
+   - Console/performance:
+     - no red errors;
+     - verbose `content-visibility` hidden-subtree messages should not grow continuously during idle;
+     - switching dashboards should not trigger large bursts of hidden-stage render messages;
+     - values should remain warm/coherent even if inactive visual subtrees are gated.
 
-7. Binance historical sync remains a separate future project.
+8. Binance historical sync remains a separate future project.
 
 ### Phase 1: Stabilize Central Current Valuation
 
