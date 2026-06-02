@@ -209,6 +209,62 @@ describe("finance session orchestrator", () => {
     expect(getCurrentValuationSnapshot(warmupUser.id)?.status).toBe("ready");
   });
 
+  it("can preload dashboard navigation without publishing a new current valuation", async () => {
+    const navigationUser: UserRecord = {
+      ...user,
+      hasBinanceCredentials: false,
+      id: "profile-navigation-view-only"
+    };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/transactions/dashboard?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            accountTotals: { checking: 100, crypto: 0, heritage: 100, investment: 0 },
+            dailyData: [],
+            monthlyData: [],
+            providerSummaries: []
+          })
+        };
+      }
+
+      if (url.startsWith("/api/transactions/checking?")) {
+        return {
+          ok: true,
+          json: async () => ({ dailyData: [], monthlyData: [], providers: [] })
+        };
+      }
+
+      if (url.startsWith("/api/transactions/investment?")) {
+        return {
+          ok: true,
+          json: async () => ({ dailyData: [], monthlyData: [], providers: [] })
+        };
+      }
+
+      if (url.startsWith("/api/transactions/crypto?")) {
+        return {
+          ok: true,
+          json: async () => ({ dailyData: [], monthlyData: [], providers: [] })
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await preloadFinanceProfileStages({
+      activeStage: "crypto",
+      event: "dashboard-change",
+      priority: "user",
+      refreshCurrentValuation: false,
+      user: navigationUser
+    });
+
+    expect(getCurrentValuationSnapshot(navigationUser.id)).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith("/api/binance/"))).toBe(false);
+  });
+
   it("records diagnostics for stage data and live quotes", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.startsWith("/api/transactions/dashboard?")) {

@@ -103,6 +103,7 @@ type PreloadFinanceProfileStagesOptions = {
   event?: FinanceSessionEvent;
   force?: boolean;
   priority?: FinanceSessionPriority;
+  refreshCurrentValuation?: boolean;
   user: UserRecord;
 };
 
@@ -1014,6 +1015,7 @@ export async function preloadFinanceProfileStages({
   event = "profile-change",
   force = false,
   priority = "background",
+  refreshCurrentValuation = true,
   user
 }: PreloadFinanceProfileStagesOptions) {
   const stageOrder = getPrioritizedProfileStageWarmupOrder(user, activeStage);
@@ -1028,19 +1030,20 @@ export async function preloadFinanceProfileStages({
       user
     })
   ));
-  const currentValuationWarmup = ensureFinanceCurrentValuation({
-    binanceRefreshKey,
-    event,
-    force,
-    livePriceMaxAgeMs: 0,
-    priority: getHigherPriority(priority, "active"),
-    user
-  });
+  const warmups: Array<Promise<unknown>> = [...stageWarmups];
 
-  await Promise.allSettled([
-    ...stageWarmups,
-    currentValuationWarmup
-  ]);
+  if (refreshCurrentValuation) {
+    warmups.push(ensureFinanceCurrentValuation({
+      binanceRefreshKey,
+      event,
+      force,
+      livePriceMaxAgeMs: 0,
+      priority: getHigherPriority(priority, "active"),
+      user
+    }));
+  }
+
+  await Promise.allSettled(warmups);
 }
 
 async function runFinanceSessionWarmup() {

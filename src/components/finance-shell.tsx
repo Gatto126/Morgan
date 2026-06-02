@@ -594,26 +594,17 @@ export function FinanceShell({
 
     const stageKey = resolveVisibleDashboardStage(newStage, activeUser);
 
-    void Promise.allSettled([
-      preloadFinanceProfileStages({
-        activeStage: stageKey,
-        binanceRefreshKey,
-        event: "dashboard-change",
-        priority: "user",
-        user: activeUser
-      }),
-      ensureFinanceProfilesCurrentValuations({
-        activeUserId: activeUser.id,
-        binanceRefreshKey,
-        event: "dashboard-change",
-        livePriceMaxAgeMs: 0,
-        priority: "user",
-        users
-      })
-    ]).catch(() => {
+    void preloadFinanceProfileStages({
+      activeStage: stageKey,
+      binanceRefreshKey,
+      event: "dashboard-change",
+      priority: "user",
+      refreshCurrentValuation: false,
+      user: activeUser
+    }).catch(() => {
       // The destination dashboard owns the visible error state.
     });
-  }, [activeUser, binanceRefreshKey, navigateTo, users]);
+  }, [activeUser, binanceRefreshKey, navigateTo]);
 
   function closeActiveOverlayPanel() {
     if (showUploadView) {

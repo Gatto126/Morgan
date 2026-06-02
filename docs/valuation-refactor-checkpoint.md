@@ -1,11 +1,11 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `c9c56b2` (pushed central Binance current sync ownership)
-Last fully Vercel-smoked checkpoint: `4cf0420`
-Latest Vercel smoke note: committed-only live quote ownership stopped partial topbar publishers, but values became too static and only refreshed on navigation.
-Current local slice: add active-profile central live valuation ticker. Values should refresh periodically through committed snapshots, not through dashboard-local quote events.
-Next implementation phase after this slice: smoke active live valuation ticker, then continue final current fallback cleanup before archive/daily snapshots.
+Current baseline commit: `2492b62` (pushed active-profile central live valuation ticker)
+Last fully Vercel-smoked checkpoint: `2492b62`
+Latest Vercel smoke note: central live ticker restored periodic current updates, but dashboard navigation still forced live valuation refreshes and could make Binance/crypto values change on every dashboard click.
+Current local slice: make dashboard navigation view-only for current valuation. Stage data can still preload, but `dashboard-change` must not force a new live valuation snapshot.
+Next implementation phase after this slice: smoke dashboard-change stability, then continue Binance connect/current-sync naming cleanup before archive/daily snapshots.
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -68,6 +68,8 @@ Live quote commit policy:
 - Detail rows can still show local live prices temporarily, but totals, provider tabs and current chart point must read the committed valuation snapshot.
 - A central active-profile live ticker should call `ensureFinanceCurrentValuation(...)` periodically while the document is visible. That ticker restores live movement without exposing partial quote-cache snapshots.
 - The ticker should not refresh inactive profiles every few seconds; inactive/home profile aggregates refresh on boot/focus/profile changes unless product requirements change.
+- Dashboard navigation is not a live-price event. `dashboard-change` may preload the destination stage, but it must not force `ensureFinanceCurrentValuation(... livePriceMaxAgeMs: 0)` or refresh all profile valuations.
+- Current valuation refresh owners are boot/F5, profile selection, import, Binance connect/delete/current-sync, focus/reconnect, daily rollover and the active-profile live ticker.
 
 Skeleton policy:
 
@@ -122,6 +124,11 @@ Binance sync ownership policy:
   - after sync succeeds, seed Binance stage cache, bump/record the Binance input version and force a new current valuation refresh;
   - after sync fails, keep the last committed valuation and expose diagnostics.
 - There is no current Binance-dashboard manual sync button in the intended product flow. Future user-initiated sync/capture belongs to the Binance historical/past-sync section, not to the current dashboard itself.
+- Current API settings flow:
+  - the settings save action should be understood as `Connect Binance API` / `Save and Connect`, not as historical sync;
+  - after credentials are saved, Morgan runs the fast current lane immediately: fetch current balances, seed Binance cache, invalidate the profile valuation and publish one committed current snapshot when live prices are ready;
+  - this path is allowed to update current quantities, but it must not create historical daily snapshots until the archive lane exists;
+  - repeated dashboard navigation must not re-run this connect/current sync path.
 - The API connect flow should become a two-lane process:
   - fast current lane: save API credentials, fetch balances, apply materiality for current pricing, publish the committed current valuation as quickly as possible;
   - full archive lane: save the full raw portfolio without materiality filtering, create/update today's provisional daily snapshot, and prepare the future history/backfill anchor.
@@ -162,7 +169,7 @@ Binance/crypto live price performance policy:
 - Primary conversion route: `TOKENUSDT / EURUSDT`, because USDT pairs usually have the broadest coverage.
 - Fallback routes: direct `TOKENEUR`, then `TOKENUSDC` converted to EUR through `USDC/EUR` or `USDC/USDT + EUR/USDT` pairs.
 - Trade Republic crypto and Binance must share normalized quote keys (`BTC`, `ETH`, etc.) so a single price refresh feeds both providers and the central valuation.
-- A short server-side/in-flight cache is acceptable only up to 5 seconds. It is meant to dedupe boot/focus/dashboard-change bursts, not to display old prices as live for a long time.
+- A short server-side/in-flight cache is acceptable only up to 5 seconds. It is meant to dedupe boot/focus/ticker refresh bursts, not to display old prices as live for a long time.
 - Public Binance market-data rate-limit/WAF risk should be reduced by batching and caching. Avoid returning to dozens of single-symbol requests during cold login/F5.
 - Rollback for this slice: if Vercel shows stale-feeling prices, missing common crypto quotes, or worse Binance bootstrap, revert only the batch-price commit and return to `2d1dbaf`.
 
@@ -563,7 +570,7 @@ Implemented so far:
   - `src/components/binance-dashboard.tsx`
 - dashboard topbar publication now normalizes stage/provider order in the shared topbar store:
   - `src/components/finance-shell/dashboard-topbar-store.ts`
-- dashboard navigation now refreshes the central valuation alongside the visible stage, and current valuation freshness accounts for live quote age:
+- dashboard navigation now preloads the destination stage without forcing a live current valuation refresh; current valuation freshness is owned by boot/focus/import/connect/daily rollover and the central ticker:
   - `src/components/finance-shell.tsx`
   - `src/components/finance-shell/current-valuations-store.ts`
 - authenticated home current Heritage now uses a multi-profile aggregate of current valuation snapshots instead of recalculating from preview/live totals:
@@ -601,7 +608,7 @@ Known mismatch found during production smoke and current mitigation:
 - Follow-up resting publisher cleanup made dashboard tab publishers UI-only when not hovering. A dashboard can select a tab or provide click handlers, but it should not overwrite the resting valuation money value.
 - Production smoke also showed Trade Republic crypto prices could fail to refresh when Binance API was not connected. Binance is optional: a no-Binance profile must still fetch TR crypto live quotes and publish `crypto = Trade Republic crypto`.
 - Production smoke after `5cc65eb` showed the authenticated home Heritage can differ from the main dashboard Heritage. `src/components/finance-shell/welcome-heritage-preview.tsx` now keeps preview/history for the chart, but the current pill and current chart point are sourced from the multi-profile valuation aggregate.
-- Follow-up smoke after `be821a5` showed the home value can remain stale if the only refresh owner is the home component. The refresh owner must be the shell/orchestrator: app boot, focus/reconnect, daily rollover, dashboard navigation and login warmup should ensure current valuation snapshots for all profiles. The home must only subscribe and aggregate.
+- Follow-up smoke after `be821a5` showed the home value can remain stale if the only refresh owner is the home component. The refresh owner must be the shell/orchestrator: app boot, focus/reconnect, daily rollover, login warmup and the active live ticker should ensure current valuation snapshots. The home must only subscribe and aggregate. Dashboard navigation only selects a slice/preloads the view; it must not create a new current value.
 - Production smoke after `dab2244` showed Binance was treated differently between the crypto dashboard and main dashboard charts. The crypto dashboard correctly showed Binance as current-only/today, while the main dashboard was adding the current Binance total to every reconstructed historical `crypto`/`heritage` bucket. Main dashboard historical chart points must now exclude Binance and only the today/current point may include Binance through the valuation/live current point.
 - Production smoke after `2777133` passed: main dashboard and crypto dashboard now follow the same Binance policy. Historical main dashboard `crypto`/`heritage` points exclude current-only Binance, while the today/current point includes Binance through the valuation current point.
 - Production smoke after `88675f4` passed: removing the main dashboard legacy current fallback did not regress F5, resting topbar/cards/current chart point, hover restore, or fake-zero behavior. Main dashboard current values are now fully valuation-driven.
@@ -621,7 +628,8 @@ Known mismatch found during production smoke and current mitigation:
 - Current local slice after `eac7d58` hardens active-profile warmup/readiness:
   - active profile stage warmups and `ensureFinanceCurrentValuation(...)` now start in parallel;
   - warmup order starts active stage, dashboard and Binance before auxiliary stages;
-  - focus/reconnect and dashboard navigation use the full active-profile preload instead of only the visible stage;
+  - focus/reconnect use the full active-profile preload and current valuation refresh;
+  - dashboard navigation uses the full active-profile stage preload but skips current valuation refresh;
   - topbar current skeletons are controlled by an explicit pending flag, so historical hover gaps stay empty instead of looking like loading current values.
 - Follow-up smoke after `a1406b5` found checking topbar could remain skeleton after leaving chart hover. Cause: UI-only topbar publishes preserved the numeric value but could also preserve/infer a pending flag incorrectly when the checking publisher did not send explicit readiness. Fix: checking tabs publish explicit `valuePending`, and the topbar renderer/store derive pending from the preserved value so numeric values cannot be hidden by a stale pending flag.
 - Follow-up smoke after `1fa9519` showed Binance balances data starts almost together with dashboard data, but Binance current can still stay at `0,00`. Cause: Binance live quote collection still filtered balances by synced `balance.eurValue > 0.49`, which conflicts with the stricter policy that synced EUR is not a trusted current fallback. Fix: request live quotes for every open Binance balance with a normalizable symbol; include only balances with valid live quotes in current valuation.
@@ -778,7 +786,8 @@ Current progress:
 - `selectCurrentValuationHeritageAggregate(...)` aggregates profile snapshots for the home current pill/today point;
 - `useCurrentValuationSnapshotMap(...)` subscribes the home to profile snapshots;
 - `ensureFinanceProfilesCurrentValuations(...)` warms all profile snapshots from the orchestrator;
-- `FinanceShell` triggers multi-profile valuation refresh on app boot/profile changes, focus/reconnect, daily rollover and dashboard navigation;
+- `FinanceShell` triggers multi-profile valuation refresh on app boot/profile changes, focus/reconnect and daily rollover;
+- dashboard navigation preloads destination stage data only and leaves current valuation refresh to the central ticker or other real refresh events;
 - `WelcomeHeritagePreview` no longer calls `ensureFinanceCurrentValuation(...)` or owns focus/online refresh listeners.
 
 Target:
@@ -913,7 +922,8 @@ Current next execution order after `4cf0420`:
    - Implementation plan for this slice:
      - make `preloadFinanceProfileStages(...)` launch stage warmups and `ensureFinanceCurrentValuation(...)` together instead of waiting stage-by-stage;
      - prioritize stage order as active stage, dashboard, Binance, then auxiliary stages;
-     - use `preloadFinanceProfileStages(...)` for app boot/F5, profile prefetch, dashboard navigation, focus/reconnect and daily rollover active-profile refresh;
+     - use `preloadFinanceProfileStages(...)` with current valuation refresh for app boot/F5, profile prefetch, focus/reconnect and daily rollover active-profile refresh;
+     - use `preloadFinanceProfileStages(... refreshCurrentValuation: false)` for dashboard navigation so the view warms without forcing prices;
      - keep `ensureFinanceProfilesCurrentValuations(...)` for all profiles/home aggregate, but rely on in-flight de-duplication so the active valuation is not recomputed separately;
      - preserve stale-while-refresh and committed-only visibility.
    - Keep inactive profiles as lower-priority background valuation refreshes for the home aggregate.
@@ -921,7 +931,7 @@ Current next execution order after `4cf0420`:
      - login warmup;
      - app boot/F5;
      - profile select prefetch while selection overlay is closing;
-     - dashboard navigation;
+     - dashboard navigation for stage preload only;
      - focus/reconnect;
      - daily rollover;
      - import approval;
@@ -1145,12 +1155,19 @@ Current next execution order after `4cf0420`:
      - stage warmup cache-only valuation publishing removed;
      - active profile central valuation refresh interval added at 10 seconds while `document.hidden === false`;
      - crypto/investment dashboard cards prefer committed valuation values over local `livePrices` when valuation is available.
+   - Current follow-up slice:
+     - dashboard navigation no longer forces a live valuation refresh;
+     - `preloadFinanceProfileStages(...)` can now warm destination stage data with `refreshCurrentValuation: false`;
+     - `FinanceShell` uses that mode for `dashboard-change`;
+     - expected behavior: switching main -> crypto -> Binance -> main within the 10 second ticker window keeps the same committed current values until the next central snapshot commits.
    - Tests:
      - topbar shell must not reseed values when `LIVE_PRICES_UPDATED_EVENT` fires;
      - stage ready warmup must not publish current valuation from partial quote caches;
+     - dashboard-change preload must not publish a new current valuation when `refreshCurrentValuation: false`;
      - current valuation still commits when `ensureFinanceCurrentValuation(...)` gets the full quote set.
    - Vercel smoke:
      - main -> crypto -> main should not show current totals jumping through multiple intermediate values;
+     - switch dashboards several times in less than 10 seconds: Binance/crypto values should not refresh because of the click itself;
      - BTC price shown in current total cards should match the committed valuation everywhere;
      - values should update while staying on one dashboard, approximately on the central valuation interval, without requiring navigation;
      - detail row prices may update, but topbar/cards/today current totals should swap only once per complete valuation refresh.
