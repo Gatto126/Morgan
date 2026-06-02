@@ -21,7 +21,6 @@ import {
   ensureCurrentValuation,
   getCurrentValuationState,
   invalidateCurrentValuation,
-  refreshCurrentValuationFromCaches,
   resetCurrentValuationsStore
 } from "./current-valuations-store";
 import {
@@ -715,15 +714,8 @@ export async function ensureFinanceStageReady(options: EnsureFinanceStageReadyOp
     publishFinanceSessionDiagnostics();
   }
 
-  const snapshot = refreshCurrentValuationFromCaches(options.user, {
-    binanceRefreshKey: options.binanceRefreshKey ?? 0
-  });
-  if (snapshot) {
-    publishFinanceSessionDiagnostics();
-  }
-
   return {
-    currentValuation: snapshot,
+    currentValuation: getCurrentValuationState(options.user.id).committedSnapshot,
     data,
     stage: options.stage,
     userId: options.user.id

@@ -175,17 +175,20 @@ export function PortfolioProviderCards({
                           const productReady = hasValuationProductValue
                             ? valuationProductValue !== null
                             : !priceKey || price != null || valuesKnown;
-                          const priceCents = price != null
-                            ? Math.round(price * 100)
-                            : getUnitPriceCentsFromCurrentValue(
-                                valuationProductValue,
-                                product.investedValue,
-                                product.quantity
-                              );
+                          const valuationUnitPriceCents = getUnitPriceCentsFromCurrentValue(
+                            valuationProductValue,
+                            product.investedValue,
+                            product.quantity
+                          );
+                          const priceCents = hasValuationProductValue
+                            ? valuationUnitPriceCents
+                            : price != null
+                              ? Math.round(price * 100)
+                              : valuationUnitPriceCents;
 
                           return (
                             <CurrentValueDisplay
-                              animateChanges={price != null}
+                              animateChanges={price != null && !hasValuationProductValue}
                               value={productReady ? formatEuroCents(priceCents) : "--"}
                             />
                           );

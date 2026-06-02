@@ -263,6 +263,53 @@ describe("finance session orchestrator", () => {
     ]);
   });
 
+  it("does not publish current valuation totals from a single stage live-price warmup", async () => {
+    const stageOnlyUser: UserRecord = {
+      ...user,
+      hasBinanceCredentials: false,
+      id: "profile-stage-only-warmup"
+    };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/transactions/dashboard?")) {
+        return {
+          ok: true,
+          json: async () => ({
+            accountTotals: { checking: 10_000, crypto: 0, heritage: 10_000, investment: 0 },
+            dailyData: [],
+            monthlyData: [],
+            providerSummaries: [{
+              checking: { cashback: 0, expenses: 0, income: 0, interest: 0, tax: 0, total: 10_000 },
+              cryptoTokens: [{ investedValue: 0, quantity: 0.1, tokenName: "Bitcoin", tokenSymbol: "BTC" }],
+              investmentProducts: [],
+              sourceInstitution: "trade_republic",
+              total: 10_000
+            }]
+          })
+        };
+      }
+
+      if (url === "/api/prices?cryptos=BTC") {
+        return {
+          ok: true,
+          json: async () => ({ BTC: 62_000 })
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await ensureFinanceStageReady({
+      event: "dashboard-change",
+      priority: "user",
+      stage: "dashboard",
+      user: stageOnlyUser
+    });
+
+    expect(result.currentValuation).toBeNull();
+    expect(getCurrentValuationSnapshot(stageOnlyUser.id)).toBeNull();
+  });
+
   it("publishes a profile current valuation snapshot with dashboard and Binance data", async () => {
     const valuationUser: UserRecord = {
       ...user,

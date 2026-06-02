@@ -7,7 +7,6 @@ import {
   type DashboardStageKey
 } from "./dashboard-stage-items";
 import {
-  seedCurrentDashboardStageTopbars,
   seedCurrentDashboardStageTopbarsFromSnapshot
 } from "./dashboard-topbar-current-values";
 import {
@@ -27,7 +26,6 @@ import {
 import { hasDashboardStageTopbarData } from "./dashboard-topbar-visibility";
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
-import { LIVE_PRICES_UPDATED_EVENT } from "@/shared/live-prices";
 
 type DashboardTopbarShellProps = {
   activeUser: UserRecord | null;
@@ -191,24 +189,8 @@ export function DashboardTopbarShell({
       && isCurrentValuationSnapshotCurrentForProfile(valuationSnapshot, activeUser, { binanceRefreshKey })
     ) {
       seedCurrentDashboardStageTopbarsFromSnapshot(activeUser, valuationSnapshot);
-      return;
     }
-
-    seedCurrentDashboardStageTopbars(activeUser, binanceRefreshKey);
   }, [activeStage, activeUser, binanceRefreshKey, valuationSnapshot]);
-
-  useEffect(() => {
-    if (!activeUser) {
-      return;
-    }
-
-    const handleLivePricesUpdated = () => {
-      seedCurrentDashboardStageTopbars(activeUser, binanceRefreshKey);
-    };
-
-    window.addEventListener(LIVE_PRICES_UPDATED_EVENT, handleLivePricesUpdated);
-    return () => window.removeEventListener(LIVE_PRICES_UPDATED_EVENT, handleLivePricesUpdated);
-  }, [activeUser, binanceRefreshKey]);
 
   useEffect(() => {
     let cancelled = false;

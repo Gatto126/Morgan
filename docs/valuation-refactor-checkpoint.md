@@ -1,11 +1,11 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `2633534` (pushed Binance/crypto batch price refresh with 5s ticker cache)
+Current baseline commit: `c9c56b2` (pushed central Binance current sync ownership)
 Last fully Vercel-smoked checkpoint: `4cf0420`
-Latest Vercel smoke note: Binance batch pricing feels faster, remaining `content-visibility` verbose messages are reduced and mostly appear during dashboard changes.
-Current local slice pending approval/Vercel smoke: centralize Binance current sync ownership. Rollback target is `2633534` plus the checkpoint context before this local code spike.
-Next implementation phase after approval: smoke central Binance current sync ownership, then decide whether to keep or revert before touching archive/daily snapshots.
+Latest Vercel smoke note: Binance sync ownership is centralized, but live quote updates can still publish visible intermediate values during dashboard changes.
+Current local slice: centralize live quote commit ownership for current totals. Topbar/cards/today point must not rebuild totals from partial live-price cache events.
+Next implementation phase after this slice: smoke live quote commit ownership, then continue final current fallback cleanup before archive/daily snapshots.
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -57,6 +57,15 @@ Definitions:
 - `refreshing/draft`: a non-visible refresh in progress. It can fetch stage data, Binance balances and live quotes, but it must not overwrite visible current values one piece at a time.
 - `complete snapshot`: a snapshot whose required children are ready for the requested profile version. Parents such as `crypto` and `heritage` are shown only when their required children are ready or explicitly absent.
 - `stale-while-refresh`: while a new snapshot is being built, the UI keeps showing the last committed snapshot. This is preferable to showing partial values or a loading skeleton during ordinary refresh/navigation.
+
+Live quote commit policy:
+
+- Live prices are inputs to the current valuation, not publishers of visible totals by themselves.
+- `LIVE_PRICES_UPDATED_EVENT` may update local row/card detail caches, but it must not directly rebuild topbar, cards or today current totals.
+- Current totals should update only through `ensureFinanceCurrentValuation(...)`, which fetches/waits for the full required quote set and publishes one committed snapshot.
+- Dashboard stage warmups can preload data and quote caches, but they must not call cache-only valuation publishing after each stage quote refresh.
+- This prevents mixed snapshots such as BTC new + ETH old + ETF old from becoming visible during dashboard navigation.
+- Detail rows can still show local live prices temporarily, but totals, provider tabs and current chart point must read the committed valuation snapshot.
 
 Skeleton policy:
 
@@ -1113,7 +1122,34 @@ Current next execution order after `4cf0420`:
      - central sync should reduce duplicate `/api/binance/sync` calls, not add new ones;
      - dashboard switching must not trigger a fresh sync unless the central stale policy says it is needed.
 
-8. Binance daily snapshot history: separate follow-up after current sync ownership.
+8. Centralize live quote commit ownership: current local implementation slice.
+   - Problem:
+     - BTC/ETH/ETF prices can appear different between dashboard main and crypto/investment detail cards;
+     - changing dashboard can show visible sequences like `10 -> 11 -> 12 -> 10 -> 9` before stabilizing;
+     - root cause is not Binance quantities anymore, but live quote cache events rebuilding valuation/topbar from partial quote batches.
+   - Current bug sources:
+     - `DashboardTopbarShell` listens to `LIVE_PRICES_UPDATED_EVENT` and calls cache-only topbar seeding;
+     - `ensureFinanceStageReady(...)` warms a single stage and then calls `refreshCurrentValuationFromCaches(...)`;
+     - dashboard-specific live price hooks still fetch/update global quote cache for local UI details.
+   - Implementation plan:
+     - remove the topbar `LIVE_PRICES_UPDATED_EVENT` listener that reseeds topbars from cache;
+     - remove cache-only valuation publishing from `ensureFinanceStageReady(...)`;
+     - keep `ensureFinanceCurrentValuation(...)` as the only path that fetches the complete quote set and commits visible current totals;
+     - keep local live price hooks for row/card details only, not as current-total publishers;
+     - keep committed snapshot visible while new quotes are being fetched.
+   - Tests:
+     - topbar shell must not reseed values when `LIVE_PRICES_UPDATED_EVENT` fires;
+     - stage ready warmup must not publish current valuation from partial quote caches;
+     - current valuation still commits when `ensureFinanceCurrentValuation(...)` gets the full quote set.
+   - Vercel smoke:
+     - main -> crypto -> main should not show current totals jumping through multiple intermediate values;
+     - BTC price shown in current total cards should match the committed valuation everywhere;
+     - detail row prices may update, but topbar/cards/today current totals should swap only once per complete valuation refresh.
+   - Rollback:
+     - baseline before this slice is `c9c56b2`;
+     - if this makes topbar stale permanently or stops current totals from refreshing after focus/login/import, revert only this live quote commit slice.
+
+9. Binance daily snapshot history: separate follow-up after current sync ownership and live quote commit cleanup.
    - Goal:
      - make Binance a historical provider from the day API is connected onward;
      - eliminate the current-only Binance spike in historical charts once enough snapshots exist.
@@ -1154,12 +1190,12 @@ Current next execution order after `4cf0420`:
      - historical chart gains Binance only from snapshot date onward;
      - refresh/login does not duplicate daily snapshots.
 
-9. Final current fallback cleanup:
+10. Final current fallback cleanup:
    - Re-audit remaining `balance.eurValue`, `livePrices`, local current and topbar publishers.
    - Keep local logic only for historical reconstruction, tooltip values, chart transforms, synced balance metadata and diagnostics.
    - Remove or quarantine helpers that can publish current money outside the committed valuation path.
 
-10. Regression smoke checklist for every slice:
+11. Regression smoke checklist for every slice:
    - F5 on dashboard/checking/investment/crypto/Binance:
      - no fake `0,00`;
      - skeleton only if no committed snapshot exists;
