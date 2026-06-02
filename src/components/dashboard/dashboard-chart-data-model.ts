@@ -113,32 +113,20 @@ export function buildDashboardChartData({
     const checkingVal = resolveValue("checking", bucket.checking);
     const investmentVal = resolveValue("investment", bucket.investment);
     const cryptoVal = resolveValue("crypto", bucket.crypto);
-    const cryptoWithBinance = cryptoVal !== null
-      ? cryptoVal + binanceTotalCents
-      : hasBinancePortfolio
-        ? binanceTotalCents
-        : null;
+    const cryptoChartVal = cryptoVal;
     const rawValue = resolveValue("value", bucket[activeTab]);
-    const valueWithBinance = getTabValueWithBinance({
-      activeTab,
-      binanceTotalCents,
-      hasBinancePortfolio,
-      rawValue
-    });
 
     const entry: DashboardChartPoint = {
       month: rawMonth,
       rawMonth,
-      value: valueWithBinance,
+      value: rawValue,
       checking: checkingVal,
       investment: investmentVal,
-      crypto: cryptoWithBinance,
+      crypto: cryptoChartVal,
       heritage: getHeritageValue({
         checkingVal,
-        cryptoWithBinance,
-        hasBinancePortfolio,
-        investmentVal,
-        binanceTotalCents
+        cryptoChartVal,
+        investmentVal
       })
     };
 
@@ -170,7 +158,7 @@ export function buildDashboardChartData({
       );
     });
 
-    entry.binance = hasBinancePortfolio ? binanceTotalCents : null;
+    entry.binance = null;
 
     return entry;
   });
@@ -364,44 +352,20 @@ function getProviderCryptoBucketValue(
   return hasKnownToken ? total : undefined;
 }
 
-function getTabValueWithBinance({
-  activeTab,
-  binanceTotalCents,
-  hasBinancePortfolio,
-  rawValue
-}: {
-  activeTab: AccountTab;
-  binanceTotalCents: number;
-  hasBinancePortfolio: boolean;
-  rawValue: number | null;
-}) {
-  if (rawValue !== null) {
-    return activeTab === "heritage" || activeTab === "crypto" ? rawValue + binanceTotalCents : rawValue;
-  }
-
-  return hasBinancePortfolio && (activeTab === "heritage" || activeTab === "crypto")
-    ? binanceTotalCents
-    : rawValue;
-}
-
 function getHeritageValue({
   checkingVal,
-  cryptoWithBinance,
-  hasBinancePortfolio,
-  investmentVal,
-  binanceTotalCents
+  cryptoChartVal,
+  investmentVal
 }: {
   checkingVal: number | null;
-  cryptoWithBinance: number | null;
-  hasBinancePortfolio: boolean;
+  cryptoChartVal: number | null;
   investmentVal: number | null;
-  binanceTotalCents: number;
 }) {
-  if (checkingVal === null && investmentVal === null && cryptoWithBinance === null) {
-    return hasBinancePortfolio ? binanceTotalCents : null;
+  if (checkingVal === null && investmentVal === null && cryptoChartVal === null) {
+    return null;
   }
 
-  return (checkingVal || 0) + (investmentVal || 0) + (cryptoWithBinance || 0);
+  return (checkingVal || 0) + (investmentVal || 0) + (cryptoChartVal || 0);
 }
 
 function isMeaningfulValue(value: number | undefined): value is number {

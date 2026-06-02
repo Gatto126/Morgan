@@ -1,7 +1,7 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `4bba198`
+Current baseline commit: `dab2244`
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -461,6 +461,7 @@ Known mismatch found during production smoke and current mitigation:
 - Production smoke also showed Trade Republic crypto prices could fail to refresh when Binance API was not connected. Binance is optional: a no-Binance profile must still fetch TR crypto live quotes and publish `crypto = Trade Republic crypto`.
 - Production smoke after `5cc65eb` showed the authenticated home Heritage can differ from the main dashboard Heritage. `src/components/finance-shell/welcome-heritage-preview.tsx` now keeps preview/history for the chart, but the current pill and current chart point are sourced from the multi-profile valuation aggregate.
 - Follow-up smoke after `be821a5` showed the home value can remain stale if the only refresh owner is the home component. The refresh owner must be the shell/orchestrator: app boot, focus/reconnect, daily rollover, dashboard navigation and login warmup should ensure current valuation snapshots for all profiles. The home must only subscribe and aggregate.
+- Production smoke after `dab2244` showed Binance was treated differently between the crypto dashboard and main dashboard charts. The crypto dashboard correctly showed Binance as current-only/today, while the main dashboard was adding the current Binance total to every reconstructed historical `crypto`/`heritage` bucket. Main dashboard historical chart points must now exclude Binance and only the today/current point may include Binance through the valuation/live current point.
 
 ## Gaps To Close
 
@@ -486,6 +487,7 @@ Current progress:
 - Asset valuations now keep provider-specific values, so cards can read a single provider's ETF/token value without accidentally using an aggregate shared asset label.
 - `useCurrentValuationSnapshot(profileId)` is available for React consumers.
 - Portfolio/investment/crypto chart data accepts a valuation current point and uses it for today's point.
+- Main dashboard historical chart points exclude current-only Binance values; Binance enters the main `crypto`/`heritage` chart only through the today/current valuation point until historical Binance sync exists.
 - Main dashboard and portfolio cards prefer valuation values for provider totals and asset current values.
 - Binance dashboard prefers `totals.binance` from the valuation snapshot for its topbar and current flat chart value.
 - Topbar storage is now a UI/layout bridge only: persisted topbar entries keep identity/order/labels, not authoritative values.
@@ -665,28 +667,32 @@ Until then:
 
 ## Implementation Plan
 
-Current next execution order after `4bba198` and the resting topbar publisher cleanup slice:
+Current next execution order after `dab2244` and the main dashboard Binance current-only chart fix:
 
-1. Smoke topbar storage/UI/transient cleanup:
+1. Smoke main dashboard vs crypto dashboard Binance chart parity:
+   - main dashboard historical `crypto`/`heritage` lines must not include current Binance before today;
+   - main dashboard today/current point must include Binance exactly like the crypto dashboard current point;
+   - hovering a past main dashboard point must show historical TR crypto without Binance, while rest state returns to full current crypto/heritage with Binance.
+2. Smoke topbar storage/UI/transient cleanup:
    - F5 on dashboard/checking/investment/crypto/Binance must not replay old topbar money values from session storage;
    - click BBVA/TR repeatedly and switch dashboards: provider order must stay canonical;
    - delete/connect Binance or change provider availability: stale provider tabs must disappear.
    - hover chart points, switch dashboard while hovering, then return: historical tooltip values must not remain as resting topbar values.
-2. Smoke the shell-owned multi-profile valuation refresh:
+3. Smoke the shell-owned multi-profile valuation refresh:
    - one profile: home Heritage equals dashboard Heritage after dashboard visits and return home;
    - multiple profiles: home equals the sum of profile snapshots;
    - inactive profile ETF/crypto live quotes refresh without opening that profile's dashboards.
-3. Smoke resting topbar publisher cleanup:
+4. Smoke resting topbar publisher cleanup:
    - at rest, dashboard/checking/investment/crypto/Binance topbar values must match valuation even after tab clicks;
    - active tab/click state should still work;
    - tooltip values should still appear only while hovering.
-4. Cleanup local current fallback builders:
+5. Cleanup local current fallback builders:
    - only after dashboard and home current values are consistently valuation-driven;
    - keep local logic for historical chart reconstruction and tooltip transforms only.
-5. Edge-case tests:
+6. Edge-case tests:
    - clean login/cache, F5 on every dashboard, import while navigating, profile switch during refresh, Binance connect/delete/sync, no-Binance crypto, missing quotes.
-6. Diagnostics improvements.
-7. Binance historical sync as a separate future project.
+7. Diagnostics improvements.
+8. Binance historical sync as a separate future project.
 
 ### Phase 1: Stabilize Central Current Valuation
 

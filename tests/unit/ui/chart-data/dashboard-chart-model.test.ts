@@ -245,28 +245,28 @@ describe("dashboard chart data model", () => {
     expect(points.map((point) => point.rawMonth)).toEqual(["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]);
   });
 
-  it("adds Binance to heritage, crypto and the dedicated Binance series", () => {
+  it("keeps Binance out of reconstructed historical points", () => {
     const points = buildHeritageData();
 
     expect(points[0]).toMatchObject({
-      value: 2000,
-      heritage: 2000,
-      crypto: 2000,
-      binance: 2000
+      value: null,
+      heritage: null,
+      crypto: null,
+      binance: null
     });
     expect(points[1]).toMatchObject({
-      value: 12000,
-      heritage: 12000,
+      value: 10000,
+      heritage: 10000,
       checking: 10000,
-      crypto: 2000,
-      binance: 2000
+      crypto: null,
+      binance: null
     });
     expect(points[2]).toMatchObject({
-      value: 42000,
-      heritage: 42000,
+      value: 40000,
+      heritage: 40000,
       investment: 25000,
-      crypto: 7000,
-      binance: 2000
+      crypto: 5000,
+      binance: null
     });
   });
 
@@ -288,6 +288,14 @@ describe("dashboard chart data model", () => {
       timeRange: "ALL"
     });
     const todayPoint = points.find((point) => point.rawMonth === "2026-01-03");
+    const previousPoint = points.find((point) => point.rawMonth === "2026-01-02");
+
+    expect(previousPoint).toMatchObject({
+      binance: null,
+      crypto: null,
+      heritage: 10000,
+      value: 10000
+    });
 
     expect(todayPoint).toMatchObject({
       "Core ETF": 48000,
@@ -419,8 +427,8 @@ describe("dashboard chart data model", () => {
     expect(checkingPoints[0].value).toBeNull();
     expect(checkingPoints[1].value).toBe(10000);
     expect(investmentPoints[2].value).toBe(25000);
-    expect(cryptoPoints[0].value).toBe(2000);
-    expect(cryptoPoints[2].value).toBe(7000);
+    expect(cryptoPoints[0].value).toBeNull();
+    expect(cryptoPoints[2].value).toBe(5000);
   });
 
   it("treats missing provider values as zero after the first acquisition", () => {
