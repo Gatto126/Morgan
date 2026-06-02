@@ -3,6 +3,7 @@ import {
   DashboardCardShell,
   DashboardMetricRow
 } from "./dashboard-card-parts";
+import { getCurrentValuationAssetValueCents } from "../finance-shell/current-valuation-assets";
 import type { CurrentValuationSnapshot } from "../finance-shell/current-valuations-store";
 import type { DashboardChartPoint } from "./dashboard-chart-types";
 import { formatEuroCents, formatProviderLabel } from "./formatters";
@@ -33,20 +34,6 @@ function getUnitPriceCentsFromCurrentValue(currentValueCents: number | null, inv
   return currentValueCents !== null && Math.abs(quantity) > 0.000001
     ? Math.round(currentValueCents / quantity)
     : getFallbackUnitPriceCents(investedValue, quantity);
-}
-
-function getValuationProductValue(
-  snapshot: CurrentValuationSnapshot | null | undefined,
-  providerId: string,
-  productName: string
-) {
-  const asset = Object.values(snapshot?.assets ?? {}).find((item) =>
-    item.category === "investment" &&
-    item.chartKey === productName &&
-    Object.hasOwn(item.providerValues, providerId)
-  );
-
-  return asset ? asset.providerValues[providerId]?.cents ?? null : undefined;
 }
 
 export function DashboardInvestmentCards({
@@ -86,13 +73,17 @@ export function DashboardInvestmentCards({
             <div className="space-y-4">
               {provider.investmentProducts.map((product) => {
               const price = product.isin ? livePrices[product.isin] : null;
-              const valuationProductValue = getValuationProductValue(
+              const valuationProductValue = getCurrentValuationAssetValueCents(
                 currentValuationSnapshot,
-                provider.sourceInstitution,
-                product.productName
+                {
+                  category: "investment",
+                  chartKey: product.productName,
+                  priceKey: product.isin,
+                  providerId: provider.sourceInstitution
+                }
               );
-              const currentValueCents = valuationProductValue !== undefined
-                ? valuationProductValue
+              const currentValueCents = currentValuationSnapshot
+                ? valuationProductValue ?? null
                 : getPointValue(currentPoint, product.productName, valuesKnown);
               const liveProductReady = currentValueCents !== null;
               const unitPriceCents = getUnitPriceCentsFromCurrentValue(

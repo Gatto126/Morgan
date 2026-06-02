@@ -4,8 +4,8 @@ Last updated: 2026-06-02
 Current baseline commit: `a230f98` (pushed dashboard navigation valuation view-only)
 Last Vercel-smoked checkpoint: `a230f98` (dashboard-change stability smoke, partial)
 Latest Vercel smoke note: dashboard switching is more stable and no longer appears to refresh Binance/crypto because of the click itself. Current updates can appear later than exactly 10s because the interval only starts the refresh; the visible swap waits for the full committed snapshot.
-Current local slice: improve valuation/coherence diagnostics before deeper real-Binance smoke.
-Next implementation phase after this slice: final coherence audit for detail rows/diagnostics, then Binance API connect/current-sync naming cleanup before archive/daily snapshots.
+Current local slice: detail asset/token row coherence after real-Binance totals smoke.
+Next implementation phase after this slice: smoke detail rows across main/investment/crypto/Binance, then Binance API connect/current-sync naming cleanup before archive/daily snapshots.
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -53,6 +53,9 @@ As of pushed commit `a230f98`:
 Remaining coherence work is narrower:
 
 - audit detail asset/token rows that may still read local live quote caches while totals read the committed valuation;
+  - current local slice adds a shared valuation asset lookup by `providerId + priceKey + chartKey`;
+  - main and portfolio investment/crypto detail rows use committed valuation asset values when a current snapshot exists;
+  - if a current snapshot exists but an asset row is not present, the row stays pending instead of falling back to a local live price;
 - confirm inactive mounted dashboards can warm data without publishing current totals or expensive hidden rendering work;
 - clarify home multi-profile refresh expectations: active profile refreshes on the live ticker, inactive profiles refresh on boot/focus/profile changes unless a future requirement asks for full multi-profile live ticking;
 - improve diagnostics so a production value can be traced to a specific committed snapshot, refresh attempt and quote set;

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import type { Dispatch, RefObject, SetStateAction, UIEvent } from "react";
 
 import { CurrentValueSkeleton } from "@/components/finance-shell/current-value-skeleton";
+import { getCurrentValuationAssetValueCents } from "@/components/finance-shell/current-valuation-assets";
 import { SlotValue } from "@/components/finance-shell/slot-value";
 import type { CurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
@@ -62,21 +63,6 @@ function getProductPriceKey(
   config: Pick<PortfolioDashboardConfig, "priceQueryParam">
 ) {
   return config.priceQueryParam === "cryptos" ? normalizeCryptoSymbol(product.isin) : product.isin;
-}
-
-function getValuationProductValue(
-  snapshot: CurrentValuationSnapshot | null | undefined,
-  providerId: string,
-  productName: string,
-  category: "crypto" | "investment"
-) {
-  const asset = Object.values(snapshot?.assets ?? {}).find((item) =>
-    item.category === category &&
-    item.chartKey === productName &&
-    Object.hasOwn(item.providerValues, providerId)
-  );
-
-  return asset ? asset.providerValues[providerId]?.cents ?? null : undefined;
 }
 
 function getUnitPriceCentsFromCurrentValue(
@@ -165,16 +151,19 @@ export function PortfolioProviderCards({
                         {(() => {
                           const priceKey = getProductPriceKey(product, config);
                           const price = priceKey ? livePrices[priceKey] : null;
-                          const valuationProductValue = getValuationProductValue(
+                          const valuationProductValue = getCurrentValuationAssetValueCents(
                             currentValuationSnapshot,
-                            provider.sourceInstitution,
-                            product.productName,
-                            config.priceQueryParam === "cryptos" ? "crypto" : "investment"
+                            {
+                              category: config.priceQueryParam === "cryptos" ? "crypto" : "investment",
+                              chartKey: product.productName,
+                              priceKey,
+                              providerId: provider.sourceInstitution
+                            }
                           );
                           const hasValuationProductValue = valuationProductValue !== undefined;
                           const productReady = hasValuationProductValue
                             ? valuationProductValue !== null
-                            : !priceKey || price != null || valuesKnown;
+                            : !currentValuationSnapshot && (!priceKey || price != null || valuesKnown);
                           const valuationUnitPriceCents = getUnitPriceCentsFromCurrentValue(
                             valuationProductValue,
                             product.investedValue,
@@ -182,7 +171,7 @@ export function PortfolioProviderCards({
                           );
                           const priceCents = hasValuationProductValue
                             ? valuationUnitPriceCents
-                            : price != null
+                            : !currentValuationSnapshot && price != null
                               ? Math.round(price * 100)
                               : valuationUnitPriceCents;
 
@@ -220,13 +209,23 @@ export function PortfolioProviderCards({
                         {(() => {
                           const priceKey = getProductPriceKey(product, config);
                           const price = priceKey ? livePrices[priceKey] : null;
-                          const valuationProductValue = getValuationProductValue(
+                          const valuationProductValue = getCurrentValuationAssetValueCents(
                             currentValuationSnapshot,
-                            provider.sourceInstitution,
-                            product.productName,
-                            config.priceQueryParam === "cryptos" ? "crypto" : "investment"
+                            {
+                              category: config.priceQueryParam === "cryptos" ? "crypto" : "investment",
+                              chartKey: product.productName,
+                              priceKey,
+                              providerId: provider.sourceInstitution
+                            }
                           );
                           if (valuationProductValue === null) {
+                            return (
+                              <span className="font-semibold text-[color:var(--text-dim)]">
+                                <CurrentValueDisplay value="--" />
+                              </span>
+                            );
+                          }
+                          if (currentValuationSnapshot && valuationProductValue === undefined) {
                             return (
                               <span className="font-semibold text-[color:var(--text-dim)]">
                                 <CurrentValueDisplay value="--" />

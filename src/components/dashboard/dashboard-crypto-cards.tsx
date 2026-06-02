@@ -1,5 +1,6 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
+import { getCurrentValuationAssetValueCents } from "@/components/finance-shell/current-valuation-assets";
 import type { CurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
 
 import { DashboardBinanceCard } from "./dashboard-binance-card";
@@ -43,20 +44,6 @@ function getUnitPriceCentsFromCurrentValue(currentValueCents: number | null, inv
   return currentValueCents !== null && Math.abs(quantity) > 0.000001
     ? Math.round(currentValueCents / quantity)
     : getFallbackUnitPriceCents(investedValue, quantity);
-}
-
-function getValuationTokenValue(
-  snapshot: CurrentValuationSnapshot | null | undefined,
-  providerId: string,
-  tokenName: string
-) {
-  const asset = Object.values(snapshot?.assets ?? {}).find((item) =>
-    item.category === "crypto" &&
-    item.chartKey === tokenName &&
-    Object.hasOwn(item.providerValues, providerId)
-  );
-
-  return asset ? asset.providerValues[providerId]?.cents ?? null : undefined;
 }
 
 export function DashboardCryptoCards({
@@ -103,13 +90,17 @@ export function DashboardCryptoCards({
               {provider.cryptoTokens.map((token) => {
               const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
               const price = tokenSymbol ? livePrices[tokenSymbol] : null;
-              const valuationTokenValue = getValuationTokenValue(
+              const valuationTokenValue = getCurrentValuationAssetValueCents(
                 currentValuationSnapshot,
-                provider.sourceInstitution,
-                token.tokenName
+                {
+                  category: "crypto",
+                  chartKey: token.tokenName,
+                  priceKey: tokenSymbol,
+                  providerId: provider.sourceInstitution
+                }
               );
-              const currentValueCents = valuationTokenValue !== undefined
-                ? valuationTokenValue
+              const currentValueCents = currentValuationSnapshot
+                ? valuationTokenValue ?? null
                 : getPointValue(currentPoint, token.tokenName, valuesKnown);
               const liveTokenReady = currentValueCents !== null;
               const unitPriceCents = getUnitPriceCentsFromCurrentValue(
