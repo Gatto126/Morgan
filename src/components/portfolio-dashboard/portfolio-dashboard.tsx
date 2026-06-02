@@ -8,7 +8,6 @@ import { DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "@/com
 import { applyLiveBinanceBalanceValues } from "@/components/dashboard/binance-live-values";
 import { useBinanceBalances } from "@/components/dashboard/use-binance-balances";
 import {
-  selectCurrentPortfolioValuationChartPoint,
   useCurrentValuationSnapshot
 } from "@/components/finance-shell/current-valuations-store";
 import { buildPortfolioChartData, getPortfolioXAxisTicks } from "./chart-data";
@@ -17,6 +16,7 @@ import { mergePortfolioDataWithBinance } from "./binance-portfolio-provider";
 import { PortfolioChart } from "./portfolio-chart";
 import { getPortfolioPointValue } from "./portfolio-current-point";
 import { buildPortfolioCurrentSnapshot } from "./portfolio-current-snapshot";
+import { selectPortfolioCurrentValuationPoint } from "./portfolio-current-valuation";
 import { PortfolioDashboardTabs } from "./portfolio-dashboard-tabs";
 import { PortfolioProviderCards } from "./portfolio-provider-cards";
 import type {
@@ -132,18 +132,13 @@ export function PortfolioDashboard({
     return dataForDisplay?.providers.find(p => p.sourceInstitution === activeTab) || null;
   }, [dataForDisplay, activeTab]);
   const currentValuationPoint = useMemo(() => {
-    if (!dataFresh || !valuationSnapshot) {
-      return null;
-    }
-
-    const hasCurrentVersion = dashboardStage === "investment"
-      ? valuationSnapshot.version.investmentCount === transactionCount
-      : valuationSnapshot.version.cryptoCount === transactionCount
-        && valuationSnapshot.version.binanceRefreshKey === binanceRefreshKey;
-
-    return hasCurrentVersion
-      ? selectCurrentPortfolioValuationChartPoint(valuationSnapshot, dashboardStage, activeTab)
-      : null;
+    return selectPortfolioCurrentValuationPoint(valuationSnapshot, {
+      activeTab,
+      binanceRefreshKey,
+      dataFresh,
+      stage: dashboardStage,
+      transactionCount
+    });
   }, [
     activeTab,
     binanceRefreshKey,
@@ -167,7 +162,7 @@ export function PortfolioDashboard({
     });
   }, [activeProvider, activeTab, cryptoValuesKnown, currentValuationPoint, dataForDisplay, isCryptoDashboard, livePrices, pricesReady, timeRange, todayKey]);
   const localCurrentSnapshot = useMemo(
-    () => dataFresh
+    () => dataFresh && !currentValuationPoint
       ? buildPortfolioCurrentSnapshot({
           activeProvider,
           activeTab,
@@ -183,6 +178,7 @@ export function PortfolioDashboard({
       activeTab,
       binanceBalancesKnown,
       config.priceQueryParam,
+      currentValuationPoint,
       dataForDisplay,
       dataFresh,
       hasBinancePortfolio,
@@ -193,6 +189,7 @@ export function PortfolioDashboard({
   );
   const currentSnapshot = currentValuationPoint ?? localCurrentSnapshot;
   const currentDisplayPoint = activeChartPoint ?? currentSnapshot;
+  const currentValuesKnown = dataFresh && !!currentSnapshot;
 
   const xAxisTicks = useMemo(() => {
     return getPortfolioXAxisTicks(chartData);
@@ -292,7 +289,7 @@ export function PortfolioDashboard({
         activePoint={currentDisplayPoint}
         isTooltipActive={!!activeChartPoint}
         rootIcon={config.rootIcon}
-        valuesKnown={!!dataForDisplay && dataFresh}
+        valuesKnown={currentValuesKnown}
         stage={dashboardStage}
         userId={userId}
         onSelectTab={setActiveTab}
@@ -350,7 +347,7 @@ export function PortfolioDashboard({
         config={config}
         currentPoint={currentSnapshot}
         currentValuationSnapshot={currentValuationPoint ? valuationSnapshot : null}
-        valuesKnown={dataFresh}
+        valuesKnown={currentValuesKnown}
         livePrices={livePrices}
         isActive={isActive}
         shouldPreloadRows={shouldLoad}

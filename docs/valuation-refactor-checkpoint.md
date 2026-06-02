@@ -1,7 +1,8 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `2777133`
+Current baseline commit: `88675f4` (last Vercel-smoked)
+Current slice pending Vercel smoke: portfolio valuation-first current point cleanup
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -464,6 +465,7 @@ Known mismatch found during production smoke and current mitigation:
 - Follow-up smoke after `be821a5` showed the home value can remain stale if the only refresh owner is the home component. The refresh owner must be the shell/orchestrator: app boot, focus/reconnect, daily rollover, dashboard navigation and login warmup should ensure current valuation snapshots for all profiles. The home must only subscribe and aggregate.
 - Production smoke after `dab2244` showed Binance was treated differently between the crypto dashboard and main dashboard charts. The crypto dashboard correctly showed Binance as current-only/today, while the main dashboard was adding the current Binance total to every reconstructed historical `crypto`/`heritage` bucket. Main dashboard historical chart points must now exclude Binance and only the today/current point may include Binance through the valuation/live current point.
 - Production smoke after `2777133` passed: main dashboard and crypto dashboard now follow the same Binance policy. Historical main dashboard `crypto`/`heritage` points exclude current-only Binance, while the today/current point includes Binance through the valuation current point.
+- Production smoke after `88675f4` passed: removing the main dashboard legacy current fallback did not regress F5, resting topbar/cards/current chart point, hover restore, or fake-zero behavior. Main dashboard current values are now fully valuation-driven.
 
 ## Gaps To Close
 
@@ -494,6 +496,8 @@ Current progress:
 - Main dashboard no longer imports or uses the legacy `dashboard-current-snapshot.ts` fallback. `src/components/dashboard.tsx` uses `selectCurrentValuationChartPoint(...)` for topbar, cards and current chart point; the removed file/test were:
   - `src/components/dashboard/dashboard-current-snapshot.ts`
   - `tests/unit/ui/current-snapshot/dashboard-current-snapshot.test.ts`
+- Vercel smoke confirmed the main dashboard works without the legacy fallback after `88675f4`.
+- Portfolio/investment/crypto dashboards now use `src/components/portfolio-dashboard/portfolio-current-valuation.ts` to accept a valuation current point only when the snapshot matches the current stage transaction count, Binance refresh key for crypto, and date key. When that valuation point exists, `buildPortfolioCurrentSnapshot(...)` is not computed, so valuation pending/null values cannot be overwritten by a local fallback.
 - Main dashboard and portfolio cards prefer valuation values for provider totals and asset current values.
 - Binance dashboard prefers `totals.binance` from the valuation snapshot for its topbar and current flat chart value.
 - Topbar storage is now a UI/layout bridge only: persisted topbar entries keep identity/order/labels, not authoritative values.
@@ -506,9 +510,9 @@ Remaining work:
   - one profile: home Heritage equals main dashboard Heritage after visiting dashboards and returning home;
   - multiple profiles: home Heritage equals the sum of profile Heritage snapshots;
   - inactive profile quotes refresh without opening that profile's dashboards;
-- replace remaining local current-value builders after consumers are migrated, starting with `src/components/portfolio-dashboard/portfolio-current-snapshot.ts`;
+- replace remaining local current-value builders after consumers are migrated; `src/components/portfolio-dashboard/portfolio-current-snapshot.ts` is now reduced to a no-valuation cold bootstrap fallback and should be deleted only after investment/crypto F5 smoke passes;
 - migrate checking dashboard card/topbar/chart where useful, though checking does not depend on live quotes;
-- remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough; main dashboard fallback is removed, portfolio fallback remains;
+- remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough; main dashboard fallback is removed, portfolio fallback is reduced but still present;
 - expand tests for orchestration races and UI consistency.
 - smoke the resting topbar publisher cleanup after deploy;
 - cleanup local current fallback builders once smoke confirms valuation is early and stable enough;
@@ -673,17 +677,18 @@ Until then:
 
 ## Implementation Plan
 
-Current next execution order after `2777133` and the passed Binance chart smoke:
+Current next execution order after the portfolio valuation-first slice:
 
 1. Cleanup local current fallback builders:
    - inventory remaining fallback paths:
-     - removed in this slice: `src/components/dashboard/dashboard-current-snapshot.ts`;
-     - still present: `src/components/portfolio-dashboard/portfolio-current-snapshot.ts`;
+     - removed and smoked: `src/components/dashboard/dashboard-current-snapshot.ts`;
+     - reduced in this slice: `src/components/portfolio-dashboard/portfolio-current-snapshot.ts` now runs only when no current valuation point exists;
      - still present by design: local bootstrap valuation snapshots built through `buildCurrentValuationSnapshot(...)`;
      - still present by design: historical chart builders, tooltip transforms, preview history and Binance current-only chart rendering.
    - implementation order:
-     - main dashboard: remove the legacy current snapshot builder and make the resting current point come only from `selectCurrentValuationChartPoint(...)`;
-     - portfolio/investment/crypto dashboard: migrate `currentSnapshot`, tabs and cards to the valuation selector when the version is current; keep the local fallback only until F5/cold login smoke proves valuation is early enough;
+     - done: main dashboard removed the legacy current snapshot builder and the resting current point now comes only from `selectCurrentValuationChartPoint(...)`;
+     - done: portfolio/investment/crypto dashboard uses `selectPortfolioCurrentValuationPoint(...)` for chart, tabs and cards when the valuation snapshot is current;
+     - portfolio removal strategy: smoke F5/cold login on investment and crypto; if valuation arrives early enough, remove `buildPortfolioCurrentSnapshot(...)` and its test; if not, keep it as cold bootstrap only and add diagnostics for the wait state;
      - Binance dashboard: keep local balance rendering for the current-only chart, but make topbar/current total prefer valuation and never publish local total as authoritative resting money;
      - checking dashboard: evaluate separately because it is not live-price dependent, but keep it aligned with valuation/topbar selectors where useful;
      - after each removal, delete the unused builder tests and add/adjust selector tests that lock the valuation-driven behavior.
