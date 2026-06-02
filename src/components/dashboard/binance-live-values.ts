@@ -1,9 +1,10 @@
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
+import { BINANCE_MATERIAL_VALUE_THRESHOLD_EUR, isMaterialBinanceEurValue } from "@/domain/binance/materiality";
 
 import type { BinanceBalanceRow } from "./types";
 
 const NON_ZERO_THRESHOLD = 0.000001;
-export const BINANCE_VISIBLE_VALUE_THRESHOLD_EUR = 0.49;
+export const BINANCE_VISIBLE_VALUE_THRESHOLD_EUR = BINANCE_MATERIAL_VALUE_THRESHOLD_EUR;
 
 export function getBinanceBalanceQuantity(balance: BinanceBalanceRow) {
   return balance.freeAmount + balance.lockedAmount;
@@ -19,7 +20,7 @@ export function isOpenBinanceBalance(balance: BinanceBalanceRow) {
 
 export function isMaterialBinanceBalance(balance: BinanceBalanceRow) {
   return isOpenBinanceBalance(balance)
-    && balance.eurValue > BINANCE_VISIBLE_VALUE_THRESHOLD_EUR;
+    && isMaterialBinanceEurValue(balance.eurValue);
 }
 
 export function getBinanceLivePriceKeys(balances: BinanceBalanceRow[] | undefined) {

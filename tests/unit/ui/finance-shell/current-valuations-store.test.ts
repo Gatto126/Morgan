@@ -525,7 +525,7 @@ describe("current valuations store", () => {
     });
   });
 
-  it("excludes Binance balances from current valuation when Binance live quotes are missing", () => {
+  it("keeps Binance valuation pending until material live quotes arrive", () => {
     const now = 1_000;
     const snapshot = buildCurrentValuationSnapshot({
       binancePayload: {
@@ -566,21 +566,83 @@ describe("current valuations store", () => {
       }
     });
 
-    expect(snapshot.status).toBe("ready");
+    expect(snapshot.status).toBe("partial");
     expect(snapshot.totals).toMatchObject({
-      binance: { cents: 0, source: "live-quote", status: "ready" },
-      crypto: { cents: 1_000_000, status: "ready" },
-      heritage: { cents: 1_030_000, status: "ready" }
+      binance: { cents: null, source: "live-quote", status: "missing-live-quote" },
+      crypto: { cents: null, status: "missing-live-quote" },
+      heritage: { cents: null, status: "missing-live-quote" }
     });
     expect(snapshot.diagnostics.missingKeys).toEqual(["MATIC"]);
     expect(snapshot.providers.BINANCE).toBeUndefined();
     expect(Object.values(snapshot.assets).filter((asset) => asset.category === "binance")).toEqual([]);
     expect(selectCurrentValuationChartPoint(snapshot)).toMatchObject({
       binance: null,
-      crypto: 1_000_000,
-      heritage: 1_030_000,
+      crypto: null,
+      heritage: null,
       rawMonth: "2026-06-01"
     });
+  });
+
+  it("excludes Binance balances after a material live quote attempt is unavailable", () => {
+    const now = 1_000;
+    const snapshot = buildCurrentValuationSnapshot({
+      binancePayload: {
+        balances: [{
+          eurValue: 12.34,
+          freeAmount: 3,
+          lockedAmount: 0,
+          tokenName: "Polygon",
+          tokenSymbol: "MATIC"
+        }]
+      },
+      dashboardData,
+      dateKey: "2026-06-01",
+      livePrices: {
+        BTC: 20_000,
+        IE00B4L5Y983: 100,
+        MATIC: null
+      },
+      liveQuotes: {
+        BTC: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 20_000
+        },
+        IE00B4L5Y983: {
+          attemptedAt: now,
+          fetchedAt: now,
+          source: "api/prices",
+          status: "available",
+          value: 100
+        },
+        MATIC: {
+          attemptedAt: now,
+          fetchedAt: null,
+          source: "api/prices",
+          status: "unavailable",
+          value: null
+        }
+      },
+      now,
+      profile: {
+        ...profile,
+        hasBinanceCredentials: true
+      }
+    });
+
+    expect(snapshot.status).toBe("ready");
+    expect(snapshot.totals).toMatchObject({
+      binance: { cents: 0, source: "live-quote", status: "ready" },
+      crypto: { cents: 1_000_000, status: "ready" },
+      heritage: { cents: 1_030_000, status: "ready" }
+    });
+    expect(snapshot.diagnostics).toMatchObject({
+      missingKeys: [],
+      unavailableKeys: ["MATIC"]
+    });
+    expect(snapshot.providers.BINANCE).toBeUndefined();
   });
 
   it("ignores Binance balances below the materiality threshold even when a quote is cached", () => {

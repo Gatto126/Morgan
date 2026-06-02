@@ -103,11 +103,19 @@ describe("binance sync service", () => {
           freeAmount: 1,
           lockedAmount: 0.5,
           eurValue: 45_000
+        },
+        {
+          tokenSymbol: "DUST",
+          tokenName: "Dust",
+          freeAmount: 20,
+          lockedAmount: 0,
+          eurValue: 0.25
         }
       ],
       { repository, now: () => syncedAt }
     );
 
+    expect(upsertBalance).toHaveBeenCalledTimes(1);
     expect(upsertBalance).toHaveBeenCalledWith("user-1", {
       tokenSymbol: "BTC",
       tokenName: "Bitcoin",
@@ -192,16 +200,28 @@ describe("binance sync service", () => {
     const syncedAt = new Date("2026-01-01T00:00:00.000Z");
     const { repository, getBalanceStatusRecords } = makeRepositoryMock();
     getBalanceStatusRecords.mockResolvedValueOnce({
-      balances: [{
-        id: "balance-1",
-        userId: "user-1",
-        tokenSymbol: "BTC",
-        tokenName: "Bitcoin",
-        freeAmount: 1,
-        lockedAmount: 0,
-        eurValue: 30_000,
-        updatedAt: syncedAt
-      }],
+      balances: [
+        {
+          id: "balance-1",
+          userId: "user-1",
+          tokenSymbol: "BTC",
+          tokenName: "Bitcoin",
+          freeAmount: 1,
+          lockedAmount: 0,
+          eurValue: 30_000,
+          updatedAt: syncedAt
+        },
+        {
+          id: "balance-2",
+          userId: "user-1",
+          tokenSymbol: "DUST",
+          tokenName: "Dust",
+          freeAmount: 20,
+          lockedAmount: 0,
+          eurValue: 0.25,
+          updatedAt: syncedAt
+        }
+      ],
       syncTimestamp: syncedAt,
       credentialRecord: {
         binanceApiKeyEncrypted: "key",

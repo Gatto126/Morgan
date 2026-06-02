@@ -1,9 +1,9 @@
 # Morgan Valuation Refactor Checkpoint
 
 Last updated: 2026-06-02
-Current baseline commit: `4cf0420` (current pushed baseline before Binance material quote filtering)
+Current baseline commit: `efd4f11` (current pushed baseline before server-side Binance material filtering)
 Last fully Vercel-smoked checkpoint: `4cf0420`
-Current slice pending Vercel smoke: Binance material quote filtering after 68-symbol diagnostic
+Current slice pending Vercel smoke: server-side Binance material filtering + atomic Binance current commit
 Next implementation phase: diagnostics deepening and remaining current-value fallback audit
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
@@ -79,7 +79,8 @@ Binance current policy:
 - Binance balances are input data, not authoritative live current values.
 - Binance token above the materiality threshold (`balance.eurValue > 0.49`) with a valid live quote: include in Binance/crypto/heritage current and show in Binance card.
 - Binance token below/equal the materiality threshold: do not request a live quote during current valuation and do not include it in current totals. The synced EUR value is only a materiality filter, not a visible current value.
-- Binance token above threshold with missing/unavailable/invalid quote: exclude from current totals and hide from current-value card rows; record the token/key in diagnostics. Do not use `balance.eurValue` as an unmarked current fallback.
+- Binance token above threshold whose quote has not arrived yet: keep the new valuation snapshot pending so the visible current total does not grow in steps.
+- Binance token above threshold with attempted unavailable/invalid quote: exclude from current totals and hide from current-value card rows; record the token/key in diagnostics. Do not use `balance.eurValue` as an unmarked current fallback.
 - Token name/quantity may be shown as synced balance data only if the UI clearly separates it from current valuation. For the current valuation card, prefer hiding unpriced token rows.
 
 ## Target Architecture
@@ -469,6 +470,10 @@ Implemented so far:
   - `balance.eurValue` is used only as a materiality filter for live quote refresh;
   - current valuation requests and includes only Binance balances above `0.49 EUR`;
   - balances below/equal threshold are ignored in current totals until a future Binance sync/history project gives them an explicit policy.
+- Binance balance status and sync persistence now apply the same materiality threshold:
+  - `src/server/services/binance-sync.ts`
+  - `/api/binance/balances` returns only material balances even for accounts that already had dust persisted;
+  - the next sync persists only material balances and deletes inactive/dust balances from the current Binance set.
 - The main dashboard resting topbar now prefers the central valuation chart point before falling back to the legacy local current snapshot:
   - `src/components/dashboard.tsx`
 - Binance dashboard manual current sync now seeds the Binance stage cache and forces a profile valuation refresh after balances are synced:
@@ -858,10 +863,13 @@ Current next execution order after `4cf0420`:
 4. Binance current policy cleanup: implemented locally, pending Vercel smoke.
    - Done: remove visible current fallback from `balance.eurValue`.
    - Done: restore materiality filtering for Binance live quote requests after diagnostics showed 68 requested crypto symbols and quote refresh around 2.7s.
+   - Done: apply the same materiality filter to Binance status responses and sync persistence, not only to the client quote collector.
+   - Done: keep Binance current snapshot pending while material quotes have not arrived, instead of committing visible partial Binance totals as each quote batch lands.
    - In valuation:
      - Binance token above `0.49 EUR` with live quote: include in Binance/crypto/heritage current;
      - Done: Binance token below/equal `0.49 EUR` is not requested and is excluded from current totals;
-     - Done: Binance token above threshold without valid live quote is excluded from current totals and current card rows;
+     - Done: Binance token above threshold with a not-yet-arrived quote keeps the snapshot partial/draft;
+     - Done: Binance token above threshold with attempted unavailable/invalid live quote is excluded from current totals and current card rows;
      - Current diagnostics list missing/unavailable quote keys; next diagnostics slice should also list excluded token symbols/reasons and material/dust counts.
    - Binance balances may still be used for names/quantities, sync diagnostics and materiality filtering, but not as unmarked current money.
    - Future Binance first-sync/history work:
@@ -872,6 +880,8 @@ Current next execution order after `4cf0420`:
      - done: missing Binance quote excludes token and records diagnostics;
      - done: balances below materiality threshold are ignored even if a quote is cached;
      - done: Binance quote-key collector requests only material open balances;
+     - done: Binance sync/status filters out dust balances before they reach the UI;
+     - done: material Binance quotes pending do not publish partial current totals;
      - missing Binance quote does not block TR crypto quote refresh;
      - no-Binance profile still computes `crypto = TR crypto`;
      - Binance total/topbar/card/today point all come from the same committed snapshot.

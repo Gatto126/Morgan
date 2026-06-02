@@ -4,6 +4,7 @@ import {
   type BinanceFetch,
   type PricedBinanceBalance
 } from "@/integrations/binance/binance-service";
+import { isMaterialBinanceEurValue } from "@/domain/binance/materiality";
 import {
   binanceRepository,
   type BinanceRepository,
@@ -33,6 +34,10 @@ export type SyncBinanceBalancesResult = {
   syncedAt: Date;
 };
 
+function filterMaterialBalances<TBalance extends { eurValue: number }>(balances: TBalance[]) {
+  return balances.filter((balance) => isMaterialBinanceEurValue(balance.eurValue));
+}
+
 export class BinanceMissingCredentialsError extends Error {
   constructor(message = "API key non configurata.") {
     super(message);
@@ -47,19 +52,20 @@ export async function persistBalances(
 ): Promise<SyncBinanceBalancesResult> {
   const repository = dependencies.repository ?? binanceRepository;
   const syncedAt = dependencies.now?.() ?? new Date();
+  const materialBalances = filterMaterialBalances(balances);
 
   await measurePerformanceStep(
     dependencies.trace,
     "binance.repository.upsertBalances",
     async () => {
-      for (const balance of balances) {
+      for (const balance of materialBalances) {
         await repository.upsertBalance(userId, balance);
       }
     },
-    { rows: balances.length }
+    { rows: materialBalances.length }
   );
 
-  const activeSymbols = balances.map((balance) => balance.tokenSymbol);
+  const activeSymbols = materialBalances.map((balance) => balance.tokenSymbol);
   await measurePerformanceStep(
     dependencies.trace,
     "binance.repository.deleteInactiveBalances",
@@ -137,7 +143,7 @@ export async function getBinanceBalancesStatus(
     );
 
   return {
-    balances,
+    balances: filterMaterialBalances(balances),
     syncedAt: syncTimestamp,
     isStale: !syncTimestamp || now.getTime() - syncTimestamp.getTime() > STALE_MS,
     hasApiKey: hasBinanceCredentials(credentialRecord)

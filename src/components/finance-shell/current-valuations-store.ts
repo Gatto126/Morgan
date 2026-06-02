@@ -713,6 +713,7 @@ function buildBinanceValuation(
   }
 
   const balanceValues: ValuationValue[] = [];
+  const readyBalanceValues: ValuationValue[] = [];
   const balances = binancePayload.balances ?? [];
 
   for (const balance of balances) {
@@ -731,11 +732,17 @@ function buildBinanceValuation(
       : balance.tokenSymbol;
     const value = getBinanceBalanceValue(balance, livePrices, liveQuotes);
 
+    if (value.status === "missing-live-quote") {
+      balanceValues.push(value);
+      continue;
+    }
+
     if (!isValuationValueReady(value)) {
       continue;
     }
 
     balanceValues.push(value);
+    readyBalanceValues.push(value);
     mergeAssetValue(assets, {
       category: "binance",
       chartKey: label,
@@ -755,7 +762,7 @@ function buildBinanceValuation(
     ? sumValuationValues(balanceValues, "live-quote")
     : createReadyValue(0, "live-quote");
 
-  if (balanceValues.length > 0) {
+  if (readyBalanceValues.length > 0) {
     const provider = getProviderValuation(providers, BINANCE_PROVIDER_ID);
     provider.hasBinance = true;
     provider.hasCrypto = true;
