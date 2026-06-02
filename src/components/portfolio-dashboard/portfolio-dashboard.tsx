@@ -52,8 +52,7 @@ export function PortfolioDashboard({
   onCloseUserSelect,
   userSelectElement,
   onImportRefreshComplete,
-  binanceRefreshKey = 0,
-  hasBinanceCredentials = false
+  binanceRefreshKey = 0
 }: PortfolioDashboardProps) {
   const { data, dataFresh, loading, error, importRefreshVersion } = usePortfolioDashboardData({
     endpoint: config.endpoint,
@@ -79,7 +78,6 @@ export function PortfolioDashboard({
   const isCryptoDashboard = config.priceQueryParam === "cryptos";
   const {
     binanceBalances,
-    binanceBalancesKnown,
     isBinanceSyncing,
     filterSmallBinance,
     setFilterSmallBinance,
@@ -94,7 +92,7 @@ export function PortfolioDashboard({
     () => data && isCryptoDashboard ? mergePortfolioDataWithBinance(data, binanceBalances) : data,
     [binanceBalances, data, isCryptoDashboard]
   );
-  const { livePrices, pricesReady } = usePortfolioLivePrices({
+  const { livePrices } = usePortfolioLivePrices({
     binanceBalances: isCryptoDashboard ? binanceBalances : undefined,
     providers: dataForPriceKeys?.providers,
     priceQueryParam: config.priceQueryParam,
@@ -112,9 +110,6 @@ export function PortfolioDashboard({
   const [activeChartPoint, setActiveChartPoint] = useState<ChartPoint | null>(null);
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
   const todayKey = useMemo(() => getTodayKey(), []);
-  const hasBinancePortfolio = isCryptoDashboard && (hasBinanceCredentials || liveBinanceBalances.length > 0);
-  const cryptoValuesKnown = pricesReady && (!hasBinancePortfolio || binanceBalancesKnown);
-
   useEffect(() => {
     onImportRefreshCompleteRef.current = onImportRefreshComplete;
   }, [onImportRefreshComplete]);
@@ -152,14 +147,14 @@ export function PortfolioDashboard({
     return buildPortfolioChartData({
       activeProvider,
       activeTab,
-      applyLiveToday: isCryptoDashboard ? cryptoValuesKnown : pricesReady,
+      applyLiveToday: false,
       currentValuationPoint,
       data: dataForDisplay,
       livePrices,
       timeRange,
       todayKey
     });
-  }, [activeProvider, activeTab, cryptoValuesKnown, currentValuationPoint, dataForDisplay, isCryptoDashboard, livePrices, pricesReady, timeRange, todayKey]);
+  }, [activeProvider, activeTab, currentValuationPoint, dataForDisplay, livePrices, timeRange, todayKey]);
   const currentSnapshot = currentValuationPoint;
   const currentDisplayPoint = activeChartPoint ?? currentSnapshot;
   const currentValuesKnown = dataFresh && !!currentSnapshot;

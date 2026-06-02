@@ -42,7 +42,7 @@ describe("Binance card total", () => {
     const valuationTotalLabel = formatEuroCents(243_368);
 
     expect(localTotalLabel).not.toBe(valuationTotalLabel);
-    expect(getBinanceCardTotalLabel(localBalances, 243_368)).toBe(valuationTotalLabel);
+    expect(getBinanceCardTotalLabel(243_368)).toBe(valuationTotalLabel);
   });
 
   it("uses valuation asset values for individual Binance balances when available", () => {
@@ -74,5 +74,18 @@ describe("Binance card total", () => {
 
     expect(euroFormatter.format(balance.eurValue)).not.toBe(formatEuroCents(100_001));
     expect(getBinanceCardBalanceValueLabel(balance, assetValues)).toBe(formatEuroCents(100_001));
+  });
+
+  it("keeps Binance current values pending instead of falling back to synced EUR values", () => {
+    const balance: BinanceBalanceRow = {
+      eurValue: 1_000.004,
+      freeAmount: 1,
+      lockedAmount: 0,
+      tokenName: "USD Coin",
+      tokenSymbol: "USDC"
+    };
+
+    expect(getBinanceCardTotalLabel(null)).toBeNull();
+    expect(getBinanceCardBalanceValueLabel(balance, undefined)).toBeNull();
   });
 });

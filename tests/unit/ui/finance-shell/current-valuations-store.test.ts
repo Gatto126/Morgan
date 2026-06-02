@@ -525,7 +525,7 @@ describe("current valuations store", () => {
     });
   });
 
-  it("uses Binance synced values when Binance live quotes are missing", () => {
+  it("excludes Binance balances from current valuation when Binance live quotes are missing", () => {
     const now = 1_000;
     const snapshot = buildCurrentValuationSnapshot({
       binancePayload: {
@@ -568,15 +568,17 @@ describe("current valuations store", () => {
 
     expect(snapshot.status).toBe("ready");
     expect(snapshot.totals).toMatchObject({
-      binance: { cents: 1_234, source: "binance-sync", status: "ready" },
-      crypto: { cents: 1_001_234, status: "ready" },
-      heritage: { cents: 1_031_234, status: "ready" }
+      binance: { cents: 0, source: "live-quote", status: "ready" },
+      crypto: { cents: 1_000_000, status: "ready" },
+      heritage: { cents: 1_030_000, status: "ready" }
     });
     expect(snapshot.diagnostics.missingKeys).toEqual(["MATIC"]);
+    expect(snapshot.providers.BINANCE).toBeUndefined();
+    expect(Object.values(snapshot.assets).filter((asset) => asset.category === "binance")).toEqual([]);
     expect(selectCurrentValuationChartPoint(snapshot)).toMatchObject({
-      binance: 1_234,
-      crypto: 1_001_234,
-      heritage: 1_031_234,
+      binance: null,
+      crypto: 1_000_000,
+      heritage: 1_030_000,
       rawMonth: "2026-06-01"
     });
   });

@@ -7,6 +7,7 @@ import type { AccountTab, DashboardData, MonthlyBucket, ProviderSummary, TimeRan
 const NON_ZERO_THRESHOLD = 0.000001;
 
 type BuildDashboardChartDataParams = {
+  applyLiveToday?: boolean;
   activeTab: AccountTab;
   binanceTotalCents: number;
   checkingProviders: string[];
@@ -74,6 +75,7 @@ function collectAllCryptoInstitutions(data: DashboardData | null) {
 }
 
 export function buildDashboardChartData({
+  applyLiveToday = true,
   activeTab,
   binanceTotalCents,
   checkingProviders,
@@ -175,7 +177,8 @@ export function buildDashboardChartData({
     });
   }
 
-  return applyLiveTodayPoint(chartPoints, {
+  return applyLiveToday
+    ? applyLiveTodayPoint(chartPoints, {
         activeTab,
         binanceTotalCents,
         data,
@@ -186,7 +189,8 @@ export function buildDashboardChartData({
         },
         livePrices,
         todayKey
-      });
+      })
+    : chartPoints;
 }
 
 function collectMonthlyKeys(

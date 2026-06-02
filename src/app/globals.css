@@ -207,6 +207,35 @@ button.dashboard-topbar-tab:hover .dashboard-topbar-currency-icon {
   transition: none !important;
 }
 
+.current-value-skeleton {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.055) 0%,
+      rgba(255, 255, 255, 0.14) 48%,
+      rgba(255, 255, 255, 0.055) 100%
+    );
+  background-size: 220% 100%;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.035) inset,
+    0 10px 28px rgba(0, 0, 0, 0.26);
+  animation: currentValueSkeletonSweep 1.8s ease-in-out infinite;
+}
+
+@keyframes currentValueSkeletonSweep {
+  0% {
+    background-position: 120% 0;
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    background-position: -120% 0;
+    opacity: 0.62;
+  }
+}
+
 .slot-value-character {
   font-variant-numeric: tabular-nums;
 }

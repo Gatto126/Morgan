@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect } from "react";
 import type { UIEvent } from "react";
 
+import { CurrentValueSkeleton } from "@/components/finance-shell/current-value-skeleton";
 import { SlotValue } from "@/components/finance-shell/slot-value";
 import { scheduleIdleTask, useDeferredTransactionRows } from "@/hooks/use-deferred-transaction-rows";
 import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transaction-rows";
@@ -24,6 +25,12 @@ type CheckingProviderCardsProps = {
 const INITIAL_TRANSACTION_ROWS = 20;
 const NEXT_TRANSACTION_ROWS = 10;
 const LOAD_MORE_SCROLL_THRESHOLD_PX = 160;
+
+function CurrentValueDisplay({ value }: { value: string }) {
+  return value === "--" || value.trim() === ""
+    ? <CurrentValueSkeleton className="h-4 w-20" />
+    : <SlotValue value={value} />;
+}
 
 export function CheckingProviderCards({
   portalNode,
@@ -67,7 +74,7 @@ export function CheckingProviderCards({
                   {formatProviderLabel(provider.sourceInstitution)}
                 </span>
                 <span className="text-sm font-bold text-[color:var(--text-main)]">
-                  <SlotValue value={formatPointValue(currentPoint, provider.sourceInstitution, valuesKnown)} />
+                  <CurrentValueDisplay value={formatPointValue(currentPoint, provider.sourceInstitution, valuesKnown)} />
                 </span>
               </div>
               <div className="mt-4 space-y-1.5 text-sm">

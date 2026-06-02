@@ -2,8 +2,8 @@
 
 Last updated: 2026-06-02
 Current baseline commit: `4fd1966` (last Vercel-smoked)
-Current slice pending Vercel smoke: `76dd695` Binance card valuation alignment + active-user atomic committed valuation store
-Next implementation phase: UI readiness gate/skeleton and Binance visible fallback removal
+Current slice pending Vercel smoke: active-user atomic committed valuation store + UI readiness/Binance visible fallback cleanup
+Next implementation phase: orchestrator warmup/readiness hardening and diagnostics deepening
 
 This file is the durable context for the Morgan valuation/topbar refactor. If the conversation is compacted, resume by reading this document before touching code.
 
@@ -507,9 +507,14 @@ Known mismatch found during production smoke and current mitigation:
 - Production smoke after `4fd1966` passed: portfolio current fallback removal and topbar stage hydration scoping did not regress F5 investment/crypto, dashboard switching, topbar flicker, hover restore, Binance current-only behavior, or fake-zero behavior. Current value fallback cleanup for main + portfolio is now considered closed.
 - Production smoke after `4fd1966` found a one-cent mismatch between Binance in the crypto topbar and Binance in the Binance card. Cause: the topbar read `snapshot.totals.binance.cents` from the central valuation, while `DashboardBinanceCard` summed local `balance.eurValue` floats. The card total should use the valuation Binance total when a current valuation snapshot is available.
 - Follow-up audit for similar cases found no other resting topbar/card totals that still sum live float values against valuation totals. Investment/crypto provider card totals already read valuation current points, and asset rows prefer `currentValuationSnapshot.assets`. Remaining `balance.eurValue` sums are bootstrap/fallback, historical preview, chart/current-only Binance support, or the Binance card fallback before valuation exists.
-- `76dd695` aligns Binance card totals and token current values with valuation values when available. It is pending Vercel smoke. The follow-up policy is stricter: remove visible Binance current fallbacks from `balance.eurValue`; if a Binance token cannot be live-priced, exclude/hide it from current valuation and diagnostics should explain why.
+- `76dd695` aligns Binance card totals and token current values with valuation values when available. Follow-up policy is stricter: remove visible Binance current fallbacks from `balance.eurValue`; if a Binance token cannot be live-priced, exclude/hide it from current valuation and diagnostics should explain why.
 - New target after the Binance card slice: active-user current valuation must be atomic. If the user switches from crypto to main and back, the same committed snapshot must be visible everywhere. No dashboard should show a newer crypto current value while another dashboard still shows an older crypto current value.
-- Current local slice implements the first atomic store step: `getCurrentValuationSnapshot(...)` now exposes only the last complete committed snapshot. Ready snapshots commit; partial/loading/error snapshots stay as draft diagnostics and do not replace visible current values. Main dashboard no longer uses a local built valuation as the visible current fallback.
+- `3f677da` implements the first atomic store step: `getCurrentValuationSnapshot(...)` now exposes only the last complete committed snapshot. Ready snapshots commit; partial/loading/error snapshots stay as draft diagnostics and do not replace visible current values. Main dashboard no longer uses a local built valuation as the visible current fallback.
+- Current local slice implements UI readiness and visible Binance fallback cleanup:
+  - topbar/card current placeholders render an animated skeleton instead of visible `--`;
+  - main and portfolio dashboards no longer add local live today points when the committed valuation point is missing;
+  - Binance current valuation excludes unpriced Binance balances instead of using synced `balance.eurValue`;
+  - Binance current card rows hide tokens without valuation values and the card total stays pending until valuation is available.
 
 ## Gaps To Close
 
@@ -554,7 +559,11 @@ Current progress:
 - Resting topbar values are seeded from `selectCurrentValuationTopbar(...)` for dashboard, checking, investment, crypto and Binance. Dashboard components now publish UI state at rest and transient values only during chart interaction.
 - `DashboardTopbarShell` hydrated layout state is scoped by `userId:stage`, preventing a previous dashboard stage's hydrated items from flashing during navigation to a different stage.
 - `DashboardBinanceCard` accepts a valuation `currentValueCents` total, and dashboard/portfolio crypto cards pass `snapshot.totals.binance.cents` so Binance card totals match topbar totals exactly.
-- `DashboardBinanceCard` also accepts valuation Binance asset values keyed by asset id/symbol; dashboard/portfolio crypto cards pass those values so individual Binance token current values use the same valuation source when available. The local `balance.eurValue` display remains only as fallback before valuation arrives.
+- `DashboardBinanceCard` also accepts valuation Binance asset values keyed by asset id/symbol; dashboard/portfolio crypto cards pass those values so individual Binance token current values use the same valuation source when available.
+- Visible Binance current fallback from `balance.eurValue` is removed locally:
+  - `DashboardBinanceCard` renders skeleton for pending totals and hides unpriced token rows;
+  - Binance dashboard uses local price fetch only as quote warmup, not as a current EUR calculator;
+  - central valuation skips Binance balances whose live quote is missing/unavailable and records the missing/unavailable quote key in diagnostics.
 - Added `tests/unit/ui/chart-data/dashboard-binance-card-total.test.ts` to lock the one-cent rounding case for both the card total and individual Binance balance values.
 - Atomic committed snapshot support is implemented locally and pending Vercel smoke:
   - `current-valuations-store.ts` keeps committed snapshot, draft snapshot, refresh state, pending version and last error per profile;
@@ -563,6 +572,10 @@ Current progress:
   - `src/components/dashboard.tsx` reads only the current committed store snapshot for its resting current values, removing the last visible local main-dashboard valuation bootstrap;
   - `finance-session-orchestrator` diagnostics now expose committed/draft valuation status, pending version and refresh state.
   - Added unit tests for no-committed pending state, stale-while-partial-refresh, and atomic swap when a complete snapshot arrives.
+- UI readiness support is implemented locally and pending Vercel smoke:
+  - `CurrentValueSkeleton` provides the dark animated current-value placeholder;
+  - `DashboardTopbarTab`, dashboard card parts, checking provider cards and portfolio provider cards render skeletons for genuinely pending current money values;
+  - dashboard/portfolio chart builders keep historical data but do not add local live today points in the app when the committed valuation point is absent.
 
 Remaining work:
 
@@ -571,16 +584,17 @@ Remaining work:
   - complete refreshes swap all selected values together;
   - no dashboard shows a newer crypto/investment value while another dashboard still shows the previous value;
   - diagnostics expose committed/draft/refreshing state clearly;
-- implement the UI readiness gate for no-committed states:
-  - show skeleton only when no committed snapshot exists for the requested profile/version;
-  - keep dashboard navigation from showing skeleton when a committed snapshot exists;
-  - make topbar/cards/chart placeholders visually synchronized on cold login/F5;
+- smoke the UI readiness and Binance fallback cleanup after deploy:
+  - skeleton appears only for no-committed current values;
+  - dashboard navigation with committed values does not show skeleton;
+  - no local live today point appears before committed valuation;
+  - Binance card/topbar/today point do not use synced `balance.eurValue`;
 - smoke the shell-owned multi-profile valuation refresh after deploy:
   - one profile: home Heritage equals main dashboard Heritage after visiting dashboards and returning home;
   - multiple profiles: home Heritage equals the sum of profile Heritage snapshots;
   - inactive profile quotes refresh without opening that profile's dashboards;
-- replace visible `--` current loading states with an elegant animated skeleton where the value is genuinely pending;
-- remove visible Binance `balance.eurValue` current fallback; hide/exclude unpriced Binance tokens from current valuation and diagnostics;
+- finish any remaining non-current `--` cleanup only if it is truly a current-value placeholder;
+- extend diagnostics with explicit excluded Binance token symbols in addition to missing/unavailable quote keys;
 - replace remaining local current-value builders after consumers are migrated; dashboard and portfolio current snapshot fallbacks have been removed and smoked;
 - migrate checking dashboard card/topbar/chart where useful, though checking does not depend on live quotes;
 - remove fallback current-value paths after production smoke confirms valuation snapshots are available early enough; main dashboard and portfolio current fallbacks are removed and smoked;
@@ -790,28 +804,29 @@ Current next execution order after `76dd695`:
      - Binance connect/delete/sync.
    - Diagnostics should report committed snapshot version, refresh state, pending version, missing/unavailable keys, quote ages and whether UI is showing committed or pending state.
 
-3. UI readiness gate and skeleton:
+3. UI readiness gate and skeleton: implemented locally, pending Vercel smoke.
    - Create reusable current-value skeleton components:
      - topbar pill skeleton matching the dark rounded animated style;
      - compact card value skeleton;
      - chart current-point skeleton/placeholder where needed.
-   - Replace visible `--` for loading current money values with skeletons.
-   - Do not show skeleton on dashboard navigation when a committed snapshot exists.
+   - Done: replace visible `--` for loading current money values in topbar/cards with skeletons.
+   - Done by data contract: do not show skeleton on dashboard navigation when a committed snapshot exists, because selectors keep returning the committed snapshot.
    - Stage reveal rule:
      - if historical/stage data and chart frame are ready but current snapshot is pending, show skeleton values in the real layout;
      - if no usable stage data exists, keep the existing dashboard loading overlay;
      - when committed snapshot exists, render topbar/cards/current chart point immediately from it.
-   - Topbar/cards/chart should appear visually synchronized on cold login/F5: either skeleton together, or committed values together.
+   - Done locally for chart current points: main/portfolio charts do not add a local live today point when the committed valuation point is missing.
+   - Smoke target: topbar/cards/chart should appear visually synchronized on cold login/F5: either skeleton together, or committed values together.
 
-4. Binance current policy cleanup:
-   - Remove visible current fallback from `balance.eurValue`.
+4. Binance current policy cleanup: implemented locally, pending Vercel smoke.
+   - Done: remove visible current fallback from `balance.eurValue`.
    - In valuation:
      - Binance token with live quote: include in Binance/crypto/heritage current;
-     - Binance token without valid live quote: exclude from current totals and current card rows;
-     - diagnostics list excluded tokens/keys and reason.
+     - Done: Binance token without valid live quote is excluded from current totals and current card rows;
+     - Current diagnostics list missing/unavailable quote keys; next diagnostics slice should also list excluded token symbols/reasons.
    - Binance balances may still be used for names/quantities or sync diagnostics, but not as unmarked current money.
    - Tests:
-     - missing Binance quote excludes token and records diagnostics;
+     - done: missing Binance quote excludes token and records diagnostics;
      - missing Binance quote does not block TR crypto quote refresh;
      - no-Binance profile still computes `crypto = TR crypto`;
      - Binance total/topbar/card/today point all come from the same committed snapshot.

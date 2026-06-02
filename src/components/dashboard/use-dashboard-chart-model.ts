@@ -21,6 +21,7 @@ import type { DashboardChartPoint } from "./dashboard-chart-types";
 import type { AccountTab, BinanceBalanceRow, DashboardData, TimeRange } from "./types";
 
 type UseDashboardChartModelParams = {
+  applyLiveToday?: boolean;
   binanceBalances: BinanceBalanceRow[];
   binanceTotalCents: number;
   checkingCount: number;
@@ -38,6 +39,7 @@ type UseDashboardChartModelParams = {
 };
 
 export function useDashboardChartModel({
+  applyLiveToday = true,
   binanceBalances,
   binanceTotalCents,
   checkingCount,
@@ -97,6 +99,7 @@ export function useDashboardChartModel({
   const todayKey = useMemo(() => getTodayKey(), []);
 
   const chartData = useMemo(() => buildDashboardChartData({
+    applyLiveToday,
     activeTab,
     binanceTotalCents,
     checkingProviders,
@@ -111,6 +114,7 @@ export function useDashboardChartModel({
     todayKey,
     timeRange
   }), [
+    applyLiveToday,
     activeTab,
     binanceTotalCents,
     checkingProviders,

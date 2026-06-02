@@ -25,13 +25,10 @@ import {
   readDashboardStageDataCache,
   seedDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
+import { CurrentValueSkeleton } from "./finance-shell/current-value-skeleton";
 import { ensureFinanceCurrentValuation } from "./finance-shell/finance-session-orchestrator";
 import { useCurrentValuationSnapshot } from "./finance-shell/current-valuations-store";
 import { usePublishDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
-import {
-  applyLiveBinanceBalanceValues,
-  getBinanceBalancesTotalCents
-} from "./dashboard/binance-live-values";
 import { useDashboardLivePrices } from "./dashboard/use-dashboard-live-prices";
 import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
 import { cn } from "@/shared/utils";
@@ -105,21 +102,17 @@ export function BinanceDashboard({
   const [isMobile, setIsMobile] = useState(false);
   const [balances, setBalances] = useState<BinanceBalance[]>([]);
   const [balancesKnown, setBalancesKnown] = useState(false);
-  const [freshBinanceRefreshKey, setFreshBinanceRefreshKey] = useState(binanceRefreshKey);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
-  const { cryptoPricesReady, livePrices } = useDashboardLivePrices(undefined, {
+  useDashboardLivePrices(undefined, {
     binanceBalances: balances,
     isActive,
     shouldLoad: shouldLoad && balancesKnown
   });
-  const liveBalances = useMemo(
-    () => applyLiveBinanceBalanceValues(balances, livePrices),
-    [balances, livePrices]
-  );
   const valuationSnapshot = useCurrentValuationSnapshot(userId);
-  const valuationBinanceCents = valuationSnapshot?.version.binanceRefreshKey === binanceRefreshKey
+  const hasValuationBinanceProvider = !!valuationSnapshot?.providers.BINANCE?.hasBinance;
+  const valuationBinanceCents = valuationSnapshot?.version.binanceRefreshKey === binanceRefreshKey && hasValuationBinanceProvider
     ? valuationSnapshot.totals.binance.cents
     : null;
 
@@ -141,7 +134,6 @@ export function BinanceDashboard({
         setBalances(cachedPayload.balances as BinanceBalance[]);
       }
       setBalancesKnown(true);
-      setFreshBinanceRefreshKey(binanceRefreshKey);
     }, 0);
 
     return () => window.clearTimeout(hydrateTimer);
@@ -153,7 +145,6 @@ export function BinanceDashboard({
       setBalances(data.balances as BinanceBalance[]);
     }
     setBalancesKnown(true);
-    setFreshBinanceRefreshKey(binanceRefreshKey);
     return data;
   }, [binanceRefreshKey, userId]);
 
@@ -192,7 +183,6 @@ export function BinanceDashboard({
         syncedBalances = data.balances;
         setBalances(syncedBalances);
         setBalancesKnown(true);
-        setFreshBinanceRefreshKey(binanceRefreshKey);
       } else {
         const loadedData = await loadBalances({ force: true });
         syncedBalances = Array.isArray(loadedData.balances)
@@ -234,15 +224,12 @@ export function BinanceDashboard({
   }
 
   const totalEur = useMemo(
-    () => typeof valuationBinanceCents === "number"
-      ? valuationBinanceCents / 100
-      : getBinanceBalancesTotalCents(liveBalances) / 100,
-    [liveBalances, valuationBinanceCents]
+    () => typeof valuationBinanceCents === "number" ? valuationBinanceCents / 100 : 0,
+    [valuationBinanceCents]
   );
-  const topbarValue = typeof valuationBinanceCents === "number" ||
-    (balancesKnown && cryptoPricesReady && freshBinanceRefreshKey === binanceRefreshKey)
+  const topbarValue = typeof valuationBinanceCents === "number"
     ? formatBinanceEuro(totalEur)
-    : "--";
+    : "";
 
   const yAxisWidth = isMobile ? 0 : 50;
   const baseMargin = isMobile ? 0 : 24;
@@ -252,7 +239,8 @@ export function BinanceDashboard({
 
   const allDailyData = useMemo(() => buildBinanceDailyChartData(totalEur), [totalEur]);
   const chartData = useMemo(() => filterBinanceChartData(allDailyData, timeRange), [allDailyData, timeRange]);
-  const hasRenderableChartData = totalEur > 0;
+  const hasRenderableChartData = typeof valuationBinanceCents === "number" && totalEur > 0;
+  const isCurrentValuationPending = balancesKnown && balances.length > 0 && typeof valuationBinanceCents !== "number";
   const xAxisTicks = useMemo(() => getBinanceXAxisTicks(chartData), [chartData]);
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
   const isPanelClosing =
@@ -301,7 +289,11 @@ export function BinanceDashboard({
           className={cn("chart-content-reveal absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", isPanelOpen && "pointer-events-none")}
           data-visible={shouldRevealChartContent ? "true" : "false"}
         >
-          {!hasRenderableChartData ? (
+          {isCurrentValuationPending ? (
+            <div className="flex h-full w-full items-center justify-center">
+              <CurrentValueSkeleton className="h-10 w-40 rounded-[18px]" />
+            </div>
+          ) : !hasRenderableChartData ? (
             <div className="flex h-full w-full items-center justify-center">
               <EmptyChartAction
                 actionLabel={isSyncing ? "Loading" : "Sync"}

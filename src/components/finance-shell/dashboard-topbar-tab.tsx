@@ -9,6 +9,7 @@ import {
   getDashboardTopbarValueParts,
   getDashboardTopbarValueTextClass
 } from "./dashboard-topbar-tab-model";
+import { CurrentValueSkeleton } from "./current-value-skeleton";
 import { SlotValue } from "./slot-value";
 
 type DashboardTopbarTabProps = {
@@ -96,19 +97,25 @@ export function DashboardTopbarTab({
           ) : null}
         </span>
         <span className={cn("dashboard-topbar-money flex h-5 shrink-0 items-center justify-end gap-1.5", hasTextIdentity ? "w-[94px]" : "w-[104px] sm:w-[108px]")}>
-          <span aria-hidden={valuePending ? "true" : undefined} className={valueClassName} title={valuePending ? undefined : value}>
-            <SlotValue
-              animateChanges={animateChanges}
-              identityKey={valueIdentity}
-              suppressInitialChanges={suppressInitialChanges}
-              value={amount}
-            />
-          </span>
-          <span aria-hidden={valuePending ? "true" : undefined} className={currencyClassName} title={valuePending ? undefined : currency}>
-            {showEuroIcon ? (
-              <Euro aria-hidden="true" className="dashboard-topbar-currency-icon block h-4 w-4 -translate-y-px text-white" stroke="white" strokeWidth={2.4} />
-            ) : currency}
-          </span>
+          {valuePending ? (
+            <CurrentValueSkeleton className={cn("h-5", hasTextIdentity ? "w-[86px]" : "w-[100px]")} />
+          ) : (
+            <>
+              <span className={valueClassName} title={value}>
+                <SlotValue
+                  animateChanges={animateChanges}
+                  identityKey={valueIdentity}
+                  suppressInitialChanges={suppressInitialChanges}
+                  value={amount}
+                />
+              </span>
+              <span className={currencyClassName} title={currency}>
+                {showEuroIcon ? (
+                  <Euro aria-hidden="true" className="dashboard-topbar-currency-icon block h-4 w-4 -translate-y-px text-white" stroke="white" strokeWidth={2.4} />
+                ) : currency}
+              </span>
+            </>
+          )}
         </span>
       </span>
     </button>

@@ -352,6 +352,28 @@ describe("dashboard chart data model", () => {
     });
   });
 
+  it("does not add a local live today point when valuation-only current points are requested", () => {
+    const points = buildDashboardChartData({
+      activeTab: "heritage",
+      applyLiveToday: false,
+      binanceTotalCents: 2000,
+      checkingProviders: collectCheckingProviders(dashboardData),
+      cryptoInstitutions: collectCryptoInstitutions(dashboardData),
+      cryptoTokens: collectCryptoTokens(dashboardData),
+      data: dashboardData,
+      hasBinancePortfolio: true,
+      investmentProducts: collectInvestmentProducts(dashboardData),
+      livePrices: {
+        BTC: 70_000,
+        IE00B4L5Y983: 120
+      },
+      todayKey: "2026-01-05",
+      timeRange: "ALL"
+    });
+
+    expect(points.some((point) => point.rawMonth === "2026-01-05")).toBe(false);
+  });
+
   it("keeps the current chart point pending until live prices are ready", () => {
     const points = buildDashboardChartData({
       activeTab: "heritage",

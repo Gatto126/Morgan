@@ -412,12 +412,9 @@ function getBinanceBalanceValue(
 ): ValuationValue {
   const quantity = getBinanceBalanceQuantity(balance);
   const priceKey = getBinanceBalanceLivePriceKey(balance);
-  const syncedValueCents = Number.isFinite(balance.eurValue)
-    ? Math.round(balance.eurValue * 100)
-    : 0;
 
   if (!priceKey) {
-    return createReadyValue(syncedValueCents, "binance-sync");
+    return createValuationValue(null, "missing-live-quote", "live-quote");
   }
 
   const { quote, value } = getQuoteValue(priceKey, livePrices, liveQuotes);
@@ -426,7 +423,11 @@ function getBinanceBalanceValue(
     return createReadyValue(Math.round(quantity * value * 100), "live-quote", quote?.fetchedAt ?? null);
   }
 
-  return createReadyValue(syncedValueCents, "binance-sync", quote?.fetchedAt ?? null);
+  if (quote || Object.hasOwn(livePrices, priceKey)) {
+    return createValuationValue(null, "unavailable", "live-quote", quote?.fetchedAt ?? null);
+  }
+
+  return createValuationValue(null, "missing-live-quote", "live-quote");
 }
 
 function mergeAssetValue(
@@ -725,6 +726,10 @@ function buildBinanceValuation(
       : balance.tokenSymbol;
     const value = getBinanceBalanceValue(balance, livePrices, liveQuotes);
 
+    if (!isValuationValueReady(value)) {
+      continue;
+    }
+
     balanceValues.push(value);
     mergeAssetValue(assets, {
       category: "binance",
@@ -742,15 +747,18 @@ function buildBinanceValuation(
   }
 
   const binanceValue = balanceValues.length > 0
-    ? sumValuationValues(balanceValues, "binance-sync")
-    : createReadyValue(0, "binance-sync");
-  const provider = getProviderValuation(providers, BINANCE_PROVIDER_ID);
-  provider.hasBinance = true;
-  provider.hasCrypto = true;
-  provider.totals.binance = binanceValue;
-  provider.totals.crypto = binanceValue;
-  provider.totals.total = binanceValue;
-  provider.transactionCount = 0;
+    ? sumValuationValues(balanceValues, "live-quote")
+    : createReadyValue(0, "live-quote");
+
+  if (balanceValues.length > 0) {
+    const provider = getProviderValuation(providers, BINANCE_PROVIDER_ID);
+    provider.hasBinance = true;
+    provider.hasCrypto = true;
+    provider.totals.binance = binanceValue;
+    provider.totals.crypto = binanceValue;
+    provider.totals.total = binanceValue;
+    provider.transactionCount = 0;
+  }
 
   return binanceValue;
 }
@@ -1362,7 +1370,11 @@ export function selectCurrentValuationTopbar(
     ].filter((item) => shouldExposeValuationValue(item.value));
   }
 
-  if (stage === "binance" && shouldExposeValuationValue(snapshot.totals.binance)) {
+  if (
+    stage === "binance"
+    && snapshot.providers[BINANCE_PROVIDER_ID]?.hasBinance
+    && shouldExposeValuationValue(snapshot.totals.binance)
+  ) {
     return [{
       id: "binance",
       label: BINANCE_PROVIDER_ID,
@@ -1448,8 +1460,9 @@ export function selectCurrentValuationChartPoint(
     return null;
   }
 
+  const hasPricedBinanceProvider = !!snapshot.providers[BINANCE_PROVIDER_ID]?.hasBinance;
   const point: DashboardChartPoint = {
-    binance: snapshot.totals.binance.cents,
+    binance: hasPricedBinanceProvider ? snapshot.totals.binance.cents : null,
     checking: snapshot.totals.checking.cents,
     crypto: snapshot.totals.crypto.cents,
     heritage: snapshot.totals.heritage.cents,

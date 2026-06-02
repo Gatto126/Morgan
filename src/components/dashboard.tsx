@@ -201,6 +201,7 @@ export function Dashboard({
     visibleTabs,
     xAxisTicks
   } = useDashboardChartModel({
+    applyLiveToday: false,
     binanceBalances: liveBinanceBalances,
     binanceTotalCents,
     checkingCount,

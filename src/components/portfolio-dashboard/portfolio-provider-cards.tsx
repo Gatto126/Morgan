@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo } from "react";
 import type { Dispatch, RefObject, SetStateAction, UIEvent } from "react";
 
+import { CurrentValueSkeleton } from "@/components/finance-shell/current-value-skeleton";
 import { SlotValue } from "@/components/finance-shell/slot-value";
 import type { CurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
@@ -39,6 +40,18 @@ type PortfolioProviderCardsProps = {
 const INITIAL_TRANSACTION_ROWS = 20;
 const NEXT_TRANSACTION_ROWS = 10;
 const LOAD_MORE_SCROLL_THRESHOLD_PX = 160;
+
+function CurrentValueDisplay({
+  animateChanges = false,
+  value
+}: {
+  animateChanges?: boolean;
+  value: string;
+}) {
+  return value === "--" || value.trim() === ""
+    ? <CurrentValueSkeleton className="h-4 w-20" />
+    : <SlotValue animateChanges={animateChanges} value={value} />;
+}
 
 function getFallbackUnitPriceCents(investedValue: number, quantity: number) {
   return Math.abs(quantity) > 0.000001 ? Math.round(investedValue / quantity) : investedValue;
@@ -133,7 +146,7 @@ export function PortfolioProviderCards({
                   {formatProviderLabel(provider.sourceInstitution)}
                 </span>
                 <span className="text-sm font-bold text-[color:var(--text-main)]">
-                  <SlotValue
+                  <CurrentValueDisplay
                     animateChanges={providerHasLivePrice}
                     value={formatPointValue(getPortfolioPointValue(currentPoint, provider.sourceInstitution), valuesKnown)}
                   />
@@ -171,7 +184,7 @@ export function PortfolioProviderCards({
                               );
 
                           return (
-                            <SlotValue
+                            <CurrentValueDisplay
                               animateChanges={price != null}
                               value={productReady ? formatEuroCents(priceCents) : "--"}
                             />
@@ -213,7 +226,7 @@ export function PortfolioProviderCards({
                           if (valuationProductValue === null) {
                             return (
                               <span className="font-semibold text-[color:var(--text-dim)]">
-                                <SlotValue value="--" />
+                                <CurrentValueDisplay value="--" />
                               </span>
                             );
                           }
@@ -227,7 +240,7 @@ export function PortfolioProviderCards({
                           if (price == null && !valuesKnown && priceKey) {
                             return (
                               <span className="font-semibold text-[color:var(--text-dim)]">
-                                <SlotValue value="--" />
+                                <CurrentValueDisplay value="--" />
                               </span>
                             );
                           }

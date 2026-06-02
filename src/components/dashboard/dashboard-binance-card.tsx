@@ -1,9 +1,13 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
+import { CurrentValueSkeleton } from "@/components/finance-shell/current-value-skeleton";
 import { SlotValue } from "@/components/finance-shell/slot-value";
 
-import { BINANCE_VISIBLE_VALUE_THRESHOLD_EUR } from "./binance-live-values";
+import {
+  BINANCE_VISIBLE_VALUE_THRESHOLD_EUR,
+  getBinanceBalanceLivePriceKey
+} from "./binance-live-values";
 import {
   DashboardAssetHeader,
   DashboardMetricRow
@@ -25,6 +29,16 @@ type DashboardBinanceCardProps = {
   listRef: RefObject<HTMLDivElement | null>;
 };
 
+function getCurrentBalanceValueCents(
+  balance: BinanceBalanceRow,
+  currentAssetValueCentsByKey?: BinanceCardAssetValueMap
+) {
+  const key = getBinanceBalanceLivePriceKey(balance) ?? balance.tokenSymbol;
+  const currentValueCents = currentAssetValueCentsByKey?.[key];
+
+  return typeof currentValueCents === "number" ? currentValueCents : null;
+}
+
 export function DashboardBinanceCard({
   balances,
   currentAssetValueCentsByKey,
@@ -38,10 +52,15 @@ export function DashboardBinanceCard({
     return null;
   }
 
+  const pricedBalances = balances.filter((balance) =>
+    getCurrentBalanceValueCents(balance, currentAssetValueCentsByKey) !== null
+  );
   const visibleBalances = filterSmallBalances
-    ? balances.filter((balance) => balance.eurValue > BINANCE_VISIBLE_VALUE_THRESHOLD_EUR)
-    : balances;
-  const totalLabel = getBinanceCardTotalLabel(balances, currentValueCents);
+    ? pricedBalances.filter((balance) =>
+        (getCurrentBalanceValueCents(balance, currentAssetValueCentsByKey) ?? 0) > BINANCE_VISIBLE_VALUE_THRESHOLD_EUR * 100
+      )
+    : pricedBalances;
+  const totalLabel = getBinanceCardTotalLabel(currentValueCents);
 
   return (
     <div className="flex flex-col gap-4 rounded-[20px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-canvas)] p-4">
@@ -78,7 +97,11 @@ export function DashboardBinanceCard({
               : <Eye className="h-3.5 w-3.5" strokeWidth={2.2} />}
           </div>
           <span className="text-sm font-bold text-[color:var(--text-main)]">
-            <SlotValue animateChanges value={totalLabel} />
+            {totalLabel ? (
+              <SlotValue animateChanges value={totalLabel} />
+            ) : (
+              <CurrentValueSkeleton className="h-4 w-20" />
+            )}
           </span>
         </div>
       </div>
@@ -87,6 +110,10 @@ export function DashboardBinanceCard({
           const total = token.freeAmount + token.lockedAmount;
           const isPartialLock = token.lockedAmount > 0 && token.freeAmount > 0;
           const valueLabel = getBinanceCardBalanceValueLabel(token, currentAssetValueCentsByKey);
+
+          if (!valueLabel) {
+            return null;
+          }
 
           return (
             <div key={token.tokenSymbol}>

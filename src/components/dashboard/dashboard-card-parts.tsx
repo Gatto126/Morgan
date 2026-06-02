@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { CurrentValueSkeleton } from "@/components/finance-shell/current-value-skeleton";
 import { SlotValue } from "@/components/finance-shell/slot-value";
 
 type DashboardCardShellProps = {
@@ -30,7 +31,15 @@ function shouldUseSlotValue(value: ReactNode) {
     && !/[A-Za-z]/.test(String(value));
 }
 
+function isPendingCurrentValue(value: ReactNode) {
+  return typeof value === "string" && (value.trim() === "" || value.trim() === "--" || value.trim() === "-");
+}
+
 function renderCardValue(value: ReactNode, animateChanges = false) {
+  if (isPendingCurrentValue(value)) {
+    return <CurrentValueSkeleton className="h-4 w-20" />;
+  }
+
   return shouldUseSlotValue(value)
     ? <SlotValue animateChanges={animateChanges} value={String(value)} />
     : value;
