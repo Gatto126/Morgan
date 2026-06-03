@@ -18,6 +18,7 @@ type BuildDashboardChartConfigParams = {
   checkingProviders: string[];
   cryptoCount: number;
   cryptoInstitutions: string[];
+  hasBinancePortfolio?: boolean;
   investmentCount: number;
   investmentProducts: string[];
   providerSummaries: ProviderSummary[];
@@ -47,6 +48,7 @@ export function buildDashboardChartConfig({
   checkingProviders,
   cryptoCount,
   cryptoInstitutions,
+  hasBinancePortfolio = false,
   investmentCount,
   investmentProducts,
   providerSummaries,
@@ -108,7 +110,7 @@ export function buildDashboardChartConfig({
     stroke: GRAYSCALE_PALETTE[index % GRAYSCALE_PALETTE.length]
   }));
 
-  if (binanceBalanceCount > 0) {
+  if (hasBinancePortfolio || binanceBalanceCount > 0) {
     institutionLines.push({
       key: "binance",
       label: "BINANCE",

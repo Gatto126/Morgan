@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DashboardData } from "./types";
 
 type UseDashboardVisualStateParams = {
+  dataDependenciesReady?: boolean;
   data: DashboardData | null;
   error: string | null;
   hasRenderableChartData: boolean;
@@ -16,6 +17,7 @@ type UseDashboardVisualStateParams = {
 };
 
 export function useDashboardVisualState({
+  dataDependenciesReady = true,
   data,
   error,
   hasRenderableChartData,
@@ -38,9 +40,9 @@ export function useDashboardVisualState({
   }, [onImportRefreshComplete]);
 
   const initialDashboardVisualReady =
-    !!data && !loading && (shouldShowUploadPanel || transactionCount === 0 || chartReady);
+    dataDependenciesReady && !!data && !loading && (shouldShowUploadPanel || transactionCount === 0 || chartReady);
   const importDashboardVisualReady =
-    !!data && !loading && (shouldShowUploadPanel || transactionCount === 0 || (chartReady && hasRenderableChartData));
+    dataDependenciesReady && !!data && !loading && (shouldShowUploadPanel || transactionCount === 0 || (chartReady && hasRenderableChartData));
   const importRefreshSettled = !loading && (error !== null || importDashboardVisualReady);
 
   useEffect(() => {

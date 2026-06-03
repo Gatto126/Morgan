@@ -270,6 +270,58 @@ describe("dashboard chart data model", () => {
     });
   });
 
+  it("adds Binance daily snapshots to historical crypto and heritage lines", () => {
+    const heritagePoints = buildDashboardChartData({
+      activeTab: "heritage",
+      binanceHistoricalPoints: [
+        { dateKey: "2026-01-02", valueCents: 2_000 },
+        { dateKey: "2026-01-03", valueCents: 3_000 }
+      ],
+      binanceTotalCents: 0,
+      checkingProviders: collectCheckingProviders(dashboardData),
+      cryptoInstitutions: collectCryptoInstitutions(dashboardData),
+      cryptoTokens: collectCryptoTokens(dashboardData),
+      data: dashboardData,
+      hasBinancePortfolio: true,
+      investmentProducts: collectInvestmentProducts(dashboardData),
+      timeRange: "ALL"
+    });
+    const cryptoPoints = buildDashboardChartData({
+      activeTab: "crypto",
+      binanceHistoricalPoints: [
+        { dateKey: "2026-01-02", valueCents: 2_000 },
+        { dateKey: "2026-01-03", valueCents: 3_000 }
+      ],
+      binanceTotalCents: 0,
+      checkingProviders: collectCheckingProviders(dashboardData),
+      cryptoInstitutions: collectCryptoInstitutions(dashboardData),
+      cryptoTokens: collectCryptoTokens(dashboardData),
+      data: dashboardData,
+      hasBinancePortfolio: true,
+      investmentProducts: collectInvestmentProducts(dashboardData),
+      timeRange: "ALL"
+    });
+
+    expect(heritagePoints.find((point) => point.rawMonth === "2026-01-02")).toMatchObject({
+      binance: 2_000,
+      crypto: 2_000,
+      heritage: 12_000,
+      value: 12_000
+    });
+    expect(heritagePoints.find((point) => point.rawMonth === "2026-01-03")).toMatchObject({
+      binance: 3_000,
+      crypto: 8_000,
+      heritage: 43_000,
+      value: 43_000
+    });
+    expect(cryptoPoints.find((point) => point.rawMonth === "2026-01-03")).toMatchObject({
+      binance: 3_000,
+      crypto: 8_000,
+      heritage: 43_000,
+      value: 8_000
+    });
+  });
+
   it("patches the current chart point with live market prices", () => {
     const points = buildDashboardChartData({
       activeTab: "heritage",
@@ -567,11 +619,12 @@ describe("dashboard chart display model", () => {
 
     const cryptoConfig = buildDashboardChartConfig({
       activeTab: "crypto",
-      binanceBalanceCount: 2,
+      binanceBalanceCount: 0,
       checkingCount: 1,
       checkingProviders: ["bbva"],
       cryptoCount: 1,
       cryptoInstitutions: ["trade_republic"],
+      hasBinancePortfolio: true,
       investmentCount: 1,
       investmentProducts: ["Core ETF"],
       providerSummaries,

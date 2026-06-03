@@ -9,6 +9,7 @@ const NON_ZERO_THRESHOLD = 0.000001;
 type BuildDashboardChartDataParams = {
   applyLiveToday?: boolean;
   activeTab: AccountTab;
+  binanceHistoricalPoints?: DashboardBinanceHistoricalPoint[];
   binanceTotalCents: number;
   checkingProviders: string[];
   currentValuationPoint?: DashboardChartPoint | null;
@@ -27,6 +28,11 @@ type BuildDashboardChartDataParams = {
 };
 
 type DashboardChartBucket = MonthlyBucket & { date?: string };
+
+export type DashboardBinanceHistoricalPoint = {
+  dateKey: string;
+  valueCents: number;
+};
 
 export function collectCheckingProviders(data: DashboardData | null) {
   return collectMonthlyKeys(data, "providerChecking");
@@ -77,6 +83,7 @@ function collectAllCryptoInstitutions(data: DashboardData | null) {
 export function buildDashboardChartData({
   applyLiveToday = true,
   activeTab,
+  binanceHistoricalPoints = [],
   binanceTotalCents,
   checkingProviders,
   currentValuationPoint,
@@ -96,6 +103,9 @@ export function buildDashboardChartData({
 
   const investmentInstitutions = collectInvestmentInstitutions(data);
   const allCryptoInstitutions = collectAllCryptoInstitutions(data);
+  const binanceHistoryByDate = new Map(
+    binanceHistoricalPoints.map((point) => [point.dateKey, point.valueCents])
+  );
   const firstAcquisitionDates = getFirstAcquisitionDates({
     activeTab,
     investmentInstitutions,
@@ -111,25 +121,37 @@ export function buildDashboardChartData({
     const rawMonth = bucket.date || bucket.month;
     const bucketDate = bucket.date || bucket.month || "";
     const resolveValue = createValueResolver(firstAcquisitionDates, bucketDate);
+    const historicalBinanceValue = binanceHistoryByDate.has(bucketDate)
+      ? binanceHistoryByDate.get(bucketDate) ?? null
+      : null;
 
     const checkingVal = resolveValue("checking", bucket.checking);
     const investmentVal = resolveValue("investment", bucket.investment);
     const cryptoVal = resolveValue("crypto", bucket.crypto);
-    const cryptoChartVal = cryptoVal;
+    const cryptoChartVal = historicalBinanceValue !== null
+      ? (cryptoVal ?? 0) + historicalBinanceValue
+      : cryptoVal;
     const rawValue = resolveValue("value", bucket[activeTab]);
+    const heritage = getHeritageValue({
+      checkingVal,
+      cryptoChartVal,
+      investmentVal
+    });
 
     const entry: DashboardChartPoint = {
       month: rawMonth,
       rawMonth,
-      value: rawValue,
+      value: getHistoricalTabValue(activeTab, {
+        checkingVal,
+        cryptoChartVal,
+        heritage,
+        investmentVal,
+        rawValue
+      }),
       checking: checkingVal,
       investment: investmentVal,
       crypto: cryptoChartVal,
-      heritage: getHeritageValue({
-        checkingVal,
-        cryptoChartVal,
-        investmentVal
-      })
+      heritage
     };
 
     checkingProviders.forEach((provider) => {
@@ -160,7 +182,7 @@ export function buildDashboardChartData({
       );
     });
 
-    entry.binance = null;
+    entry.binance = historicalBinanceValue;
 
     return entry;
   });
@@ -370,6 +392,38 @@ function getHeritageValue({
   }
 
   return (checkingVal || 0) + (investmentVal || 0) + (cryptoChartVal || 0);
+}
+
+function getHistoricalTabValue(
+  activeTab: AccountTab,
+  {
+    checkingVal,
+    cryptoChartVal,
+    heritage,
+    investmentVal,
+    rawValue
+  }: {
+    checkingVal: number | null;
+    cryptoChartVal: number | null;
+    heritage: number | null;
+    investmentVal: number | null;
+    rawValue: number | null;
+  }
+) {
+  if (activeTab === "heritage") {
+    return heritage;
+  }
+  if (activeTab === "crypto") {
+    return cryptoChartVal;
+  }
+  if (activeTab === "checking") {
+    return checkingVal ?? rawValue;
+  }
+  if (activeTab === "investment") {
+    return investmentVal ?? rawValue;
+  }
+
+  return rawValue;
 }
 
 function isMeaningfulValue(value: number | undefined): value is number {

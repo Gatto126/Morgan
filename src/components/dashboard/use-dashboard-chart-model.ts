@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { getEuropeRomeDateKey } from "@/shared/date-keys";
 import {
   buildDashboardChartData,
   collectCheckingProviders,
   collectCryptoInstitutions,
   collectCryptoTokens,
-  collectInvestmentProducts
+  collectInvestmentProducts,
+  type DashboardBinanceHistoricalPoint
 } from "./dashboard-chart-data-model";
 import {
   addReferenceLineValue,
@@ -23,6 +25,7 @@ import type { AccountTab, BinanceBalanceRow, DashboardData, TimeRange } from "./
 type UseDashboardChartModelParams = {
   applyLiveToday?: boolean;
   binanceBalances: BinanceBalanceRow[];
+  binanceHistoricalPoints?: DashboardBinanceHistoricalPoint[];
   binanceTotalCents: number;
   checkingCount: number;
   currentValuationPoint?: DashboardChartPoint | null;
@@ -41,6 +44,7 @@ type UseDashboardChartModelParams = {
 export function useDashboardChartModel({
   applyLiveToday = true,
   binanceBalances,
+  binanceHistoricalPoints = [],
   binanceTotalCents,
   checkingCount,
   currentValuationPoint,
@@ -101,6 +105,7 @@ export function useDashboardChartModel({
   const chartData = useMemo(() => buildDashboardChartData({
     applyLiveToday,
     activeTab,
+    binanceHistoricalPoints,
     binanceTotalCents,
     checkingProviders,
     currentValuationPoint,
@@ -116,6 +121,7 @@ export function useDashboardChartModel({
   }), [
     applyLiveToday,
     activeTab,
+    binanceHistoricalPoints,
     binanceTotalCents,
     checkingProviders,
     currentValuationPoint,
@@ -154,6 +160,7 @@ export function useDashboardChartModel({
     checkingProviders,
     cryptoCount,
     cryptoInstitutions,
+    hasBinancePortfolio,
     investmentCount,
     investmentProducts,
     providerSummaries: data?.providerSummaries ?? [],
@@ -165,6 +172,7 @@ export function useDashboardChartModel({
     checkingProviders,
     cryptoCount,
     cryptoInstitutions,
+    hasBinancePortfolio,
     investmentCount,
     investmentProducts,
     showSoldAssets,
@@ -202,10 +210,5 @@ export function useDashboardChartModel({
 }
 
 function getTodayKey() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return getEuropeRomeDateKey();
 }

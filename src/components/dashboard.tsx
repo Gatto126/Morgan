@@ -20,6 +20,7 @@ import {
   getBinanceBalancesTotalCents
 } from "./dashboard/binance-live-values";
 import { useBinanceBalances } from "./dashboard/use-binance-balances";
+import { useBinanceHistory } from "./dashboard/use-binance-history";
 import { useDashboardChartModel } from "./dashboard/use-dashboard-chart-model";
 import { useDashboardData } from "./dashboard/use-dashboard-data";
 import { useDashboardLivePrices } from "./dashboard/use-dashboard-live-prices";
@@ -141,7 +142,14 @@ export function Dashboard({
     () => getBinanceBalancesTotalCents(liveBinanceBalances),
     [liveBinanceBalances]
   );
-  const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0;
+  const {
+    binanceHistoricalPoints,
+    binanceHistoryReady
+  } = useBinanceHistory({
+    enabled: shouldLoad && hasBinanceCredentials,
+    userId
+  });
+  const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0 || binanceHistoricalPoints.length > 0;
   const storedValuationSnapshot = useCurrentValuationSnapshot(userId);
   const currentValuationSnapshot = useMemo(
     () => isDashboardValuationSnapshotCurrent(storedValuationSnapshot, {
@@ -169,6 +177,8 @@ export function Dashboard({
   const dashboardValuesKnown = !!data && dataFresh;
   const dashboardCryptoValuesKnown = cryptoPricesReady && (!hasBinanceCredentials || binanceBalancesKnown);
   const hasCurrentValuationPoint = !!currentValuationChartPoint;
+  const binanceInitialDataReady =
+    binanceHistoryReady && (!hasBinanceCredentials || hasCurrentValuationPoint || binanceBalancesKnown);
   const topbarCryptoValuesKnown = hasCurrentValuationPoint || dashboardCryptoValuesKnown;
   const topbarInvestmentValuesKnown = hasCurrentValuationPoint || investmentPricesReady;
   const requiresInitialUpload = transactionCount === 0 && !hasBinancePortfolio;
@@ -202,6 +212,7 @@ export function Dashboard({
   } = useDashboardChartModel({
     applyLiveToday: false,
     binanceBalances: liveBinanceBalances,
+    binanceHistoricalPoints,
     binanceTotalCents,
     checkingCount,
     currentValuationPoint: currentValuationChartPoint,
@@ -220,6 +231,7 @@ export function Dashboard({
     setChartReady,
     showLoadingOverlay
   } = useDashboardVisualState({
+    dataDependenciesReady: binanceInitialDataReady,
     data,
     error,
     hasRenderableChartData,

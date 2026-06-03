@@ -7,14 +7,14 @@ import { DashboardPanelHost } from "@/components/dashboard-panel-host";
 import { DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "@/components/dashboard/dashboard-status";
 import { applyLiveBinanceBalanceValues } from "@/components/dashboard/binance-live-values";
 import { useBinanceBalances } from "@/components/dashboard/use-binance-balances";
+import { useBinanceHistory } from "@/components/dashboard/use-binance-history";
 import {
   useCurrentValuationSnapshot
 } from "@/components/finance-shell/current-valuations-store";
 import {
   buildPortfolioChartData,
   getPortfolioXAxisTicks,
-  mergePortfolioDataWithProviderHistory,
-  type PortfolioProviderHistoricalPoint
+  mergePortfolioDataWithProviderHistory
 } from "./chart-data";
 import { getEuropeRomeDateKey } from "@/shared/date-keys";
 import { formatProviderLabel } from "./formatters";
@@ -75,7 +75,6 @@ export function PortfolioDashboard({
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const [showSoldAssets, setShowSoldAssets] = useState(false);
   const [chartReady, setChartReady] = useState(false);
-  const [binanceHistoricalPoints, setBinanceHistoricalPoints] = useState<PortfolioProviderHistoricalPoint[]>([]);
   const hasInitialData = !!data && !loading;
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(!hasInitialData);
   const [contentVisible, setContentVisible] = useState(hasInitialData);
@@ -85,7 +84,15 @@ export function PortfolioDashboard({
   const isMobile = useIsMobile();
   const isCryptoDashboard = config.priceQueryParam === "cryptos";
   const {
+    binanceHistoricalPoints,
+    binanceHistoryReady
+  } = useBinanceHistory({
+    enabled: isCryptoDashboard && shouldLoad && hasBinanceCredentials,
+    userId
+  });
+  const {
     binanceBalances,
+    binanceBalancesKnown,
     isBinanceSyncing,
     filterSmallBinance,
     setFilterSmallBinance,
@@ -206,10 +213,12 @@ export function PortfolioDashboard({
     : [{ key: "ALL", label: config.rootLabel, total: 0 }];
 
   const effectiveChartReady = !isPanelOpen && chartReady;
+  const binanceInitialDataReady =
+    !isCryptoDashboard || !hasBinanceCredentials || (binanceHistoryReady && (binanceBalancesKnown || !!currentValuationPoint));
   const initialVisualReady =
-    !!dataForDisplay && !loading && (isPanelOpen || (effectiveChartReady && hasRenderableChartData));
+    binanceInitialDataReady && !!dataForDisplay && !loading && (isPanelOpen || (effectiveChartReady && hasRenderableChartData));
   const importRefreshSettled =
-    !loading && (error !== null || (!!dataForDisplay && effectiveChartReady && hasRenderableChartData));
+    !loading && (error !== null || (binanceInitialDataReady && !!dataForDisplay && effectiveChartReady && hasRenderableChartData));
   const shouldRenderVisuals = isActive;
 
   useEffect(() => {
@@ -239,39 +248,6 @@ export function PortfolioDashboard({
       });
     });
   }, [importRefreshSettled, importRefreshVersion]);
-
-  useEffect(() => {
-    if (!isCryptoDashboard || !shouldLoad || !hasBinanceCredentials) {
-      const clearTimer = window.setTimeout(() => setBinanceHistoricalPoints([]), 0);
-      return () => window.clearTimeout(clearTimer);
-    }
-
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      void fetch(`/api/binance/history?userId=${encodeURIComponent(userId)}`, {
-        signal: controller.signal
-      })
-        .then(async (response) => {
-          if (!response.ok) return null;
-          return (await response.json()) as {
-            snapshots?: Array<{ dateKey: string; totalEurValue: number }>;
-          };
-        })
-        .then((payload) => {
-          if (!payload || !Array.isArray(payload.snapshots)) return;
-          setBinanceHistoricalPoints(payload.snapshots.map((snapshot) => ({
-            dateKey: snapshot.dateKey,
-            valueCents: Math.round(snapshot.totalEurValue * 100)
-          })));
-        })
-        .catch(() => {});
-    }, 0);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [hasBinanceCredentials, isCryptoDashboard, shouldLoad, userId]);
 
   if (error) return (
     <div
