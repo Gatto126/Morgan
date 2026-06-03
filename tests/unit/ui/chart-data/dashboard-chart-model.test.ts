@@ -358,12 +358,12 @@ describe("dashboard chart data model", () => {
       "Core ETF": 48000,
       Bitcoin: 700000,
       binance: 2000,
-      crypto: 702000,
+      crypto: 700000,
       crypto_inst_trade_republic: 700000,
-      heritage: 760000,
+      heritage: 758000,
       investment: 48000,
       investment_inst_trade_republic: 48000,
-      value: 760000
+      value: 758000
     });
   });
 
@@ -402,10 +402,45 @@ describe("dashboard chart data model", () => {
     expect(todayPoint).toMatchObject({
       Bitcoin: 710_000,
       binance: 20_000,
-      crypto: 730_000,
-      heritage: 790_000,
+      crypto: 710_000,
+      heritage: 770_000,
       investment: 50_000,
-      value: 730_000
+      value: 710_000
+    });
+  });
+
+  it("does not fold a standalone current Binance point into the main crypto aggregate history", () => {
+    const points = buildDashboardChartData({
+      activeTab: "crypto",
+      binanceTotalCents: 2000,
+      checkingProviders: collectCheckingProviders(dashboardData),
+      currentValuationPoint: {
+        Bitcoin: 71_000,
+        binance: 20_000,
+        checking: 10_000,
+        crypto: 91_000,
+        crypto_inst_trade_republic: 71_000,
+        heritage: 151_000,
+        investment: 50_000,
+        rawMonth: "2026-01-03",
+        value: 151_000
+      },
+      cryptoInstitutions: collectCryptoInstitutions(dashboardData),
+      cryptoTokens: collectCryptoTokens(dashboardData),
+      data: dashboardData,
+      hasBinancePortfolio: true,
+      investmentProducts: collectInvestmentProducts(dashboardData),
+      todayKey: "2026-01-03",
+      timeRange: "ALL"
+    });
+    const todayPoint = points.find((point) => point.rawMonth === "2026-01-03");
+
+    expect(todayPoint).toMatchObject({
+      binance: 20_000,
+      crypto: 71_000,
+      crypto_inst_trade_republic: 71_000,
+      heritage: 131_000,
+      value: 71_000
     });
   });
 
@@ -529,7 +564,7 @@ describe("dashboard chart data model", () => {
     expect(points[0]).toMatchObject({
       rawMonth: "2026-01-02",
       binance: 2_000,
-      value: 2_000
+      value: 0
     });
     expect(points.map((point) => point.rawMonth)).not.toContain("2026-01-01");
   });

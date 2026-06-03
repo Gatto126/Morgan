@@ -259,6 +259,36 @@ describe("portfolio chart data", () => {
     });
   });
 
+  it("does not fold a standalone current Binance point into the crypto aggregate history", () => {
+    const dataWithBinance = mergePortfolioDataWithBinance(portfolioData, [{
+      eurValue: 250.25,
+      freeAmount: 0.003,
+      lockedAmount: 0.001,
+      tokenName: "Bitcoin",
+      tokenSymbol: "BTC"
+    }]);
+    const points = buildPortfolioChartData({
+      activeProvider: null,
+      activeTab: "ALL",
+      currentValuationPoint: {
+        BINANCE: 28_000,
+        heritage: 70_000,
+        rawMonth: "2026-03-15",
+        trade_republic: 42_000
+      },
+      data: dataWithBinance,
+      timeRange: "ALL",
+      todayKey: "2026-03-15"
+    });
+    const todayPoint = points.find((point) => point.rawMonth === "2026-03-15");
+
+    expect(todayPoint).toMatchObject({
+      BINANCE: 28_000,
+      heritage: 42_000,
+      trade_republic: 42_000
+    });
+  });
+
   it("keeps the current provider point pending until live prices are ready", () => {
     const points = buildPortfolioChartData({
       data: portfolioData,

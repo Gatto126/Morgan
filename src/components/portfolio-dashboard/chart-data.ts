@@ -201,18 +201,18 @@ export function buildPortfolioChartData({
   });
 
   if (!todayKey) {
-    return chartPoints;
+    return removeStandaloneBinanceFromPortfolioAggregate(chartPoints, activeTab);
   }
 
   if (currentValuationPoint) {
-    return applyCurrentValuationTodayPoint(chartPoints, {
+    return removeStandaloneBinanceFromPortfolioAggregate(applyCurrentValuationTodayPoint(chartPoints, {
       activeTab,
       currentValuationPoint,
       todayKey
-    });
+    }), activeTab);
   }
 
-  return applyLiveToday
+  const chartDataWithToday = applyLiveToday
     ? applyLiveTodayPoint(chartPoints, {
         activeProvider,
         activeTab,
@@ -226,6 +226,8 @@ export function buildPortfolioChartData({
         data,
         todayKey
       });
+
+  return removeStandaloneBinanceFromPortfolioAggregate(chartDataWithToday, activeTab);
 }
 
 function applyCurrentValuationTodayPoint(
@@ -263,6 +265,38 @@ function applyCurrentValuationTodayPoint(
   }
 
   return [...chartPoints, todayPoint];
+}
+
+function isFiniteChartValue(value: ChartPoint[string]): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function removeStandaloneBinanceFromPortfolioAggregate(chartPoints: ChartPoint[], activeTab: string) {
+  if (activeTab !== "ALL") {
+    return chartPoints;
+  }
+
+  const binancePointCount = chartPoints.reduce((count, point) =>
+    isFiniteChartValue(point[BINANCE_PROVIDER_KEY]) ? count + 1 : count
+  , 0);
+
+  if (binancePointCount !== 1) {
+    return chartPoints;
+  }
+
+  return chartPoints.map((point) => {
+    const binanceValue = point[BINANCE_PROVIDER_KEY];
+    const aggregateValue = point.heritage;
+
+    if (!isFiniteChartValue(binanceValue) || !isFiniteChartValue(aggregateValue)) {
+      return point;
+    }
+
+    return {
+      ...point,
+      heritage: aggregateValue - binanceValue
+    };
+  });
 }
 
 export function getPortfolioXAxisTicks(chartData: ChartPoint[]) {
