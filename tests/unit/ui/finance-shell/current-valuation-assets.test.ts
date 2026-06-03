@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { getCurrentValuationAssetValueCents } from "@/components/finance-shell/current-valuation-assets";
+import {
+  getCurrentValuationAssetValueCents,
+  getCurrentValuationProviderValueCents
+} from "@/components/finance-shell/current-valuation-assets";
 import type { CurrentValuationSnapshot, ValuationValue } from "@/components/finance-shell/current-valuations-store";
 
 function value(cents: number | null): ValuationValue {
@@ -40,8 +43,42 @@ const snapshot = {
       quantity: 0.000294,
       value: value(1_799)
     }
+  },
+  providers: {
+    BINANCE: {
+      hasBinance: true,
+      hasChecking: false,
+      hasCrypto: true,
+      hasInvestment: false,
+      id: "BINANCE",
+      label: "BINANCE",
+      totals: {
+        binance: value(231_123),
+        checking: value(0),
+        crypto: value(231_123),
+        investment: value(0),
+        total: value(231_123)
+      },
+      transactionCount: 0
+    },
+    trade_republic: {
+      hasBinance: false,
+      hasChecking: true,
+      hasCrypto: true,
+      hasInvestment: true,
+      id: "trade_republic",
+      label: "trade_republic",
+      totals: {
+        binance: value(0),
+        checking: value(448_513),
+        crypto: value(3_059),
+        investment: value(233_110),
+        total: value(684_682)
+      },
+      transactionCount: 449
+    }
   }
-} satisfies Pick<CurrentValuationSnapshot, "assets">;
+} satisfies Pick<CurrentValuationSnapshot, "assets" | "providers">;
 
 describe("current valuation asset lookup", () => {
   it("finds provider asset values by price key before chart label", () => {
@@ -68,6 +105,31 @@ describe("current valuation asset lookup", () => {
       chartKey: "Solana",
       priceKey: "SOL",
       providerId: "trade_republic"
+    })).toBeUndefined();
+  });
+
+  it("reads provider crypto totals from the committed valuation snapshot", () => {
+    expect(getCurrentValuationProviderValueCents(snapshot, {
+      category: "crypto",
+      providerId: "trade_republic"
+    })).toBe(3_059);
+  });
+
+  it("keeps Binance totals separate from Trade Republic crypto provider totals", () => {
+    expect(getCurrentValuationProviderValueCents(snapshot, {
+      category: "crypto",
+      providerId: "BINANCE"
+    })).toBeUndefined();
+    expect(getCurrentValuationProviderValueCents(snapshot, {
+      category: "binance",
+      providerId: "BINANCE"
+    })).toBe(231_123);
+  });
+
+  it("returns undefined for providers that are not in the committed snapshot", () => {
+    expect(getCurrentValuationProviderValueCents(snapshot, {
+      category: "crypto",
+      providerId: "missing_provider"
     })).toBeUndefined();
   });
 });

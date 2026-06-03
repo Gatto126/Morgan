@@ -1,6 +1,9 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
-import { getCurrentValuationAssetValueCents } from "@/components/finance-shell/current-valuation-assets";
+import {
+  getCurrentValuationAssetValueCents,
+  getCurrentValuationProviderValueCents
+} from "@/components/finance-shell/current-valuation-assets";
 import type { CurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
 
 import { DashboardBinanceCard } from "./dashboard-binance-card";
@@ -76,15 +79,23 @@ export function DashboardCryptoCards({
           const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
           return tokenSymbol ? livePrices[tokenSymbol] != null : false;
         });
+        const valuationProviderValue = getCurrentValuationProviderValueCents(
+          currentValuationSnapshot,
+          {
+            category: "crypto",
+            providerId: provider.sourceInstitution
+          }
+        );
+        const providerCurrentValue = currentValuationSnapshot
+          ? valuationProviderValue ?? null
+          : getPointValue(currentPoint, `crypto_inst_${provider.sourceInstitution}`, valuesKnown);
 
         return (
           <DashboardCardShell
-            animateValueChanges={providerHasLivePrice}
+            animateValueChanges={providerHasLivePrice || typeof valuationProviderValue === "number"}
             key={`crypto-${provider.sourceInstitution}`}
             title={formatProviderLabel(provider.sourceInstitution)}
-            value={formatCurrentValue(
-              getPointValue(currentPoint, `crypto_inst_${provider.sourceInstitution}`, valuesKnown)
-            )}
+            value={formatCurrentValue(providerCurrentValue)}
           >
             <div className="space-y-4">
               {provider.cryptoTokens.map((token) => {
@@ -114,7 +125,7 @@ export function DashboardCryptoCards({
                   <hr className="mb-3 border-[color:var(--line-strong)] opacity-50" />
                   <DashboardAssetHeader
                     align="center"
-                    animateValueChanges={price != null}
+                    animateValueChanges={price != null || typeof valuationTokenValue === "number"}
                     name={token.tokenName}
                     value={liveTokenReady ? formatEuroCents(unitPriceCents) : "--"}
                   />

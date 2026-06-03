@@ -3,7 +3,10 @@ import { useCallback, useEffect, useMemo } from "react";
 import type { Dispatch, RefObject, SetStateAction, UIEvent } from "react";
 
 import { CurrentValueSkeleton } from "@/components/finance-shell/current-value-skeleton";
-import { getCurrentValuationAssetValueCents } from "@/components/finance-shell/current-valuation-assets";
+import {
+  getCurrentValuationAssetValueCents,
+  getCurrentValuationProviderValueCents
+} from "@/components/finance-shell/current-valuation-assets";
 import { SlotValue } from "@/components/finance-shell/slot-value";
 import type { CurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
@@ -65,6 +68,10 @@ function getProductPriceKey(
   return config.priceQueryParam === "cryptos" ? normalizeCryptoSymbol(product.isin) : product.isin;
 }
 
+function getProviderValuationCategory(config: Pick<PortfolioDashboardConfig, "priceQueryParam">) {
+  return config.priceQueryParam === "cryptos" ? "crypto" : "investment";
+}
+
 function getUnitPriceCentsFromCurrentValue(
   currentValueCents: number | null | undefined,
   investedValue: number,
@@ -123,6 +130,17 @@ export function PortfolioProviderCards({
           const priceKey = getProductPriceKey(product, config);
           return priceKey ? livePrices[priceKey] != null : false;
         });
+        const providerValuationCategory = getProviderValuationCategory(config);
+        const valuationProviderValue = getCurrentValuationProviderValueCents(
+          currentValuationSnapshot,
+          {
+            category: providerValuationCategory,
+            providerId: provider.sourceInstitution
+          }
+        );
+        const providerCurrentValue = currentValuationSnapshot
+          ? valuationProviderValue ?? null
+          : getPortfolioPointValue(currentPoint, provider.sourceInstitution);
 
         return (
           <div key={provider.sourceInstitution} className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
@@ -133,8 +151,8 @@ export function PortfolioProviderCards({
                 </span>
                 <span className="text-sm font-bold text-[color:var(--text-main)]">
                   <CurrentValueDisplay
-                    animateChanges={providerHasLivePrice}
-                    value={formatPointValue(getPortfolioPointValue(currentPoint, provider.sourceInstitution), valuesKnown)}
+                    animateChanges={providerHasLivePrice || typeof valuationProviderValue === "number"}
+                    value={formatPointValue(providerCurrentValue, valuesKnown || !!currentValuationSnapshot)}
                   />
                 </span>
               </div>

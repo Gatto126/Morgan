@@ -121,7 +121,8 @@ Stato verificato alla baseline `3610ebd`:
 - la cache server-side profilo viene invalidata dopo sync/update/delete Binance, evitando payload Binance stale dopo connect/delete;
 - il primo connect Binance ora attende il ciclo valuation prima del messaggio finale `Connected! ...`, oppure mostra un messaggio esplicito se la valuation non e' pronta;
 - `binanceRefreshKey` viene persistito in `localStorage`, cosi' un reload immediato dopo connect continua a leggere la cache/versione Binance nuova invece della vecchia `binance:0` vuota;
-- la dashboard Binance non usa piu' una schermata muta: mostra chart, preparing, no-material o unavailable in modo esplicito.
+- la dashboard Binance non usa piu' una schermata muta: mostra chart, preparing, no-material o unavailable in modo esplicito;
+- crypto current surfaces completate localmente: prezzo unitario/current value token e totali provider crypto/investment nelle card main dashboard e portfolio dashboard leggono il committed valuation snapshot invece del punto chart/stage fallback.
 
 Risultati smoke manuale comunicati il 2026-06-03:
 
@@ -158,6 +159,31 @@ pnpm run smoke:upload-panel:docker   pass
 pnpm run e2e:active-components       pass con Binance reale, 9 token trovati, card+chart Binance visibili, HTTP/browser errors 0, account test cancellato
 pnpm run e2e:realistic               pass con Binance reale, 9 token trovati, HTTP/browser errors 0, account test cancellato
 docker logs finali                   nessun P2002/Unique constraint/500 rate-limit dopo fix upsert
+```
+
+Verifica locale crypto current surfaces del 2026-06-03:
+
+```text
+pnpm exec vitest run tests/unit/ui/finance-shell/current-valuation-assets.test.ts
+  pass, provider crypto totals separati da Binance e missing provider gestito
+pnpm exec tsc --noEmit --pretty false
+  pass
+pnpm run lint
+  pass
+pnpm run typecheck:test
+  pass
+pnpm run test:run
+  pass, 82 file / 393 test
+pnpm run docker:preprod:up
+  pass, build production + Postgres
+pnpm run smoke:upload-panel:docker
+  pass
+pnpm run e2e:active-components
+  pass con Binance reale, 9 token trovati, HTTP/browser errors 0, account test cancellato
+pnpm run e2e:realistic
+  pass con Binance reale, 9 token trovati, secondo profilo incluso, HTTP/browser errors 0, account test cancellato
+docker logs finali
+  nessun ERROR/500/P2002/Unhandled/Exception
 ```
 
 Nota sicurezza: le credenziali Binance reali sono state passate solo come variabili d'ambiente di processo nei comandi E2E locali. Non sono state salvate in file tracciati.
@@ -269,6 +295,13 @@ Policy live quote:
    - gate: unit test selector multi-profilo + E2E Home con due profili e refresh-in-flight.
 
 4. Audit superfici current:
+   - fatto localmente: crypto current surfaces completate;
+   - fatto: aggiunto selector provider totals da committed valuation snapshot e usato da main dashboard crypto card e portfolio/crypto dashboard card;
+   - fatto: test unitari coprono provider Trade Republic crypto, Binance separato e provider mancante;
+   - gate completato: Docker preprod + `active-components` + `realistic` con Binance reale passano senza HTTP/browser errors;
+   - regola: ogni prezzo/current value crypto visibile deve leggere dallo stesso committed valuation snapshot usato da Binance/topbar;
+   - includere crypto dashboard, card Trade Republic, prezzo unitario BTC/ETH, current value BTC/ETH, totale provider, totale crypto e heritage;
+   - non aggiornare con quote live `Invested Value`, quantity o storico transazionale;
    - mappare topbar, card, detail row, chart today e Home;
    - sostituire eventuali calcoli locali con selector committed snapshot;
    - gate: test unitari per selector e smoke browser con confronto topbar/card/detail/Home.
@@ -343,6 +376,7 @@ Matrix minima per le prossime fasi:
 | Primo connect Binance coerente | unit/service per sync material set + E2E Docker real-Binance con riepilogo visibile o stato no-material esplicito |
 | Global valuation scheduler | unit su priorita' active/inactive + E2E Home multi-profilo con snapshot committed |
 | Audit current surfaces | unit selector + smoke browser topbar/card/detail/Home su stesso snapshot |
+| Crypto current surfaces | unit su token Trade Republic + Binance che condividono quote BTC/ETH; dashboard/card devono aggiornare prezzo, current value e totale dallo snapshot |
 | Cache stale stage data | E2E reload con cache stale: stage data immediati quando validi, current values sempre committed snapshot |
 | Diagnostica compatta | unit shape diagnostica + E2E che fallisce se `coherent` non e' true |
 | Storico Binance | design doc prima del codice; poi test repository/snapshot e job schedulato con fixtures complete inclusi dust/locked |

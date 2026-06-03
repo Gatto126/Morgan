@@ -1,9 +1,16 @@
 import type { AssetValuation, CurrentValuationSnapshot } from "./current-valuations-store";
 
+type CurrentValuationProviderCategory = "investment" | "crypto" | "binance";
+
 type CurrentValuationAssetLookup = {
   category: AssetValuation["category"];
   chartKey?: string | null;
   priceKey?: string | null;
+  providerId: string;
+};
+
+type CurrentValuationProviderLookup = {
+  category: CurrentValuationProviderCategory;
   providerId: string;
 };
 
@@ -53,4 +60,26 @@ export function getCurrentValuationAssetValueCents(
   const asset = findCurrentValuationAsset(snapshot, lookup);
 
   return asset ? asset.providerValues[lookup.providerId]?.cents ?? null : undefined;
+}
+
+export function getCurrentValuationProviderValueCents(
+  snapshot: Pick<CurrentValuationSnapshot, "providers"> | null | undefined,
+  { category, providerId }: CurrentValuationProviderLookup
+) {
+  const provider = snapshot?.providers[providerId];
+  if (!provider) {
+    return undefined;
+  }
+
+  if (category === "investment") {
+    return provider.hasInvestment ? provider.totals.investment.cents : undefined;
+  }
+
+  if (category === "binance") {
+    return provider.hasBinance ? provider.totals.binance.cents : undefined;
+  }
+
+  return provider.hasCrypto && !provider.hasBinance
+    ? provider.totals.crypto.cents
+    : undefined;
 }
