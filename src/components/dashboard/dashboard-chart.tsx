@@ -187,6 +187,7 @@ export function DashboardChart({
                   {seriesReady ? (
                     <DashboardChartLines
                       activeTab={activeTab}
+                      chartData={processedChartData}
                       chartConfig={chartConfig}
                       hiddenSeries={hiddenSeries}
                       selectedValue={selectedValue}

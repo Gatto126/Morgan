@@ -2,6 +2,7 @@ import { Line, ReferenceLine } from "recharts";
 
 import { ChartReferenceLabel } from "@/components/chart-primitives/chart-reference-label";
 import { SelectableChartDot, type ChartDotSelectedPoint } from "@/components/chart-primitives/selectable-chart-dot";
+import { getRenderableSeriesPointCount } from "./dashboard-chart-series";
 import type { DashboardChartConfig, DashboardChartPoint } from "./dashboard-chart-types";
 import type { AccountTab } from "./types";
 
@@ -13,6 +14,7 @@ type ActiveDotProps = {
 
 type DashboardChartLinesProps = {
   activeTab: AccountTab;
+  chartData: DashboardChartPoint[];
   chartConfig: DashboardChartConfig;
   hiddenSeries: Record<string, boolean>;
   selectedValue: number | null;
@@ -29,6 +31,7 @@ function getHiddenSeriesSignature(hiddenSeries: Record<string, boolean>) {
 
 export function DashboardChartLines({
   activeTab,
+  chartData,
   chartConfig,
   hiddenSeries,
   selectedValue,
@@ -45,6 +48,7 @@ export function DashboardChartLines({
     <>
       {chartConfig.subLines.map((subLine) => {
         if (hiddenSeries[subLine.key]) return null;
+        const shouldShowStandaloneDot = getRenderableSeriesPointCount(chartData, subLine.key) === 1;
         return (
           <Line
             key={subLine.key}
@@ -64,7 +68,15 @@ export function DashboardChartLines({
                 seriesKey={subLine.key}
               />
             )}
-            dot={false}
+            dot={shouldShowStandaloneDot ? (props: ActiveDotProps) => (
+              <SelectableChartDot
+                {...props}
+                color={subLine.stroke}
+                onSelectPoint={handleSelectPoint}
+                radius={4}
+                seriesKey={subLine.key}
+              />
+            ) : false}
           />
         );
       })}
@@ -87,7 +99,15 @@ export function DashboardChartLines({
               seriesKey="value"
             />
           )}
-          dot={false}
+          dot={getRenderableSeriesPointCount(chartData, "value") === 1 ? (props: ActiveDotProps) => (
+            <SelectableChartDot
+              {...props}
+              color="#ffffff"
+              onSelectPoint={handleSelectPoint}
+              radius={4}
+              seriesKey="value"
+            />
+          ) : false}
         />
       )}
 
