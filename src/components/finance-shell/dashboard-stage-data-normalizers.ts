@@ -8,6 +8,7 @@ import type {
   MonthlyBucket,
   ProviderSummary
 } from "@/components/dashboard/types";
+import type { BinanceHistoricalPoint } from "@/types/binance-history";
 import type {
   CheckingBucket,
   CheckingData,
@@ -58,6 +59,15 @@ function normalizeNumberRecord(value: unknown): Record<string, number> {
   return Object.fromEntries(
     Object.entries(value).map(([key, amount]) => [key, asNumber(amount)])
   );
+}
+
+function normalizeBinanceHistoricalPoint(value: unknown): BinanceHistoricalPoint {
+  const point = isRecord(value) ? value : {};
+
+  return {
+    dateKey: asString(point.dateKey),
+    valueCents: asNumber(point.valueCents)
+  };
 }
 
 function normalizeNestedNumberRecord(value: unknown): Record<string, Record<string, number>> {
@@ -160,6 +170,7 @@ export function normalizeDashboardData(value: unknown): DashboardData {
       heritage: asNumber(accountTotals.heritage),
       investment: asNumber(accountTotals.investment)
     } satisfies Record<AccountTab, number>,
+    binanceHistoricalPoints: asArray(data.binanceHistoricalPoints).map(normalizeBinanceHistoricalPoint),
     dailyData: asArray(data.dailyData).map(normalizeDashboardDailyBucket),
     monthlyData: asArray(data.monthlyData).map(normalizeDashboardMonthlyBucket),
     providerSummaries: asArray(data.providerSummaries).map(normalizeDashboardProvider)
@@ -248,6 +259,7 @@ export function normalizePortfolioData(value: unknown): PortfolioData {
   const data = isRecord(value) ? value : {};
 
   return {
+    binanceHistoricalPoints: asArray(data.binanceHistoricalPoints).map(normalizeBinanceHistoricalPoint),
     dailyData: asArray(data.dailyData).map(normalizePortfolioBucket),
     monthlyData: asArray(data.monthlyData).map((bucket): PortfolioMonthBucket => {
       const normalized = normalizePortfolioBucket(bucket);

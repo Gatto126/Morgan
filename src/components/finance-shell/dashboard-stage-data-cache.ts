@@ -23,7 +23,7 @@ type DashboardStageDataEntry<TData> = {
 };
 
 type StoredDashboardStageDataEntry = {
-  cacheVersion: 2;
+  cacheVersion: number;
   data: unknown;
   fetchedAt: number;
   stage: DashboardStageKey;
@@ -53,7 +53,7 @@ const dashboardStageEndpoints = {
 const cacheTtlMs = 60_000;
 const historicalStageFreshTtlBufferMs = 5 * 60_000;
 const staleCacheTtlMs = 6 * 60 * 60 * 1_000;
-const storageCacheVersion = 2;
+const storageCacheVersion = 3;
 const storageCachePrefix = `morgan:dashboard-stage-data:v${storageCacheVersion}:`;
 const dashboardStageDataCache = new Map<string, DashboardStageDataEntry<unknown>>();
 

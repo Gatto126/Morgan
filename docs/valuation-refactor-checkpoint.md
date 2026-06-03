@@ -3,7 +3,7 @@
 Ultimo aggiornamento: 2026-06-03
 Commit baseline corrente: `3610ebd` (cleanup ownership Binance current-sync pushato)
 Ultimo checkpoint smoke su Vercel: `3610ebd` (cold login e diagnostica di coerenza cross-dashboard)
-Slice locale corrente: primo connect Binance coerente completato; crypto current surfaces snapshot-driven completate; storico Binance server-side implementato e collegato alle linee Binance in Binance dashboard, Crypto dashboard e main dashboard localmente.
+Slice locale corrente: primo connect Binance coerente completato; crypto current surfaces snapshot-driven completate; storico Binance server-side implementato e precaricato nei payload stage di Binance dashboard, Crypto dashboard e main dashboard localmente.
 Prossima fase: push/deploy Vercel, poi verificare il primo run cron e la comparsa del primo punto storico reale.
 
 Questo file e' la memoria durevole del refactor valuation/topbar/Binance.
@@ -127,8 +127,9 @@ Stato verificato alla baseline `3610ebd`:
 - produzione preparata: `CRON_SECRET` configurato su Vercel Production e migration `20260603070000_binance_daily_snapshots` applicata su Neon production.
 - Binance dashboard collegata allo storico daily snapshot: la linea non viene piu' ricostruita piatta dal solo valore corrente; usa gli snapshot giornalieri reali e aggiunge/sostituisce il punto di oggi con il committed current valuation snapshot.
 - Crypto dashboard ALL collegata allo stesso storico daily snapshot per il provider `BINANCE`: la linea Binance non deve piu' essere un salto verticale da zero/current; i bucket storici sommano Binance daily snapshot al totale crypto storico, mentre il punto di oggi resta il committed current valuation snapshot.
-- Main dashboard collegata allo storico daily snapshot Binance: i punti storici `crypto` e `heritage` sommano il valore Binance giornaliero quando disponibile; nella tab crypto la sottolinea `BINANCE` nasce dallo stesso storico e non deve comparire in ritardo dopo F5.
-- Le dashboard che dipendono dallo storico Binance aspettano il caricamento/fallimento dello storico e almeno un dato current/cached Binance prima di dichiarare il primo visual ready, cosi' il grafico non viene mostrato prima e poi mutato con la linea Binance.
+- Main dashboard collegata allo storico daily snapshot Binance: i punti storici `crypto` e `heritage` sommano il valore Binance giornaliero quando disponibile; nella tab crypto la sottolinea `BINANCE` nasce dallo stesso storico.
+- Lo storico Binance non deve arrivare come fetch client tardiva per main/crypto: viene arricchito server-side dentro i payload stage `/api/transactions/dashboard` e `/api/transactions/crypto`, anche quando la base arriva da `ProfileStageSnapshot`.
+- Cache stage client bumpata a versione 3 per scartare payload `sessionStorage` vecchi senza `binanceHistoricalPoints`.
 - I date key current per chart Binance/Crypto usano `Europe/Rome`, come il cron storico.
 
 Risultati smoke manuale comunicati il 2026-06-03:
@@ -308,7 +309,7 @@ Policy live quote:
 - Storico Binance daily snapshot: `src/server/services/binance-daily-snapshot.ts`, `src/server/repositories/binance-daily-snapshot-repository.ts`, `src/app/api/cron/binance-daily-snapshot/route.ts`, `src/app/api/binance/history/route.ts`
 - Binance chart storico: `src/components/binance-dashboard.tsx`, `src/components/binance-dashboard/binance-chart-model.ts`
 - Crypto chart Binance storico: `src/components/portfolio-dashboard/portfolio-dashboard.tsx`, `src/components/portfolio-dashboard/chart-data.ts`
-- Main dashboard Binance storico/readiness: `src/components/dashboard.tsx`, `src/components/dashboard/use-binance-history.ts`, `src/components/dashboard/dashboard-chart-data-model.ts`, `src/components/dashboard/use-dashboard-visual-state.ts`
+- Main/Crypto dashboard Binance storico/readiness: `src/server/services/binance-history-stage-data.ts`, `src/components/dashboard.tsx`, `src/components/dashboard/dashboard-chart-data-model.ts`, `src/components/dashboard/use-dashboard-visual-state.ts`, `src/components/portfolio-dashboard/portfolio-dashboard.tsx`
 
 ## Problemi Risolti
 
@@ -339,7 +340,7 @@ Policy live quote:
 | P2 | Stale crypto cache non renderizza prima del background refresh ritardato | `realistic` conferma cache crypto in sessionStorage, refresh background partito e reload ok, ma `cachedCryptoRenderedBeforeRefreshReleased=false`. | Usare cache stale solo come stage data se versione/data key combaciano; current values restano snapshot-driven. Correggere hook/mount order dopo audit snapshot/current surfaces. |
 | P2 | Lavoro dashboard inattive montate | Le dashboard inattive possono warmare dati. Serve confidenza che non pubblichino current totals o facciano hidden rendering costoso. | Aggiungere instrumentation/assertions per hidden dashboard transitions; mantenere warmup cache/data-only. |
 | P2 | Primo run cron da osservare | Il codice e Vercel Cron sono pronti, ma il primo punto reale arriva solo dopo il run schedulato. | Dopo il primo run controllare log Vercel e DB; la Binance dashboard deve mostrare il nuovo punto storico piu' il punto current di oggi. |
-| P2 | Smoke F5 storico Binance production | Codice locale collega lo storico Binance anche a main/heritage e blocca il primo visual ready finche' lo storico non e' settled. | Dopo deploy, fare F5 su main e crypto: la linea Binance/crypto deve apparire insieme alle altre, senza aggiunta tardiva. |
+| P2 | Smoke F5 storico Binance production | Codice locale include lo storico Binance nei payload stage dashboard/crypto e invalida la vecchia cache client. | Dopo deploy, fare F5 su main e crypto: la linea Binance/crypto deve apparire insieme alle altre, senza aggiunta tardiva. |
 | P3 | Futuro desktop/SQLite | Lo schema SQLite valida, ma il runtime desktop non e' implementato. | Tenere valuation/domain logic target-neutral; poi aggiungere storage adapter e migrazioni SQLite. |
 
 ## Piano Attivo
@@ -370,7 +371,7 @@ Policy live quote:
    - fatto localmente: endpoint `/api/binance/history` e Binance dashboard collegata agli snapshot daily;
    - fatto localmente: Crypto dashboard ALL usa gli snapshot daily per la linea provider `BINANCE`;
    - fatto localmente: main dashboard usa gli snapshot daily per sommare Binance nei punti storici `crypto` e `heritage`;
-   - fatto localmente: main/crypto dashboard aspettano lo storico Binance prima del primo visual ready, evitando linee Binance che arrivano dopo F5;
+   - fatto localmente: main/crypto dashboard ricevono `binanceHistoricalPoints` dentro lo stage payload, evitando fetch client separate e linee Binance che arrivano dopo F5;
    - fatto localmente: date key chart allineato a `Europe/Rome`;
    - resta: pushare il collegamento UI e verificare il primo run schedulato.
 

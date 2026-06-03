@@ -18,6 +18,7 @@ import {
 import type { UserRecord } from "@/components/finance-shell/types";
 import { auth } from "@/server/auth/auth";
 import { getBinanceBalancesStatus } from "@/server/services/binance-sync";
+import { withBinanceHistoryForDashboardStage } from "@/server/services/binance-history-stage-data";
 import { getCheckingSummaryData } from "@/server/services/checking-data";
 import { getDashboardData } from "@/server/services/dashboard-data";
 import {
@@ -78,10 +79,13 @@ async function getInitialDashboardStageData(
       () => loadDashboardStageData(dashboardStage, activeUser.id)
     );
   };
-  const data = await getCachedProfileData(
+  const baseData = await getCachedProfileData(
     cacheKey,
     loadStageData
   );
+  const data = dashboardStage === "dashboard" || dashboardStage === "crypto"
+    ? await withBinanceHistoryForDashboardStage(baseData, activeUser.id)
+    : baseData;
 
   return {
     data,

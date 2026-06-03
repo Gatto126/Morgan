@@ -15,6 +15,7 @@ import {
   parseProfileStageSnapshotVersion
 } from "@/server/services/profile-stage-snapshot";
 import { getDashboardData } from "@/server/services/dashboard-data";
+import { withBinanceHistoryForDashboardStage } from "@/server/services/binance-history-stage-data";
 
 const log = apiLogger("Dashboard");
 const endpoint = "/api/transactions/dashboard";
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
     const version = request.nextUrl.searchParams.get("v");
     const snapshotVersion = parseProfileStageSnapshotVersion(version);
     const dateKey = request.nextUrl.searchParams.get("d") ?? undefined;
-    const dashboardData = await getCachedProfileData(
+    const baseDashboardData = await getCachedProfileData(
       makeProfileStageCacheKey("dashboard", userId, version),
       () => getProfileStageSnapshot(
         "dashboard",
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
         onMetric: (metric) => trace.addStep("profile.cache", metric.durationMs ?? 0, metric)
       }
     );
+    const dashboardData = await withBinanceHistoryForDashboardStage(baseDashboardData, userId, { trace });
 
     log.response("GET", endpoint, 200, {
       providers: dashboardData.providerSummaries.length,

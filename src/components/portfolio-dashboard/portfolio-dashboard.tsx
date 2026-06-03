@@ -7,7 +7,6 @@ import { DashboardPanelHost } from "@/components/dashboard-panel-host";
 import { DashboardLoadingOverlay, getDashboardStageVisibilityStyle } from "@/components/dashboard/dashboard-status";
 import { applyLiveBinanceBalanceValues } from "@/components/dashboard/binance-live-values";
 import { useBinanceBalances } from "@/components/dashboard/use-binance-balances";
-import { useBinanceHistory } from "@/components/dashboard/use-binance-history";
 import {
   useCurrentValuationSnapshot
 } from "@/components/finance-shell/current-valuations-store";
@@ -84,13 +83,6 @@ export function PortfolioDashboard({
   const isMobile = useIsMobile();
   const isCryptoDashboard = config.priceQueryParam === "cryptos";
   const {
-    binanceHistoricalPoints,
-    binanceHistoryReady
-  } = useBinanceHistory({
-    enabled: isCryptoDashboard && shouldLoad && hasBinanceCredentials,
-    userId
-  });
-  const {
     binanceBalances,
     binanceBalancesKnown,
     isBinanceSyncing,
@@ -123,9 +115,9 @@ export function PortfolioDashboard({
   );
   const dataForChart = useMemo(
     () => dataForDisplay && isCryptoDashboard
-      ? mergePortfolioDataWithProviderHistory(dataForDisplay, "BINANCE", binanceHistoricalPoints)
+      ? mergePortfolioDataWithProviderHistory(dataForDisplay, "BINANCE", dataForDisplay.binanceHistoricalPoints ?? [])
       : dataForDisplay,
-    [binanceHistoricalPoints, dataForDisplay, isCryptoDashboard]
+    [dataForDisplay, isCryptoDashboard]
   );
   const [activeChartPoint, setActiveChartPoint] = useState<ChartPoint | null>(null);
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
@@ -214,7 +206,7 @@ export function PortfolioDashboard({
 
   const effectiveChartReady = !isPanelOpen && chartReady;
   const binanceInitialDataReady =
-    !isCryptoDashboard || !hasBinanceCredentials || (binanceHistoryReady && (binanceBalancesKnown || !!currentValuationPoint));
+    !isCryptoDashboard || !hasBinanceCredentials || binanceBalancesKnown || !!currentValuationPoint;
   const initialVisualReady =
     binanceInitialDataReady && !!dataForDisplay && !loading && (isPanelOpen || (effectiveChartReady && hasRenderableChartData));
   const importRefreshSettled =

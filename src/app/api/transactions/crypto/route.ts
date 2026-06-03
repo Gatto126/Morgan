@@ -15,6 +15,7 @@ import {
   parseProfileStageSnapshotVersion
 } from "@/server/services/profile-stage-snapshot";
 import { getTradeRepublicCryptoPortfolioSummaryData } from "@/server/services/portfolio-data";
+import { withBinanceHistoryForDashboardStage } from "@/server/services/binance-history-stage-data";
 
 const log = apiLogger("CryptoTransactions");
 const endpoint = "/api/transactions/crypto";
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
     const version = request.nextUrl.searchParams.get("v");
     const snapshotVersion = parseProfileStageSnapshotVersion(version);
     const dateKey = request.nextUrl.searchParams.get("d") ?? undefined;
-    const { result, transactionCount } = await getCachedProfileData(
+    const { result: baseResult, transactionCount } = await getCachedProfileData(
       makeProfileStageCacheKey("crypto", userId, version),
       () => getProfileStageSnapshot(
         "crypto",
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
         onMetric: (metric) => trace.addStep("profile.cache", metric.durationMs ?? 0, metric)
       }
     );
+    const result = await withBinanceHistoryForDashboardStage(baseResult, userId, { trace });
     const productCount = result.providers.reduce((acc, provider) => acc + provider.products.length, 0);
 
     log.response("GET", endpoint, 200, {

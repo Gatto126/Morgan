@@ -1,3 +1,5 @@
+import type { BinanceHistoricalPoint } from "@/types/binance-history";
+
 export type AccountTab = "heritage" | "checking" | "investment" | "crypto";
 export type TimeRange = "ALL" | "1Y" | "6M" | "3M" | "1M" | "1W";
 
@@ -65,6 +67,7 @@ export type DailyBucket = MonthlyBucket & {
 
 export type DashboardData = {
   accountTotals: Record<AccountTab, number>;
+  binanceHistoricalPoints?: BinanceHistoricalPoint[];
   monthlyData: MonthlyBucket[];
   dailyData: DailyBucket[];
   providerSummaries: ProviderSummary[];

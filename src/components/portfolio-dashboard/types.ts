@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { BinanceHistoricalPoint } from "@/types/binance-history";
 
 export type TimeRange = "ALL" | "1Y" | "6M" | "3M" | "1M" | "1W";
 
@@ -46,6 +47,7 @@ export type PortfolioProviderSummary = {
 };
 
 export type PortfolioData = {
+  binanceHistoricalPoints?: BinanceHistoricalPoint[];
   monthlyData: MonthBucket[];
   dailyData: PortfolioBucket[];
   providers: PortfolioProviderSummary[];

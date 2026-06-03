@@ -10,6 +10,7 @@ import {
 describe("dashboard stage data normalizers", () => {
   it("normalizes malformed portfolio payloads before consumers call map", () => {
     const data = normalizePortfolioData({
+      binanceHistoricalPoints: [{ dateKey: "2026-06-03", valueCents: 234_500 }],
       dailyData: [{ month: "2026-06", providers: undefined, providerProducts: undefined }],
       monthlyData: undefined,
       providers: undefined
@@ -24,10 +25,12 @@ describe("dashboard stage data normalizers", () => {
       providers: {},
       total: 0
     }]);
+    expect(data.binanceHistoricalPoints).toEqual([{ dateKey: "2026-06-03", valueCents: 234_500 }]);
   });
 
   it("normalizes dashboard provider arrays and nested holdings", () => {
     const data = normalizeDashboardData({
+      binanceHistoricalPoints: [{ dateKey: "2026-06-03", valueCents: 234_500 }],
       providerSummaries: [{
         checking: undefined,
         cryptoTokens: undefined,
@@ -50,6 +53,7 @@ describe("dashboard stage data normalizers", () => {
       sourceInstitution: "TRADE_REPUBLIC",
       total: 0
     }]);
+    expect(data.binanceHistoricalPoints).toEqual([{ dateKey: "2026-06-03", valueCents: 234_500 }]);
   });
 
   it("normalizes malformed checking payloads", () => {
