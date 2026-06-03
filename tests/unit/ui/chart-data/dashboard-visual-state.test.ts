@@ -16,7 +16,7 @@ const data = {
 } satisfies DashboardData;
 
 describe("dashboard visual state", () => {
-  it("does not reveal SSR stage data before required current dependencies are ready", () => {
+  it("does not show SSR stage data before required current dependencies are ready", () => {
     expect(shouldStartDashboardVisualStateVisible({
       data,
       dataDependenciesReady: false,
@@ -24,7 +24,7 @@ describe("dashboard visual state", () => {
     })).toBe(false);
   });
 
-  it("reveals immediately only when stage data and dependencies are ready", () => {
+  it("shows immediately only when stage data and dependencies are ready", () => {
     expect(shouldStartDashboardVisualStateVisible({
       data,
       dataDependenciesReady: true,

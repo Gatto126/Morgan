@@ -29,7 +29,7 @@ export function WelcomeStage({
           data-panel-background="welcome"
           data-visible={isBackgroundVisible ? "true" : "false"}
           className={cn(
-            "panel-content-reveal absolute inset-0 flex items-center justify-center",
+            "visibility-gate absolute inset-0 flex items-center justify-center",
             isPanelModalOpen && "pointer-events-none"
           )}
         >

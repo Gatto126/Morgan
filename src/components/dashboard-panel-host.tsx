@@ -101,7 +101,7 @@ export function DashboardPanelHost({
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden rounded-[18px]">
       <div
-        className={cn("panel-content-reveal absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", panel && "pointer-events-none")}
+        className={cn("visibility-gate absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", panel && "pointer-events-none")}
         data-visible={!panel || isPanelClosing ? "true" : "false"}
       >
         {children}

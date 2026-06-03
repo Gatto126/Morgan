@@ -103,13 +103,13 @@ export function DashboardChart({
     (showUserSelectView && isClosingUserSelect) ||
     (shouldShowUploadPanel && isClosingUpload);
   const isChartVisible = !isPanelOpen;
-  const shouldRevealChartContent = (shouldShowEmptyState || renderedChartSize.width > 0) && (!isPanelOpen || isPanelClosing);
+  const shouldShowChartContent = (shouldShowEmptyState || renderedChartSize.width > 0) && (!isPanelOpen || isPanelClosing);
 
   return (
     <div data-testid="dashboard-chart" className="relative flex w-full flex-1 flex-col justify-center overflow-hidden rounded-[18px] min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px]">
       <div
-        className={cn("chart-content-reveal absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", !isChartVisible && "pointer-events-none")}
-        data-visible={shouldRevealChartContent ? "true" : "false"}
+        className={cn("visibility-gate absolute inset-0 z-0 flex h-full min-h-0 w-full flex-col", !isChartVisible && "pointer-events-none")}
+        data-visible={shouldShowChartContent ? "true" : "false"}
       >
         {shouldShowEmptyState ? (
           <div className="flex h-full w-full items-center justify-center">

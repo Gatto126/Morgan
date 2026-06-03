@@ -322,23 +322,20 @@ button:active *,
   animation: panelOverlayExit 0.18s ease-out both;
 }
 
-.chart-content-reveal,
-.panel-content-reveal {
+.visibility-gate {
   opacity: 0;
   transform: none;
   transition: none;
   will-change: auto;
 }
 
-.chart-content-reveal[data-visible="true"],
-.panel-content-reveal[data-visible="true"] {
+.visibility-gate[data-visible="true"] {
   opacity: 1;
   transform: none;
   will-change: auto;
 }
 
-.chart-content-reveal[data-visible="false"],
-.panel-content-reveal[data-visible="false"] {
+.visibility-gate[data-visible="false"] {
   pointer-events: none;
 }
 

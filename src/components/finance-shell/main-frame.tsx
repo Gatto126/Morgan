@@ -169,7 +169,7 @@ export function FinanceShellMainFrame({
               ref={dashboardBackgroundRef}
               data-panel-background="dashboard"
               data-visible={isDashboardBackgroundVisible ? "true" : "false"}
-              className="panel-content-reveal relative flex w-full min-h-0 items-center justify-center p-3 sm:p-5"
+              className="visibility-gate relative flex w-full min-h-0 items-center justify-center p-3 sm:p-5"
             >
               <div className="h-full w-full max-w-none">
                 <div className="relative flex h-full min-h-0 flex-col justify-center">

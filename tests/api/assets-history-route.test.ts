@@ -76,7 +76,7 @@ describe("GET /api/assets/[isin]/history", () => {
     expect(mocks.listAssetHistorySeries).toHaveBeenCalledWith("IE00B4L5Y983", "EUR");
   });
 
-  it("does not reveal global history for assets outside the profile", async () => {
+  it("does not expose global history for assets outside the profile", async () => {
     mocks.profileHasMarketKey.mockResolvedValueOnce(false);
 
     const response = await GET(makeRequest(), params);
