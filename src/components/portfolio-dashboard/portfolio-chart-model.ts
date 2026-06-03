@@ -81,8 +81,7 @@ export function hasStandalonePortfolioPointSeries(chartData: ChartPoint[], serie
 
 export function shouldRenderStandalonePortfolioPointSeries(
   chartData: ChartPoint[],
-  seriesKey: string,
-  isAggregateVisible: boolean
+  seriesKey: string
 ) {
-  return !isAggregateVisible && hasStandalonePortfolioPointSeries(chartData, seriesKey);
+  return hasStandalonePortfolioPointSeries(chartData, seriesKey);
 }

@@ -39,7 +39,6 @@ export function DashboardChartLines({
   setSelectedSeriesKey
 }: DashboardChartLinesProps) {
   const hiddenSeriesSignature = getHiddenSeriesSignature(hiddenSeries);
-  const isMainSeriesVisible = !hiddenSeries[activeTab];
   const handleSelectPoint = (point: ChartDotSelectedPoint) => {
     setSelectedMonth(point.month);
     setSelectedSeriesKey(point.seriesKey);
@@ -51,7 +50,7 @@ export function DashboardChartLines({
         if (hiddenSeries[subLine.key]) return null;
         const hasLine = hasRenderableLineSeries(chartData, subLine.key);
         const shouldRenderStandalonePoint =
-          !hasLine && shouldRenderStandalonePointSeries(chartData, subLine.key, isMainSeriesVisible);
+          !hasLine && shouldRenderStandalonePointSeries(chartData, subLine.key);
 
         if (!hasLine && !shouldRenderStandalonePoint) return null;
 
@@ -104,7 +103,7 @@ export function DashboardChartLines({
         );
       })}
 
-      {isMainSeriesVisible && hasRenderableLineSeries(chartData, "value") && (
+      {!hiddenSeries[activeTab] && hasRenderableLineSeries(chartData, "value") && (
         <Line
           key={`${activeTab}-${hiddenSeriesSignature}`}
           type="linear"

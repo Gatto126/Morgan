@@ -149,7 +149,7 @@ export function PortfolioChart({
                   const strokeColor = GRAYSCALE_PALETTE[index % GRAYSCALE_PALETTE.length];
                   const hasLine = hasRenderablePortfolioLineSeries(chartData, providerKey);
                   const shouldRenderStandalonePoint =
-                    !hasLine && shouldRenderStandalonePortfolioPointSeries(chartData, providerKey, isAggregateVisible);
+                    !hasLine && shouldRenderStandalonePortfolioPointSeries(chartData, providerKey);
 
                   if (!hasLine && !shouldRenderStandalonePoint) return null;
 

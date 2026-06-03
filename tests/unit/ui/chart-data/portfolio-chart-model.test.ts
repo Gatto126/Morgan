@@ -80,8 +80,7 @@ describe("portfolio chart model", () => {
 
     expect(hasRenderablePortfolioLineSeries(points, "BINANCE")).toBe(false);
     expect(hasStandalonePortfolioPointSeries(points, "BINANCE")).toBe(true);
-    expect(shouldRenderStandalonePortfolioPointSeries(points, "BINANCE", false)).toBe(true);
-    expect(shouldRenderStandalonePortfolioPointSeries(points, "BINANCE", true)).toBe(false);
+    expect(shouldRenderStandalonePortfolioPointSeries(points, "BINANCE")).toBe(true);
     expect(hasRenderablePortfolioLineSeries(points, "trade_republic")).toBe(true);
     expect(hasStandalonePortfolioPointSeries(points, "trade_republic")).toBe(false);
     expect(hasRenderablePortfolioLineSeries(points, "heritage")).toBe(true);

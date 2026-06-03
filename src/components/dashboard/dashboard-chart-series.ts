@@ -17,8 +17,7 @@ export function hasStandalonePointSeries(chartData: DashboardChartPoint[], serie
 
 export function shouldRenderStandalonePointSeries(
   chartData: DashboardChartPoint[],
-  seriesKey: string,
-  isMainSeriesVisible: boolean
+  seriesKey: string
 ) {
-  return !isMainSeriesVisible && hasStandalonePointSeries(chartData, seriesKey);
+  return hasStandalonePointSeries(chartData, seriesKey);
 }

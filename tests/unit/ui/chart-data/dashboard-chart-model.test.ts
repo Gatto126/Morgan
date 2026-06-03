@@ -758,8 +758,7 @@ describe("dashboard chart display model", () => {
 
     expect(hasRenderableLineSeries(points, "binance")).toBe(false);
     expect(hasStandalonePointSeries(points, "binance")).toBe(true);
-    expect(shouldRenderStandalonePointSeries(points, "binance", false)).toBe(true);
-    expect(shouldRenderStandalonePointSeries(points, "binance", true)).toBe(false);
+    expect(shouldRenderStandalonePointSeries(points, "binance")).toBe(true);
     expect(hasRenderableLineSeries(points, "crypto_inst_trade_republic")).toBe(true);
     expect(hasStandalonePointSeries(points, "crypto_inst_trade_republic")).toBe(false);
     expect(hasRenderableLineSeries(points, "value")).toBe(true);
