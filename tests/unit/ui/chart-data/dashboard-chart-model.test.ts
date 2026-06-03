@@ -506,8 +506,32 @@ describe("dashboard chart data model", () => {
     expect(checkingPoints[0].value).toBeNull();
     expect(checkingPoints[1].value).toBe(10000);
     expect(investmentPoints[2].value).toBe(25000);
-    expect(cryptoPoints[0].value).toBeNull();
-    expect(cryptoPoints[2].value).toBe(5000);
+    expect(cryptoPoints[0].rawMonth).toBe("2026-01-03");
+    expect(cryptoPoints[0].value).toBe(5000);
+  });
+
+  it("trims the main crypto chart window to the first crypto or Binance point", () => {
+    const points = buildDashboardChartData({
+      activeTab: "crypto",
+      binanceHistoricalPoints: [
+        { dateKey: "2026-01-02", valueCents: 2_000 }
+      ],
+      binanceTotalCents: 0,
+      checkingProviders: collectCheckingProviders(dashboardData),
+      cryptoInstitutions: collectCryptoInstitutions(dashboardData),
+      cryptoTokens: collectCryptoTokens(dashboardData),
+      data: dashboardData,
+      hasBinancePortfolio: true,
+      investmentProducts: collectInvestmentProducts(dashboardData),
+      timeRange: "ALL"
+    });
+
+    expect(points[0]).toMatchObject({
+      rawMonth: "2026-01-02",
+      binance: 2_000,
+      value: 2_000
+    });
+    expect(points.map((point) => point.rawMonth)).not.toContain("2026-01-01");
   });
 
   it("treats missing provider values as zero after the first acquisition", () => {

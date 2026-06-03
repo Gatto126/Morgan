@@ -188,18 +188,26 @@ export function buildDashboardChartData({
   });
 
   if (!todayKey) {
-    return chartPoints;
-  }
-
-  if (currentValuationPoint) {
-    return applyCurrentValuationTodayPoint(chartPoints, {
+    return trimDashboardChartDataToActiveWindow(chartPoints, {
       activeTab,
-      currentValuationPoint,
-      todayKey
+      allCryptoInstitutions,
+      cryptoTokens
     });
   }
 
-  return applyLiveToday
+  if (currentValuationPoint) {
+    return trimDashboardChartDataToActiveWindow(applyCurrentValuationTodayPoint(chartPoints, {
+      activeTab,
+      currentValuationPoint,
+      todayKey
+    }), {
+      activeTab,
+      allCryptoInstitutions,
+      cryptoTokens
+    });
+  }
+
+  const chartDataWithToday = applyLiveToday
     ? applyLiveTodayPoint(chartPoints, {
         activeTab,
         binanceTotalCents,
@@ -213,6 +221,12 @@ export function buildDashboardChartData({
         todayKey
       })
     : chartPoints;
+
+  return trimDashboardChartDataToActiveWindow(chartDataWithToday, {
+    activeTab,
+    allCryptoInstitutions,
+    cryptoTokens
+  });
 }
 
 function collectMonthlyKeys(
@@ -428,6 +442,44 @@ function getHistoricalTabValue(
 
 function isMeaningfulValue(value: number | undefined): value is number {
   return value !== undefined && Math.abs(value) > NON_ZERO_THRESHOLD;
+}
+
+function isMeaningfulPointValue(value: DashboardChartPoint[string]) {
+  return typeof value === "number" && Number.isFinite(value) && Math.abs(value) > NON_ZERO_THRESHOLD;
+}
+
+function trimDashboardChartDataToActiveWindow(
+  chartPoints: DashboardChartPoint[],
+  {
+    activeTab,
+    allCryptoInstitutions,
+    cryptoTokens
+  }: {
+    activeTab: AccountTab;
+    allCryptoInstitutions: string[];
+    cryptoTokens: string[];
+  }
+) {
+  if (activeTab !== "crypto") {
+    return chartPoints;
+  }
+
+  const activeSeriesKeys = [
+    "value",
+    "crypto",
+    "binance",
+    ...allCryptoInstitutions.map((institution) => `crypto_inst_${institution}`),
+    ...cryptoTokens
+  ];
+  const firstActiveIndex = chartPoints.findIndex((point) =>
+    activeSeriesKeys.some((key) => isMeaningfulPointValue(point[key]))
+  );
+
+  if (firstActiveIndex <= 0) {
+    return chartPoints;
+  }
+
+  return chartPoints.slice(firstActiveIndex);
 }
 
 function applyLiveTodayPoint(
