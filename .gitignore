@@ -4,6 +4,7 @@ node_modules/
 # Framework and build output
 .next/
 .next-*/
+.vercel/
 out/
 dist/
 coverage/
@@ -44,3 +45,5 @@ design_frames/*.pdf
 # OS metadata
 .DS_Store
 Thumbs.db
+
+.vercel

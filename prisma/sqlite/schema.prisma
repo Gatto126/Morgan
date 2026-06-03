@@ -21,6 +21,7 @@ model User {
   investmentTransactions    InvestmentTransaction[]
   cryptoTransactions        CryptoTransaction[]
   binanceBalances           BinanceBalance[]
+  binanceDailySnapshots     BinanceDailySnapshot[]
   stageSnapshots            ProfileStageSnapshot[]
 
   @@unique([ownerId, name])
@@ -266,4 +267,39 @@ model BinanceBalance {
 
   @@unique([userId, tokenSymbol])
   @@index([userId])
+}
+
+model BinanceDailySnapshot {
+  id            String                       @id @default(cuid())
+  userId        String
+  dateKey       String
+  snapshotAt    DateTime
+  totalEurValue Float                        @default(0)
+  tokenCount    Int                          @default(0)
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+  user          User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokens        BinanceDailySnapshotToken[]
+
+  @@unique([userId, dateKey])
+  @@index([dateKey])
+  @@index([userId])
+}
+
+model BinanceDailySnapshotToken {
+  id           String               @id @default(cuid())
+  snapshotId   String
+  tokenSymbol  String
+  tokenName    String?
+  freeAmount   Float                @default(0)
+  lockedAmount Float                @default(0)
+  totalAmount  Float                @default(0)
+  eurPrice     Float                @default(0)
+  eurValue     Float                @default(0)
+  createdAt    DateTime             @default(now())
+  snapshot     BinanceDailySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, tokenSymbol])
+  @@index([snapshotId])
+  @@index([tokenSymbol])
 }

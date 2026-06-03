@@ -3,8 +3,8 @@
 Ultimo aggiornamento: 2026-06-03
 Commit baseline corrente: `3610ebd` (cleanup ownership Binance current-sync pushato)
 Ultimo checkpoint smoke su Vercel: `3610ebd` (cold login e diagnostica di coerenza cross-dashboard)
-Slice locale corrente: primo connect Binance coerente completato; Docker preprod + E2E real-Binance verdi con chart Binance post-reload.
-Prossima fase: global valuation scheduler multi-profilo e assert automatici sulla diagnostica `morganFinanceCoherenceDiagnostics`.
+Slice locale corrente: primo connect Binance coerente completato; crypto current surfaces snapshot-driven completate; storico Binance server-side implementato localmente.
+Prossima fase: push/deploy Vercel, verifica cron registrato, poi collegare la dashboard Binance allo storico.
 
 Questo file e' la memoria durevole del refactor valuation/topbar/Binance.
 Quando una conversazione Codex viene compattata, leggere questo file prima di toccare codice.
@@ -90,17 +90,16 @@ Ogni profilo possiede il proprio committed valuation snapshot.
 
 La Home deve aggregare solo snapshot committed validi per i profili richiesti. Se uno snapshot manca, e' vecchio rispetto alla versione profilo/data o ha quote obbligatorie mancanti, la Home deve segnalarlo o restare pending per quella parte; non deve mischiare valori current locali o parziali.
 
-Scheduler target:
+Regola multi-profilo:
 
 ```text
-profilo attivo: priorita' alta
-profili inattivi/Home: priorita' piu' bassa ma stesso modello snapshot
+ogni profilo mantiene il proprio snapshot corrente committed
 nessuna dashboard pubblica valori correnti direttamente
 ogni profilo committa atomicamente il proprio snapshot
 Home aggrega dopo commit, non durante il draft
 ```
 
-Stato attuale: il codice gia' priorizza profilo attivo e profili inattivi in background, ma il comportamento "global refresh coerente per tutti i profili rilevanti" deve diventare un contratto testato, non solo una buona intenzione.
+Stato attuale: il profilo attivo e la Home hanno percorsi di warmup/refresh gia' funzionanti. Il requisito da preservare non e' fare tutto ovunque a ogni tick, ma impedire che Home/topbar/card mescolino snapshot current locali, parziali o non committed.
 
 ## Stato Corrente
 
@@ -124,6 +123,8 @@ Stato verificato alla baseline `3610ebd`:
 - la dashboard Binance non usa piu' una schermata muta: mostra chart, preparing, no-material o unavailable in modo esplicito;
 - crypto current surfaces completate localmente: prezzo unitario/current value token e totali provider crypto/investment nelle card main dashboard e portfolio dashboard leggono il committed valuation snapshot invece del punto chart/stage fallback.
 - follow-up locale: le card crypto non usano piu' fallback legacy a `currentPoint`, live price diretto o invested value quando manca lo snapshot; mostrano pending/skeleton finche' il committed snapshot non e' valido.
+- storico Binance server-side implementato localmente: schema `BinanceDailySnapshot`, servizio idempotente, route cron protetta da `CRON_SECRET` e configurazione Vercel Cron `0 23 * * *`;
+- produzione preparata: `CRON_SECRET` configurato su Vercel Production e migration `20260603070000_binance_daily_snapshots` applicata su Neon production.
 
 Risultati smoke manuale comunicati il 2026-06-03:
 
@@ -187,6 +188,47 @@ docker logs finali
   nessun ERROR/500/P2002/Unhandled/Exception
 ```
 
+Verifica locale storico Binance server-side del 2026-06-03:
+
+```text
+pnpm exec prisma generate --schema=prisma/schema.prisma
+  pass
+pnpm exec vitest run tests/unit/server/services/binance-daily-snapshot.test.ts
+  pass, service idempotente, Europe/Rome date key, dust incluso, batch continua dopo errore profilo
+pnpm exec vitest run tests/api/binance-daily-snapshot-cron.test.ts
+  pass, missing secret 503, unauthorized 401, authorized 200
+pnpm run prisma:validate
+  pass, Postgres + SQLite
+pnpm run lint
+  pass
+pnpm run typecheck
+  pass
+pnpm run typecheck:test
+  pass
+pnpm run test:run
+  pass, 84 file / 400 test
+pnpm run build
+  pass, route `/api/cron/binance-daily-snapshot` inclusa
+pnpm run docker:preprod:up
+  pass, build production + migration deploy + health ok
+pnpm run smoke:upload-panel:docker
+  pass
+docker logs app --tail=200
+  nessun ERROR/500/P2002/Unhandled/Exception
+pnpm run docker:preprod:down
+  pass
+```
+
+Verifica production setup storico Binance del 2026-06-03:
+
+```text
+Vercel Environment Variables
+  CRON_SECRET aggiunto a Production, Sensitive
+Neon production migration
+  prisma migrate deploy su host Neon direct/unpooled
+  migration applicata: 20260603070000_binance_daily_snapshots
+```
+
 Nota sicurezza: le credenziali Binance reali sono state passate solo come variabili d'ambiente di processo nei comandi E2E locali. Non sono state salvate in file tracciati.
 
 ## Invarianti Non Negoziabili
@@ -228,8 +270,6 @@ Policy live quote:
 - `LIVE_PRICES_UPDATED_EVENT` puo' aggiornare diagnostica e cache, ma non dovrebbe ricostruire direttamente i totali correnti visibili.
 - I totali correnti si aggiornano tramite `ensureFinanceCurrentValuation(...)`.
 - Gli stage warmup possono precaricare dati e cache quote, ma non devono pubblicare current totals in modo indipendente.
-- Il global valuation scheduler target deve deduplicare le quote richieste per chiave normalizzata su tutti i profili rilevanti e tutti i provider. Esempio: Pino ha BTC, Apple e MSCI World; Luca ha BTC, Apple e MSCI Europe; il ciclo globale deve richiedere una sola volta `BTC`, una sola volta `Apple`, una sola volta `MSCI World` e una sola volta `MSCI Europe`, poi distribuire quelle quote agli snapshot dei profili/provider che le usano.
-- La deduplica vale per crypto, ETF e azioni. Le posizioni restano separate per profilo/provider/asset, ma la quote live normalizzata e' unica nel ciclo.
 
 ## Mappa Codice Chiave
 
@@ -245,6 +285,7 @@ Policy live quote:
 - Price API/service: `src/app/api/prices/route.ts`, `src/server/services/price-refresh.ts`
 - Binance current sync: `src/app/api/binance/sync/route.ts`, `src/app/api/binance/connect/route.ts`, `src/server/services/binance-sync.ts`
 - Integrazione Binance: `src/integrations/binance/binance-service.ts`
+- Storico Binance daily snapshot: `src/server/services/binance-daily-snapshot.ts`, `src/server/repositories/binance-daily-snapshot-repository.ts`, `src/app/api/cron/binance-daily-snapshot/route.ts`
 
 ## Problemi Risolti
 
@@ -270,12 +311,11 @@ Policy live quote:
 | Priorita' | Problema | Comprensione Attuale | Risoluzione Prevista |
 | --- | --- | --- | --- |
 | P1 | E2E coherence automatizzati | La coerenza e' verificata manualmente con browser diagnostics. | Aggiungere assert E2E su `window.morganFinanceCoherenceDiagnostics?.()` per cold login, F5, dashboard switching e refresh-in-flight. |
-| P1 | Global valuation scheduler multi-profilo non formalizzato | Esiste refresh per profilo attivo e profili inattivi in background, ma non e' ancora un contratto testato che Home/topbar/card siano globalmente coerenti su tutti i profili rilevanti. La deduplica quote oggi e' forte dentro il singolo snapshot, ma va formalizzata globalmente su profili/provider condivisi. | Formalizzare scheduler centrale: attivo alta priorita', inattivi/Home background, raccolta quote normalizzate deduplicata cross-profilo, commit atomico per profilo, Home aggrega solo committed snapshot validi. |
 | P1 | Audit topbar/card/detail/Home | Molti valori sono gia' snapshot-driven, ma serve verifica sistematica di tutte le superfici current. | Mappare ogni valore current visibile e assicurare che legga da selector committed snapshot, non da calcoli dashboard-local. |
 | P2 | Leggibilita' diagnostica | La diagnostica e' utile ma verbosa; l'indagine production richiede ancora interpretazione. | Aggiungere summary compatto: profilo attivo, visible snapshot id, committed/draft ids, totali, missing/unavailable keys, current sync status. |
-| P2 | Stale crypto cache non renderizza prima del background refresh ritardato | `realistic` conferma cache crypto in sessionStorage, refresh background partito e reload ok, ma `cachedCryptoRenderedBeforeRefreshReleased=false`. | Usare cache stale solo come stage data se versione/data key combaciano; current values restano snapshot-driven. Correggere hook/mount order solo dopo P1 scheduler/audit. |
+| P2 | Stale crypto cache non renderizza prima del background refresh ritardato | `realistic` conferma cache crypto in sessionStorage, refresh background partito e reload ok, ma `cachedCryptoRenderedBeforeRefreshReleased=false`. | Usare cache stale solo come stage data se versione/data key combaciano; current values restano snapshot-driven. Correggere hook/mount order dopo audit snapshot/current surfaces. |
 | P2 | Lavoro dashboard inattive montate | Le dashboard inattive possono warmare dati. Serve confidenza che non pubblichino current totals o facciano hidden rendering costoso. | Aggiungere instrumentation/assertions per hidden dashboard transitions; mantenere warmup cache/data-only. |
-| P2 | Design Binance storico/backfill | La current coherence e' separata dallo storico Binance. Current sync resta materiale/veloce; full Binance history deve salvare tutto. | Disegnare modello daily storico server-side schedulato, con snapshot completi e percorso separato da current sync. |
+| P2 | Dashboard Binance non ancora collegata allo storico daily snapshot | Lo storico server-side salva il punto giornaliero completo, ma la UI/chart Binance deve ancora leggerlo. | Dopo cron e DB, aggiungere endpoint/query storica e usare quei punti nel chart Binance senza toccare current valuation. |
 | P3 | Futuro desktop/SQLite | Lo schema SQLite valida, ma il runtime desktop non e' implementato. | Tenere valuation/domain logic target-neutral; poi aggiungere storage adapter e migrazioni SQLite. |
 
 ## Piano Attivo
@@ -291,14 +331,18 @@ Policy live quote:
    - fatto: `binanceRefreshKey` e' persistito, quindi F5/reload post-connect resta sulla versione cache nuova;
    - gate completato: Docker preprod + `e2e:active-components` con credenziali reali mostra card+chart Binance e passa senza HTTP/browser errors.
 
-3. Global valuation scheduler multi-profilo:
-   - rendere esplicito un solo scheduler centrale per refresh current;
-   - profilo attivo alta priorita';
-   - profili inattivi/Home background ma stesso modello snapshot;
-   - deduplicare le quote live nel ciclo globale per chiave normalizzata cross-profilo/cross-provider: BTC condiviso si fetcha una volta, Apple condivisa si fetcha una volta, ETF/azioni condivisi si fetchano una volta;
-   - mantenere separate le posizioni e i totali per profilo/provider, anche quando condividono la stessa quote;
-   - Home aggrega solo committed snapshot validi;
-   - gate: unit test scheduler con due profili che condividono BTC/Apple e hanno ETF distinti + E2E Home con due profili e refresh-in-flight.
+3. Storico Binance server-side:
+   - fatto: aggiunto modello `BinanceDailySnapshot` + righe token complete;
+   - fatto: snapshot idempotente per `userId + dateKey`;
+   - fatto: `dateKey` calcolato in `Europe/Rome`, anche se Vercel Cron gira in UTC;
+   - fatto: route `/api/cron/binance-daily-snapshot` protetta da `CRON_SECRET`;
+   - fatto: configurazione Vercel Cron a `0 23 * * *` UTC;
+   - fatto: il job salva tutto quello che Binance restituisce con saldo positivo, inclusi dust e locked;
+   - fatto: `BinanceBalance` current resta veloce/materiale e separato;
+   - gate completato localmente: service/route test, schema Postgres/SQLite, test suite, build e Docker preprod.
+   - fatto: `CRON_SECRET` configurato su Vercel Production;
+   - fatto: migration Neon production applicata;
+   - resta: pushare e verificare che il deploy registri il cron.
 
 4. Audit superfici current:
    - fatto localmente: crypto current surfaces completate;
@@ -331,12 +375,6 @@ Policy live quote:
    - aggiungere un helper piccolo che riduce la diagnostica completa a un oggetto current-state leggibile;
    - mantenere la diagnostica dettagliata esistente per indagini profonde;
    - documentare qui la shape compatta dopo l'implementazione.
-
-8. Storico Binance:
-   - non iniziare finche' E2E diagnostics non sono stabili;
-   - scrivere prima il design;
-   - tenere current sync, live quote pricing e historical backfill come concetti separati;
-   - prevedere job server-side schedulato che salva snapshot completi, non filtrati per materialita'.
 
 ## Strategia Test
 
@@ -381,12 +419,11 @@ Matrix minima per le prossime fasi:
 | Fase | Test minimo |
 | --- | --- |
 | Primo connect Binance coerente | unit/service per sync material set + E2E Docker real-Binance con riepilogo visibile o stato no-material esplicito |
-| Global valuation scheduler | unit su priorita' active/inactive + E2E Home multi-profilo con snapshot committed |
 | Audit current surfaces | unit selector + smoke browser topbar/card/detail/Home su stesso snapshot |
 | Crypto current surfaces | unit su token Trade Republic + Binance che condividono quote BTC/ETH; dashboard/card devono aggiornare prezzo, current value e totale dallo snapshot |
 | Cache stale stage data | E2E reload con cache stale: stage data immediati quando validi, current values sempre committed snapshot |
 | Diagnostica compatta | unit shape diagnostica + E2E che fallisce se `coherent` non e' true |
-| Storico Binance | design doc prima del codice; poi test repository/snapshot e job schedulato con fixtures complete inclusi dust/locked |
+| Storico Binance server-side | schema + service idempotente + route cron autorizzata + fixtures complete inclusi dust/locked |
 
 ## Risultati E2E Docker 2026-06-03
 
@@ -574,16 +611,25 @@ Non-owner:
 
 Lo storico Binance resta intenzionalmente separato dalla current valuation coherence.
 
-Il percorso target e' un job server-side schedulato, ad esempio a mezzanotte, non una responsabilita' del browser:
+Il percorso target e' un job server-side schedulato, non una responsabilita' del browser:
 
 ```text
-job storico Binance
+Vercel Cron 0 23 * * * UTC
 -> profili con credenziali Binance valide
 -> sync signed account completo
 -> salva snapshot giornaliero completo: dust, locked, zero-value, token non materiali
 -> usa quello storico per chart/backfill
 -> non pubblica valori current parziali nelle dashboard
 ```
+
+Decisione operativa:
+
+- `dateKey` e' calcolato in `Europe/Rome`, quindi il job resta legato al giorno italiano anche se Vercel Cron usa UTC.
+- L'endpoint cron e' `/api/cron/binance-daily-snapshot`.
+- La chiamata deve avere header `Authorization: Bearer ${CRON_SECRET}`.
+- Lo snapshot e' idempotente: una sola riga per `userId + dateKey`; se esiste, il job non richiama Binance per quel profilo.
+- Lo storico salva tutto quello che Binance restituisce con saldo positivo, anche se sotto `0,49 EUR`.
+- La UI current continua a usare `BinanceBalance` filtrato/materiale e committed valuation snapshot.
 
 Non risolvere Binance history riusando current sync come se fosse un ledger storico. Il lavoro futuro su Binance history deve decidere:
 

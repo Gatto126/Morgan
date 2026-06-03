@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["fra1"],
-  "buildCommand": "pnpm run vercel-build"
+  "buildCommand": "pnpm run vercel-build",
+  "crons": [
+    {
+      "path": "/api/cron/binance-daily-snapshot",
+      "schedule": "0 23 * * *"
+    }
+  ]
 }
