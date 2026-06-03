@@ -68,6 +68,7 @@ export type PortfolioDashboardTab = {
 export type PortfolioDashboardConfig = {
   endpoint: string;
   rootLabel: string;
+  aggregateLegendLabel?: string;
   rootIcon: LucideIcon;
   loadingLabel: string;
   fetchErrorMessage: string;

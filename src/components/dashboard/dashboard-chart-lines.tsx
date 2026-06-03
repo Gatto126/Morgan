@@ -2,7 +2,7 @@ import { Line, ReferenceLine } from "recharts";
 
 import { ChartReferenceLabel } from "@/components/chart-primitives/chart-reference-label";
 import { SelectableChartDot, type ChartDotSelectedPoint } from "@/components/chart-primitives/selectable-chart-dot";
-import { hasRenderableLineSeries } from "./dashboard-chart-series";
+import { hasRenderableLineSeries, shouldRenderStandalonePointSeries } from "./dashboard-chart-series";
 import type { DashboardChartConfig, DashboardChartPoint } from "./dashboard-chart-types";
 import type { AccountTab } from "./types";
 
@@ -39,6 +39,7 @@ export function DashboardChartLines({
   setSelectedSeriesKey
 }: DashboardChartLinesProps) {
   const hiddenSeriesSignature = getHiddenSeriesSignature(hiddenSeries);
+  const isMainSeriesVisible = !hiddenSeries[activeTab];
   const handleSelectPoint = (point: ChartDotSelectedPoint) => {
     setSelectedMonth(point.month);
     setSelectedSeriesKey(point.seriesKey);
@@ -48,10 +49,40 @@ export function DashboardChartLines({
     <>
       {chartConfig.subLines.map((subLine) => {
         if (hiddenSeries[subLine.key]) return null;
-        if (!hasRenderableLineSeries(chartData, subLine.key)) return null;
+        const hasLine = hasRenderableLineSeries(chartData, subLine.key);
+        const shouldRenderStandalonePoint =
+          !hasLine && shouldRenderStandalonePointSeries(chartData, subLine.key, isMainSeriesVisible);
+
+        if (!hasLine && !shouldRenderStandalonePoint) return null;
+
+        if (shouldRenderStandalonePoint) {
+          return (
+            <Line
+              key={`${subLine.key}-point-${hiddenSeriesSignature}`}
+              type="linear"
+              dataKey={subLine.key}
+              name={subLine.key}
+              stroke="transparent"
+              strokeWidth={0}
+              isAnimationActive={false}
+              connectNulls={false}
+              activeDot={false}
+              dot={(props: ActiveDotProps) => (
+                <SelectableChartDot
+                  {...props}
+                  color={subLine.stroke}
+                  onSelectPoint={handleSelectPoint}
+                  radius={5}
+                  seriesKey={subLine.key}
+                />
+              )}
+            />
+          );
+        }
+
         return (
           <Line
-            key={subLine.key}
+            key={`${subLine.key}-line-${hiddenSeriesSignature}`}
             type="linear"
             dataKey={subLine.key}
             name={subLine.key}
@@ -73,7 +104,7 @@ export function DashboardChartLines({
         );
       })}
 
-      {!hiddenSeries[activeTab] && hasRenderableLineSeries(chartData, "value") && (
+      {isMainSeriesVisible && hasRenderableLineSeries(chartData, "value") && (
         <Line
           key={`${activeTab}-${hiddenSeriesSignature}`}
           type="linear"

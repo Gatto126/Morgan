@@ -5,7 +5,10 @@ import {
   formatPortfolioTooltipSeriesLabel,
   formatPortfolioXAxisTick,
   getPortfolioAllLegendItems,
-  getPortfolioProviderLegendItems
+  getPortfolioProviderLegendItems,
+  hasRenderablePortfolioLineSeries,
+  hasStandalonePortfolioPointSeries,
+  shouldRenderStandalonePortfolioPointSeries
 } from "@/components/portfolio-dashboard/portfolio-chart-model";
 import type { PortfolioProviderSummary } from "@/components/portfolio-dashboard/types";
 
@@ -42,6 +45,7 @@ describe("portfolio chart model", () => {
     expect(formatPortfolioTooltipLabel("2026-03")).toBe("Mar 26");
     expect(formatPortfolioTooltipSeriesLabel("balance")).toBe("BALANCE");
     expect(formatPortfolioTooltipSeriesLabel("heritage")).toBe("HERITAGE");
+    expect(formatPortfolioTooltipSeriesLabel("heritage", "CRYPTO")).toBe("CRYPTO");
     expect(formatPortfolioTooltipSeriesLabel("trade_republic")).toBe("TRADE REPUBLIC");
     expect(formatPortfolioXAxisTick("2026-04-01")).toBe("Apr 26");
   });
@@ -49,6 +53,10 @@ describe("portfolio chart model", () => {
   it("builds aggregate and provider legend items", () => {
     expect(getPortfolioAllLegendItems([provider]).map((item) => item.label)).toEqual([
       "HERITAGE",
+      "TRADE REPUBLIC"
+    ]);
+    expect(getPortfolioAllLegendItems([provider], "CRYPTO").map((item) => item.label)).toEqual([
+      "CRYPTO",
       "TRADE REPUBLIC"
     ]);
 
@@ -61,5 +69,21 @@ describe("portfolio chart model", () => {
       "Core ETF",
       "Sold Fund"
     ]);
+  });
+
+  it("classifies standalone provider points separately from lines", () => {
+    const points = [
+      { rawMonth: "2026-06-01", heritage: 30, trade_republic: 30, BINANCE: null },
+      { rawMonth: "2026-06-02", heritage: 31, trade_republic: 31, BINANCE: null },
+      { rawMonth: "2026-06-03", heritage: 2331, trade_republic: 31, BINANCE: 2300 }
+    ];
+
+    expect(hasRenderablePortfolioLineSeries(points, "BINANCE")).toBe(false);
+    expect(hasStandalonePortfolioPointSeries(points, "BINANCE")).toBe(true);
+    expect(shouldRenderStandalonePortfolioPointSeries(points, "BINANCE", false)).toBe(true);
+    expect(shouldRenderStandalonePortfolioPointSeries(points, "BINANCE", true)).toBe(false);
+    expect(hasRenderablePortfolioLineSeries(points, "trade_republic")).toBe(true);
+    expect(hasStandalonePortfolioPointSeries(points, "trade_republic")).toBe(false);
+    expect(hasRenderablePortfolioLineSeries(points, "heritage")).toBe(true);
   });
 });

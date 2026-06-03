@@ -3,6 +3,7 @@ import type { ChartLegendItem } from "@/components/chart-primitives/chart-legend
 import { GRAYSCALE_PALETTE } from "./constants";
 import { formatProviderLabel, getMonthLabel } from "./formatters";
 import type { PortfolioProviderSummary } from "./types";
+import type { ChartPoint } from "@/types/chart";
 
 export const PORTFOLIO_TOOLTIP_PRIORITY_NAMES = ["heritage", "value", "balance"] as const;
 
@@ -20,9 +21,9 @@ export function formatPortfolioTooltipLabel(label?: string) {
   return formattedLabel;
 }
 
-export function formatPortfolioTooltipSeriesLabel(name: string) {
+export function formatPortfolioTooltipSeriesLabel(name: string, aggregateLabel = "HERITAGE") {
   if (name === "value" || name === "balance") return "BALANCE";
-  if (name === "heritage") return "HERITAGE";
+  if (name === "heritage") return aggregateLabel;
   return formatProviderLabel(name);
 }
 
@@ -33,10 +34,13 @@ export function formatPortfolioXAxisTick(value: string) {
   return getMonthLabel(`${year}-${month}`);
 }
 
-export function getPortfolioAllLegendItems(providers: PortfolioProviderSummary[]): ChartLegendItem[] {
+export function getPortfolioAllLegendItems(
+  providers: PortfolioProviderSummary[],
+  aggregateLabel = "HERITAGE"
+): ChartLegendItem[] {
   return ["heritage", ...providers.map((provider) => provider.sourceInstitution)].map((key, index) => ({
     key,
-    label: key === "heritage" ? "HERITAGE" : formatProviderLabel(key),
+    label: key === "heritage" ? aggregateLabel : formatProviderLabel(key),
     color: key === "heritage" ? "#ffffff" : GRAYSCALE_PALETTE[(index - 1) % GRAYSCALE_PALETTE.length]
   }));
 }
@@ -58,4 +62,27 @@ export function getPortfolioProviderLegendItems(
       labelClassName: "truncate"
     };
   });
+}
+
+export function getPortfolioNumericSeriesPointCount(chartData: ChartPoint[], seriesKey: string) {
+  return chartData.reduce((count, point) => {
+    const value = point[seriesKey];
+    return typeof value === "number" && Number.isFinite(value) ? count + 1 : count;
+  }, 0);
+}
+
+export function hasRenderablePortfolioLineSeries(chartData: ChartPoint[], seriesKey: string) {
+  return getPortfolioNumericSeriesPointCount(chartData, seriesKey) >= 2;
+}
+
+export function hasStandalonePortfolioPointSeries(chartData: ChartPoint[], seriesKey: string) {
+  return getPortfolioNumericSeriesPointCount(chartData, seriesKey) === 1;
+}
+
+export function shouldRenderStandalonePortfolioPointSeries(
+  chartData: ChartPoint[],
+  seriesKey: string,
+  isAggregateVisible: boolean
+) {
+  return !isAggregateVisible && hasStandalonePortfolioPointSeries(chartData, seriesKey);
 }

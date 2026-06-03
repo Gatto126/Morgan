@@ -12,6 +12,7 @@ type CryptoDashboardProps = Omit<PortfolioDashboardProps, "config">;
 const cryptoDashboardConfig: PortfolioDashboardConfig = {
   endpoint: "/api/transactions/crypto",
   rootLabel: "CRYPTO",
+  aggregateLegendLabel: "CRYPTO",
   rootIcon: Coins,
   loadingLabel: "Caricamento investimenti crypto...",
   fetchErrorMessage: "Errore nel caricamento della pagina investimenti crypto.",

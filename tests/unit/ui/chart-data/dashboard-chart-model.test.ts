@@ -7,7 +7,11 @@ import {
   collectCryptoTokens,
   collectInvestmentProducts
 } from "@/components/dashboard/dashboard-chart-data-model";
-import { hasRenderableLineSeries } from "@/components/dashboard/dashboard-chart-series";
+import {
+  hasRenderableLineSeries,
+  hasStandalonePointSeries,
+  shouldRenderStandalonePointSeries
+} from "@/components/dashboard/dashboard-chart-series";
 import {
   addReferenceLineValue,
   buildDashboardChartConfig,
@@ -686,7 +690,7 @@ describe("dashboard chart display model", () => {
     expect(hasRenderableDashboardChartData([{ rawMonth: "2026-03-01", value: null, bbva: null }], config)).toBe(false);
   });
 
-  it("does not render standalone Binance chart points as a line", () => {
+  it("classifies standalone Binance chart points separately from lines", () => {
     const points: DashboardChartPoint[] = [
       { rawMonth: "2026-06-01", value: 30, crypto_inst_trade_republic: 30, binance: null },
       { rawMonth: "2026-06-02", value: 32, crypto_inst_trade_republic: 32, binance: null },
@@ -694,7 +698,11 @@ describe("dashboard chart display model", () => {
     ];
 
     expect(hasRenderableLineSeries(points, "binance")).toBe(false);
+    expect(hasStandalonePointSeries(points, "binance")).toBe(true);
+    expect(shouldRenderStandalonePointSeries(points, "binance", false)).toBe(true);
+    expect(shouldRenderStandalonePointSeries(points, "binance", true)).toBe(false);
     expect(hasRenderableLineSeries(points, "crypto_inst_trade_republic")).toBe(true);
+    expect(hasStandalonePointSeries(points, "crypto_inst_trade_republic")).toBe(false);
     expect(hasRenderableLineSeries(points, "value")).toBe(true);
   });
 });

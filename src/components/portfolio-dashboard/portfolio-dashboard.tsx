@@ -306,6 +306,7 @@ export function PortfolioDashboard({
                 data={dataForDisplay}
                 activeProvider={activeProvider}
                 activeTab={activeTab}
+                aggregateLegendLabel={config.aggregateLegendLabel}
                 chartData={chartData}
                 xAxisTicks={xAxisTicks}
                 timeRange={timeRange}

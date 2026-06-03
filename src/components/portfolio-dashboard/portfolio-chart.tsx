@@ -16,6 +16,8 @@ import {
   formatPortfolioXAxisTick,
   getPortfolioAllLegendItems,
   getPortfolioProviderLegendItems,
+  hasRenderablePortfolioLineSeries,
+  shouldRenderStandalonePortfolioPointSeries,
   PORTFOLIO_TOOLTIP_PRIORITY_NAMES
 } from "./portfolio-chart-model";
 import { formatEuroCents } from "./formatters";
@@ -27,6 +29,7 @@ type PortfolioChartProps = {
   data: PortfolioData;
   activeProvider: PortfolioProviderSummary | null;
   activeTab: string;
+  aggregateLegendLabel?: string;
   chartData: ChartPoint[];
   xAxisTicks: string[];
   timeRange: TimeRange;
@@ -47,6 +50,7 @@ export function PortfolioChart({
   data,
   activeProvider,
   activeTab,
+  aggregateLegendLabel = "HERITAGE",
   chartData,
   xAxisTicks,
   timeRange,
@@ -68,6 +72,9 @@ export function PortfolioChart({
     fallbackSize: FALLBACK_CHART_SIZE,
     onFrameReadyChange: onChartReadyChange
   });
+  const hiddenSeriesSignature = Object.keys(hiddenSeries).sort().map(key => hiddenSeries[key] ? "0" : "1").join("");
+  const isAggregateVisible = !hiddenSeries.heritage;
+  const formatSeriesLabel = (name: string) => formatPortfolioTooltipSeriesLabel(name, aggregateLegendLabel);
 
   return (
     <>
@@ -124,7 +131,7 @@ export function PortfolioChart({
               content={(
                 <ChartTooltip
                   formatLabel={formatPortfolioTooltipLabel}
-                  formatSeriesLabel={formatPortfolioTooltipSeriesLabel}
+                  formatSeriesLabel={formatSeriesLabel}
                   formatValue={formatEuroCents}
                   labelClassName="truncate max-w-[150px]"
                   priorityNames={PORTFOLIO_TOOLTIP_PRIORITY_NAMES}
@@ -140,9 +147,40 @@ export function PortfolioChart({
                   const providerKey = provider.sourceInstitution;
                   if (hiddenSeries[providerKey]) return null;
                   const strokeColor = GRAYSCALE_PALETTE[index % GRAYSCALE_PALETTE.length];
+                  const hasLine = hasRenderablePortfolioLineSeries(chartData, providerKey);
+                  const shouldRenderStandalonePoint =
+                    !hasLine && shouldRenderStandalonePortfolioPointSeries(chartData, providerKey, isAggregateVisible);
+
+                  if (!hasLine && !shouldRenderStandalonePoint) return null;
+
+                  if (shouldRenderStandalonePoint) {
+                    return (
+                      <Line
+                        key={`${providerKey}-point-${hiddenSeriesSignature}`}
+                        type="linear"
+                        dataKey={providerKey}
+                        name={providerKey}
+                        stroke="transparent"
+                        strokeWidth={0}
+                        isAnimationActive={false}
+                        connectNulls={false}
+                        activeDot={false}
+                        dot={(props: ActiveDotProps) => (
+                          <SelectableChartDot
+                            {...props}
+                            color={strokeColor}
+                            onSelectPoint={onSelectPoint}
+                            radius={5}
+                            seriesKey={providerKey}
+                          />
+                        )}
+                      />
+                    );
+                  }
+
                   return (
                     <Line
-                      key={providerKey}
+                      key={`${providerKey}-line-${hiddenSeriesSignature}`}
                       type="linear"
                       dataKey={providerKey}
                       name={providerKey}
@@ -162,26 +200,27 @@ export function PortfolioChart({
                     />
                   );
                 })}
-                <Line
-                  key={`heritage-${Object.keys(hiddenSeries).sort().map(key => hiddenSeries[key] ? "0" : "1").join("")}`}
-                  type="linear"
-                  dataKey="heritage"
-                  name="heritage"
-                  stroke="#ffffff"
-                  strokeWidth={2.5}
-                  isAnimationActive={false}
-                  connectNulls={false}
-                  hide={!!hiddenSeries.heritage}
-                  activeDot={(props: ActiveDotProps) => (
-                    <SelectableChartDot
-                      {...props}
-                      color="#ffffff"
-                      onSelectPoint={onSelectPoint}
-                      seriesKey="heritage"
-                    />
-                  )}
-                  dot={false}
-                />
+                {isAggregateVisible && hasRenderablePortfolioLineSeries(chartData, "heritage") ? (
+                  <Line
+                    key={`heritage-${hiddenSeriesSignature}`}
+                    type="linear"
+                    dataKey="heritage"
+                    name="heritage"
+                    stroke="#ffffff"
+                    strokeWidth={2.5}
+                    isAnimationActive={false}
+                    connectNulls={false}
+                    activeDot={(props: ActiveDotProps) => (
+                      <SelectableChartDot
+                        {...props}
+                        color="#ffffff"
+                        onSelectPoint={onSelectPoint}
+                        seriesKey="heritage"
+                      />
+                    )}
+                    dot={false}
+                  />
+                ) : null}
               </>
             ) : seriesReady ? (
               <>
@@ -215,7 +254,7 @@ export function PortfolioChart({
                   );
                 })}
                 <Line
-                  key={`balance-${Object.keys(hiddenSeries).sort().map(key => hiddenSeries[key] ? "0" : "1").join("")}`}
+                  key={`balance-${hiddenSeriesSignature}`}
                   type="linear"
                   dataKey="balance"
                   name="balance"
@@ -253,7 +292,7 @@ export function PortfolioChart({
         className="flex flex-wrap items-center justify-center gap-3 pt-2 pb-0 sm:gap-4 overflow-x-auto max-h-[100px] hide-scrollbar"
         hiddenSeries={hiddenSeries}
         items={activeTab === "ALL"
-          ? getPortfolioAllLegendItems(data.providers)
+          ? getPortfolioAllLegendItems(data.providers, aggregateLegendLabel)
           : getPortfolioProviderLegendItems(activeProvider, showSoldAssets)}
         labelClassName={activeTab === "ALL" ? undefined : "max-w-[150px]"}
         onToggleSeries={onToggleSeries}
