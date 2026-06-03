@@ -341,7 +341,7 @@ Policy live quote:
 | P2 | Stale crypto cache non renderizza prima del background refresh ritardato | `realistic` conferma cache crypto in sessionStorage, refresh background partito e reload ok, ma `cachedCryptoRenderedBeforeRefreshReleased=false`. | Usare cache stale solo come stage data se versione/data key combaciano; current values restano snapshot-driven. Correggere hook/mount order dopo audit snapshot/current surfaces. |
 | P2 | Lavoro dashboard inattive montate | Le dashboard inattive possono warmare dati. Serve confidenza che non pubblichino current totals o facciano hidden rendering costoso. | Aggiungere instrumentation/assertions per hidden dashboard transitions; mantenere warmup cache/data-only. |
 | P2 | Primo run cron da osservare | Il codice e Vercel Cron sono pronti, ma il primo punto reale arriva solo dopo il run schedulato. | Dopo il primo run controllare log Vercel e DB; la Binance dashboard deve mostrare il nuovo punto storico piu' il punto current di oggi. |
-| P2 | Smoke F5 storico Binance production | Codice locale include lo storico Binance nei payload stage dashboard/crypto, invalida la vecchia cache client e blocca il primo reveal finche' manca il current valuation point Binance. | Dopo deploy, fare F5 su main e crypto: il chart deve restare in loading/pending finche' topbar/current snapshot sono pronti, poi apparire gia' coerente. |
+| P2 | Smoke F5 storico Binance production | Codice locale include lo storico Binance nei payload stage dashboard/crypto/Home, invalida le vecchie cache client e blocca il primo reveal finche' manca il current valuation point. | Dopo deploy, fare F5 su Home, main e crypto: il chart deve restare in loading/pending finche' topbar/current snapshot sono pronti, poi apparire gia' coerente. |
 | P3 | Futuro desktop/SQLite | Lo schema SQLite valida, ma il runtime desktop non e' implementato. | Tenere valuation/domain logic target-neutral; poi aggiungere storage adapter e migrazioni SQLite. |
 
 ## Piano Attivo
@@ -374,8 +374,9 @@ Policy live quote:
    - fatto localmente: main dashboard usa gli snapshot daily per sommare Binance nei punti storici `crypto` e `heritage`;
    - fatto localmente: main/crypto dashboard ricevono `binanceHistoricalPoints` dentro lo stage payload, evitando fetch client separate e linee Binance che arrivano dopo F5;
    - fatto localmente: con Binance collegata, main/crypto non partono visibili da SSR/cache stage data se manca il `currentValuationPoint`;
+   - fatto localmente: Home preview riceve `binanceHistoricalPoints` nel payload preview e non renderizza la linea Heritage finche' manca il punto current aggregate committed;
    - fatto localmente: date key chart allineato a `Europe/Rome`;
-   - resta: pushare il collegamento UI e verificare il primo run schedulato.
+   - resta: deployare la correzione Home e verificare il primo run schedulato.
 
 4. Audit superfici current:
    - fatto localmente: crypto current surfaces completate;
@@ -387,6 +388,7 @@ Policy live quote:
    - includere crypto dashboard, card Trade Republic, prezzo unitario BTC/ETH, current value BTC/ETH, totale provider, totale crypto e heritage;
    - non aggiornare con quote live `Invested Value`, quantity o storico transazionale;
    - mappare topbar, card, detail row, chart today e Home;
+   - regola Home: storico/preview possono arrivare da cache o payload leggero, ma il grafico non deve essere mostrato prima del current aggregate committed;
    - sostituire eventuali calcoli locali con selector committed snapshot;
    - gate: test unitari per selector e smoke browser con confronto topbar/card/detail/Home.
 

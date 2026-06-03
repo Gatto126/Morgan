@@ -38,7 +38,7 @@ const loadingPreviewState: AccountPortfolioPreviewState = {
   records: []
 };
 
-const previewCachePrefix = "morgan:account-portfolio-preview:v1:";
+const previewCachePrefix = "morgan:account-portfolio-preview:v2:";
 const previewCacheTtlMs = dashboardStageDataFreshTtlMs;
 const previewStaleCacheTtlMs = 6 * 60 * 60 * 1_000;
 const previewMemoryCache = new Map<string, { data: DashboardData; fetchedAt: number }>();

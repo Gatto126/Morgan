@@ -1,3 +1,5 @@
+import type { BinanceHistoricalPoint } from "@/types/binance-history";
+
 type DashboardPreviewBucket = {
   checking: number;
   crypto: number;
@@ -9,6 +11,7 @@ type DashboardPreviewBucket = {
 
 type DashboardPreviewLike = {
   accountTotals: unknown;
+  binanceHistoricalPoints?: BinanceHistoricalPoint[];
   dailyData: DashboardPreviewBucket[];
   monthlyData: DashboardPreviewBucket[];
   providerSummaries: unknown;
@@ -34,6 +37,7 @@ function toPreviewDailyBucket(bucket: DashboardPreviewBucket): DashboardPreviewB
 export function toDashboardPreviewData<TData extends DashboardPreviewLike>(data: TData): TData {
   return {
     accountTotals: data.accountTotals,
+    binanceHistoricalPoints: data.binanceHistoricalPoints ?? [],
     dailyData: data.dailyData.map(toPreviewDailyBucket),
     monthlyData: data.monthlyData.map(toPreviewMonthlyBucket),
     providerSummaries: data.providerSummaries

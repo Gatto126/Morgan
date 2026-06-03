@@ -83,12 +83,16 @@ export function WelcomeHeritagePreview({
     [binanceRefreshKey, snapshotsByProfileId, users]
   );
   const currentValuationPoint = currentValuationAggregate.point;
+  const historicalChartData = useMemo(
+    () => getAggregatedAccountChartData(records),
+    [records]
+  );
+  const canRenderCommittedChart = currentValuationPoint !== null;
   const chartData = useMemo(
-    () => mergeCurrentValuationPoint(
-      getAggregatedAccountChartData(records),
-      currentValuationPoint
-    ),
-    [currentValuationPoint, records]
+    () => canRenderCommittedChart
+      ? mergeCurrentValuationPoint(historicalChartData, currentValuationPoint)
+      : [],
+    [canRenderCommittedChart, currentValuationPoint, historicalChartData]
   );
   const heritageValues = useMemo(
     () => chartData
@@ -97,7 +101,13 @@ export function WelcomeHeritagePreview({
     [chartData]
   );
   const xAxisTicks = useMemo(() => getWelcomeXAxisTicks(chartData), [chartData]);
-  const topbarValue = activePoint?.heritage ?? currentValuationPoint?.heritage ?? null;
+  const activePointKey = String(activePoint?.rawMonth ?? activePoint?.month ?? "");
+  const visibleActivePoint = activePointKey && chartData.some((point) => {
+    return String(point.rawMonth ?? point.month ?? "") === activePointKey;
+  })
+    ? activePoint
+    : null;
+  const topbarValue = visibleActivePoint?.heritage ?? currentValuationPoint?.heritage ?? null;
   const yDomain = getWelcomeYDomain(heritageValues);
   const hasChartData = heritageValues.length > 0;
   const xAxisLabels = useMemo(
@@ -260,7 +270,10 @@ function getAggregatedAccountChartData(records: AccountPortfolioPreviewRecord[])
       cryptoInstitutions: collectCryptoInstitutions(record.data),
       cryptoTokens: collectCryptoTokens(record.data),
       data: record.data,
-      hasBinancePortfolio: record.user.hasBinanceCredentials || binanceTotalCents > 0,
+      binanceHistoricalPoints: record.data.binanceHistoricalPoints ?? [],
+      hasBinancePortfolio: record.user.hasBinanceCredentials
+        || binanceTotalCents > 0
+        || (record.data.binanceHistoricalPoints?.length ?? 0) > 0,
       investmentProducts: collectInvestmentProducts(record.data),
       timeRange: "ALL"
     });
