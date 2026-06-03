@@ -17,20 +17,60 @@ function normalizeCurrency(value: string) {
 }
 
 describe("binance chart model", () => {
-  it("builds a flat daily balance series from the current Binance total", () => {
+  it("builds a daily balance series from historical snapshots and the current total", () => {
     const today = new Date(Date.UTC(2026, 4, 29, 12));
-    const points = buildBinanceDailyChartData(5525.53, today);
+    const points = buildBinanceDailyChartData(
+      5525.53,
+      [
+        { dateKey: "2026-05-28", totalEurValue: 5000 },
+        { dateKey: "2026-05-27", totalEurValue: 4900 }
+      ],
+      today
+    );
 
-    expect(points[0]).toEqual({
-      date: "2025-01-29",
-      rawMonth: "2025-01-29",
-      balance: 552553
-    });
-    expect(points.at(-1)).toEqual({
+    expect(points).toEqual([
+      {
+        date: "2026-05-27",
+        rawMonth: "2026-05-27",
+        balance: 490000
+      },
+      {
+        date: "2026-05-28",
+        rawMonth: "2026-05-28",
+        balance: 500000
+      },
+      {
+        date: "2026-05-29",
+        rawMonth: "2026-05-29",
+        balance: 552553
+      }
+    ]);
+  });
+
+  it("uses the committed current value for today's point instead of stale history", () => {
+    const today = new Date(Date.UTC(2026, 4, 29, 12));
+    const points = buildBinanceDailyChartData(
+      5525.53,
+      [{ dateKey: "2026-05-29", totalEurValue: 5000 }],
+      today
+    );
+
+    expect(points).toEqual([{
       date: "2026-05-29",
       rawMonth: "2026-05-29",
       balance: 552553
-    });
+    }]);
+  });
+
+  it("does not invent historical points before the first daily snapshot", () => {
+    const today = new Date(Date.UTC(2026, 4, 29, 12));
+
+    expect(buildBinanceDailyChartData(0, [], today)).toEqual([]);
+    expect(buildBinanceDailyChartData(5525.53, [], today)).toEqual([{
+      date: "2026-05-29",
+      rawMonth: "2026-05-29",
+      balance: 552553
+    }]);
   });
 
   it("filters daily points by the selected time range", () => {

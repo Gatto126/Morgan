@@ -18,6 +18,7 @@ import {
   formatBinanceEuroCents,
   formatBinanceXAxisTick,
   getBinanceXAxisTicks,
+  type BinanceHistoricalSnapshotPoint,
   type BinanceTimeRange
 } from "./binance-dashboard/binance-chart-model";
 import {
@@ -42,6 +43,10 @@ type BinanceBalance = {
   freeAmount: number;
   lockedAmount: number;
   eurValue: number;
+};
+
+type BinanceHistoryResponse = {
+  snapshots?: BinanceHistoricalSnapshotPoint[];
 };
 
 interface BinanceDashboardProps {
@@ -96,6 +101,7 @@ export function BinanceDashboard({
   const [isMobile, setIsMobile] = useState(false);
   const [balances, setBalances] = useState<BinanceBalance[]>([]);
   const [balancesKnown, setBalancesKnown] = useState(false);
+  const [historicalSnapshots, setHistoricalSnapshots] = useState<BinanceHistoricalSnapshotPoint[]>([]);
   const valuationSnapshot = useCurrentValuationSnapshot(userId);
   const hasCurrentValuationSnapshot = valuationSnapshot?.version.binanceRefreshKey === binanceRefreshKey
     && valuationSnapshot.status === "ready";
@@ -145,6 +151,34 @@ export function BinanceDashboard({
     return () => window.clearTimeout(timer);
   }, [loadBalances, shouldLoad]);
 
+  useEffect(() => {
+    if (!shouldLoad || !hasBinanceCredentials) {
+      const clearTimer = window.setTimeout(() => setHistoricalSnapshots([]), 0);
+      return () => window.clearTimeout(clearTimer);
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/binance/history?userId=${encodeURIComponent(userId)}`, {
+        signal: controller.signal
+      })
+        .then(async (response) => {
+          if (!response.ok) return null;
+          return (await response.json()) as BinanceHistoryResponse;
+        })
+        .then((payload) => {
+          if (!payload || !Array.isArray(payload.snapshots)) return;
+          setHistoricalSnapshots(payload.snapshots);
+        })
+        .catch(() => {});
+    }, 0);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [hasBinanceCredentials, shouldLoad, userId]);
+
   const totalEur = useMemo(
     () => typeof valuationBinanceCents === "number" ? valuationBinanceCents / 100 : 0,
     [valuationBinanceCents]
@@ -159,9 +193,12 @@ export function BinanceDashboard({
     fallbackSize: FALLBACK_CHART_SIZE
   });
 
-  const allDailyData = useMemo(() => buildBinanceDailyChartData(totalEur), [totalEur]);
+  const allDailyData = useMemo(
+    () => buildBinanceDailyChartData(totalEur, historicalSnapshots),
+    [historicalSnapshots, totalEur]
+  );
   const chartData = useMemo(() => filterBinanceChartData(allDailyData, timeRange), [allDailyData, timeRange]);
-  const hasRenderableChartData = typeof valuationBinanceCents === "number" && totalEur > 0;
+  const hasRenderableChartData = typeof valuationBinanceCents === "number" && chartData.length > 0;
   const isCurrentValuationPending = !!hasBinanceCredentials && (
     !hasCurrentValuationSnapshot ||
     (balancesKnown && balances.length > 0 && typeof valuationBinanceCents !== "number")
@@ -297,7 +334,7 @@ export function BinanceDashboard({
                               seriesKey="balance"
                             />
                           )}
-                          dot={false}
+                          dot={chartData.length <= 1 ? { fill: "#ffffff", r: 3, stroke: "#ffffff" } : false}
                         />
                       ) : null}
                       {seriesReady && selectedPoint ? (
@@ -318,7 +355,7 @@ export function BinanceDashboard({
                   hiddenSeries={{}}
                   items={BINANCE_CHART_LEGEND_ITEMS}
                   onToggleSeries={() => undefined}
-                  transactionCount={hasRenderableChartData ? 1 : 0}
+                  transactionCount={hasRenderableChartData ? chartData.length : 0}
                 />
               </>
             )}

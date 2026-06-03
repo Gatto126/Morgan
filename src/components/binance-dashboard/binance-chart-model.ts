@@ -6,6 +6,11 @@ export const BINANCE_TIME_RANGES = ["ALL", "1Y", "6M", "3M", "1M", "1W"] as cons
 export const BINANCE_TOOLTIP_PRIORITY_NAMES = ["balance"] as const;
 export const BINANCE_CHART_LEGEND_ITEMS = [{ key: "balance", label: "BALANCE", color: "#ffffff" }] as const;
 
+export type BinanceHistoricalSnapshotPoint = {
+  dateKey: string;
+  totalEurValue: number;
+};
+
 const euroFormatter = new Intl.NumberFormat("it-IT", {
   style: "currency",
   currency: "EUR",
@@ -45,18 +50,35 @@ export function formatBinanceTooltipSeriesLabel() {
   return "BINANCE";
 }
 
-export function buildBinanceDailyChartData(totalEur: number, today = new Date()): ChartPoint[] {
-  const currentBalanceCents = Math.round(totalEur * 100);
-  const points: ChartPoint[] = [];
-  const start = new Date(today);
-  start.setFullYear(today.getFullYear() - 1, today.getMonth() - 4);
+function toDateKey(date: Date) {
+  return date.toISOString().split("T")[0];
+}
 
-  for (let day = new Date(start); day <= today; day.setDate(day.getDate() + 1)) {
-    const date = day.toISOString().split("T")[0];
-    points.push({ date, rawMonth: date, balance: currentBalanceCents });
+function toChartPoint(dateKey: string, valueEur: number): ChartPoint {
+  return {
+    date: dateKey,
+    rawMonth: dateKey,
+    balance: Math.round(valueEur * 100)
+  };
+}
+
+export function buildBinanceDailyChartData(
+  totalEur: number,
+  historicalSnapshots: BinanceHistoricalSnapshotPoint[] = [],
+  today = new Date()
+): ChartPoint[] {
+  const pointsByDate = new Map<string, ChartPoint>();
+
+  for (const snapshot of historicalSnapshots) {
+    pointsByDate.set(snapshot.dateKey, toChartPoint(snapshot.dateKey, snapshot.totalEurValue));
   }
 
-  return points;
+  if (totalEur > 0) {
+    const todayKey = toDateKey(today);
+    pointsByDate.set(todayKey, toChartPoint(todayKey, totalEur));
+  }
+
+  return [...pointsByDate.values()].sort((first, second) => first.rawMonth.localeCompare(second.rawMonth));
 }
 
 export function filterBinanceChartData(

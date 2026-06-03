@@ -18,7 +18,8 @@ vi.mock("@/server/security/secrets", () => ({
 import {
   createBinanceDailySnapshotForProfile,
   createBinanceDailySnapshotsForAllProfiles,
-  getBinanceDailySnapshotDateKey
+  getBinanceDailySnapshotDateKey,
+  getBinanceDailySnapshotHistory
 } from "@/server/services/binance-daily-snapshot";
 import type {
   BinanceDailySnapshotProfile,
@@ -39,6 +40,7 @@ function makeRepositoryMock() {
   const repository = {
     createSnapshot: vi.fn<BinanceDailySnapshotRepository["createSnapshot"]>(),
     findSnapshot: vi.fn<BinanceDailySnapshotRepository["findSnapshot"]>(),
+    listSnapshots: vi.fn<BinanceDailySnapshotRepository["listSnapshots"]>(),
     listProfilesWithBinanceCredentials: vi.fn<BinanceDailySnapshotRepository["listProfilesWithBinanceCredentials"]>()
   } satisfies BinanceDailySnapshotRepository;
 
@@ -52,6 +54,7 @@ function makeRepositoryMock() {
     userId: input.userId
   }));
   repository.findSnapshot.mockResolvedValue(null);
+  repository.listSnapshots.mockResolvedValue([]);
   repository.listProfilesWithBinanceCredentials.mockResolvedValue([]);
 
   return repository;
@@ -210,5 +213,29 @@ describe("binance daily snapshot service", () => {
     expect(result.results.map((profileResult) => profileResult.status))
       .toEqual(["failed", "created"]);
     expect(repository.createSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns historical snapshots normalized for the client chart", async () => {
+    const repository = makeRepositoryMock();
+    repository.listSnapshots.mockResolvedValueOnce([
+      {
+        dateKey: "2026-06-04",
+        id: "snapshot-1",
+        snapshotAt: new Date("2026-06-03T23:00:00.000Z"),
+        tokenCount: 9,
+        totalEurValue: 2311.23,
+        userId: "user-1"
+      }
+    ]);
+
+    await expect(getBinanceDailySnapshotHistory("user-1", { repository })).resolves.toEqual([
+      {
+        dateKey: "2026-06-04",
+        snapshotAt: "2026-06-03T23:00:00.000Z",
+        tokenCount: 9,
+        totalEurValue: 2311.23
+      }
+    ]);
+    expect(repository.listSnapshots).toHaveBeenCalledWith("user-1");
   });
 });

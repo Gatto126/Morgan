@@ -48,6 +48,13 @@ export type BinanceDailySnapshotBatchResult = {
   totalProfiles: number;
 };
 
+export type BinanceDailySnapshotHistoryItem = {
+  dateKey: string;
+  snapshotAt: string;
+  tokenCount: number;
+  totalEurValue: number;
+};
+
 export type BinanceDailySnapshotDependencies = BinanceServiceDependencies & {
   fetcher?: BinanceFetch;
   now?: () => Date;
@@ -229,4 +236,24 @@ export async function createBinanceDailySnapshotsForAllProfiles(
     snapshotAt: snapshotAt.toISOString(),
     totalProfiles: profiles.length
   };
+}
+
+export async function getBinanceDailySnapshotHistory(
+  userId: string,
+  dependencies: Pick<BinanceDailySnapshotDependencies, "repository" | "trace"> = {}
+): Promise<BinanceDailySnapshotHistoryItem[]> {
+  const repository = dependencies.repository ?? binanceDailySnapshotRepository;
+  const snapshots = await measurePerformanceStep(
+    dependencies.trace,
+    "binanceDailySnapshot.repository.listSnapshots",
+    () => repository.listSnapshots(userId),
+    (rows) => ({ snapshots: rows.length })
+  );
+
+  return snapshots.map((snapshot) => ({
+    dateKey: snapshot.dateKey,
+    snapshotAt: snapshot.snapshotAt.toISOString(),
+    tokenCount: snapshot.tokenCount,
+    totalEurValue: snapshot.totalEurValue
+  }));
 }
