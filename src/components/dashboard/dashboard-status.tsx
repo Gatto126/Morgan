@@ -44,16 +44,22 @@ export function DashboardLoadingOverlay({
         pointerEvents: "all"
       }}
     >
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: "50%",
-          border: "2.5px solid rgba(255,255,255,0.07)",
-          borderTopColor: "rgba(255,255,255,0.5)",
-          animation: "dashboardSpinner 0.85s linear infinite"
-        }}
-      />
+      <DashboardLoadingSpinner />
     </div>
+  );
+}
+
+export function DashboardLoadingSpinner() {
+  return (
+    <div
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: "50%",
+        border: "2.5px solid rgba(255,255,255,0.07)",
+        borderTopColor: "rgba(255,255,255,0.5)",
+        animation: "dashboardSpinner 0.85s linear infinite"
+      }}
+    />
   );
 }

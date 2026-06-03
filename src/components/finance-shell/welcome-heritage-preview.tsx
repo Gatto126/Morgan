@@ -12,6 +12,7 @@ import {
   collectCryptoTokens,
   collectInvestmentProducts
 } from "@/components/dashboard/dashboard-chart-data-model";
+import { DashboardLoadingSpinner } from "@/components/dashboard/dashboard-status";
 import type { DashboardChartPoint } from "@/components/dashboard/dashboard-chart-types";
 import { formatEuroCents } from "@/components/dashboard/formatters";
 import type { BinanceBalanceRow } from "@/components/dashboard/types";
@@ -110,6 +111,7 @@ export function WelcomeHeritagePreview({
   const topbarValue = visibleActivePoint?.heritage ?? currentValuationPoint?.heritage ?? null;
   const yDomain = getWelcomeYDomain(heritageValues);
   const hasChartData = heritageValues.length > 0;
+  const showChartLoader = !hasChartData;
   const xAxisLabels = useMemo(
     () => hasChartData ? xAxisTicks.map((tick) => formatWelcomeXAxisTick(tick)) : [],
     [hasChartData, xAxisTicks]
@@ -132,6 +134,14 @@ export function WelcomeHeritagePreview({
         </div>
 
         <div ref={chartContainerRef} className="absolute inset-x-0 top-0 h-[320px] overflow-visible">
+          {showChartLoader ? (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-[84px] z-10 flex h-[170px] items-center justify-center"
+            >
+              <DashboardLoadingSpinner />
+            </div>
+          ) : null}
           <svg
             aria-hidden="true"
             className="absolute inset-0 h-full w-full overflow-visible"
