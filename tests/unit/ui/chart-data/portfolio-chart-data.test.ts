@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { mergePortfolioDataWithBinance } from "@/components/portfolio-dashboard/binance-portfolio-provider";
-import { buildPortfolioChartData, getPortfolioXAxisTicks } from "@/components/portfolio-dashboard/chart-data";
+import {
+  buildPortfolioChartData,
+  getPortfolioXAxisTicks,
+  mergePortfolioDataWithProviderHistory
+} from "@/components/portfolio-dashboard/chart-data";
 import type { PortfolioData, PortfolioProviderSummary } from "@/components/portfolio-dashboard/types";
 
 const provider: PortfolioProviderSummary = {
@@ -203,6 +207,55 @@ describe("portfolio chart data", () => {
       "HOME (HOME)": 229,
       balance: 28229,
       BINANCE: 28229
+    });
+  });
+
+  it("merges Binance daily snapshots into crypto provider history", () => {
+    const dataWithBinance = mergePortfolioDataWithBinance(portfolioData, [{
+      eurValue: 250.25,
+      freeAmount: 0.003,
+      lockedAmount: 0.001,
+      tokenName: "Bitcoin",
+      tokenSymbol: "BTC"
+    }]);
+    const dataWithHistory = mergePortfolioDataWithProviderHistory(dataWithBinance, "BINANCE", [
+      { dateKey: "2026-03-14", valueCents: 20_000 },
+      { dateKey: "2026-03-16", valueCents: 25_000 }
+    ]);
+    const points = buildPortfolioChartData({
+      activeProvider: null,
+      activeTab: "ALL",
+      currentValuationPoint: {
+        BINANCE: 28_000,
+        heritage: 70_000,
+        rawMonth: "2026-03-15",
+        trade_republic: 42_000
+      },
+      data: dataWithHistory,
+      timeRange: "ALL",
+      todayKey: "2026-03-15"
+    });
+
+    expect(points.map((point) => point.rawMonth)).toEqual([
+      "2026-03-14",
+      "2026-03-15",
+      "2026-03-16",
+      "2026-04-01"
+    ]);
+    expect(points.find((point) => point.rawMonth === "2026-03-14")).toMatchObject({
+      BINANCE: 20_000,
+      heritage: 20_000,
+      trade_republic: null
+    });
+    expect(points.find((point) => point.rawMonth === "2026-03-15")).toMatchObject({
+      BINANCE: 28_000,
+      heritage: 70_000,
+      trade_republic: 42_000
+    });
+    expect(points.find((point) => point.rawMonth === "2026-03-16")).toMatchObject({
+      BINANCE: 25_000,
+      heritage: 25_000,
+      trade_republic: 0
     });
   });
 

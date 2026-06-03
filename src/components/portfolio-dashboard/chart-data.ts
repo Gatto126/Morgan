@@ -42,6 +42,68 @@ type BuildPortfolioChartDataOptions = {
   todayKey?: string;
 };
 
+export type PortfolioProviderHistoricalPoint = {
+  dateKey: string;
+  valueCents: number;
+};
+
+export function mergePortfolioDataWithProviderHistory(
+  data: PortfolioData,
+  providerKey: string,
+  historicalPoints: PortfolioProviderHistoricalPoint[]
+): PortfolioData {
+  if (historicalPoints.length === 0) {
+    return data;
+  }
+
+  const bucketsByDate = new Map<string, PortfolioBucket>();
+
+  for (const bucket of data.dailyData) {
+    const dateKey = bucket.date || bucket.month;
+    bucketsByDate.set(dateKey, {
+      ...bucket,
+      providerProducts: { ...bucket.providerProducts },
+      providers: { ...bucket.providers }
+    });
+  }
+
+  for (const point of historicalPoints) {
+    const existing = bucketsByDate.get(point.dateKey);
+    if (existing) {
+      const previousValue = existing.providers[providerKey] ?? 0;
+      const nextProviders = {
+        ...existing.providers,
+        [providerKey]: point.valueCents
+      };
+      bucketsByDate.set(point.dateKey, {
+        ...existing,
+        date: point.dateKey,
+        month: point.dateKey.slice(0, 7),
+        providers: nextProviders,
+        total: existing.total - previousValue + point.valueCents
+      });
+      continue;
+    }
+
+    bucketsByDate.set(point.dateKey, {
+      date: point.dateKey,
+      month: point.dateKey.slice(0, 7),
+      providerProducts: {},
+      providers: { [providerKey]: point.valueCents },
+      total: point.valueCents
+    });
+  }
+
+  return {
+    ...data,
+    dailyData: [...bucketsByDate.values()].sort((first, second) => {
+      const firstKey = first.date || first.month;
+      const secondKey = second.date || second.month;
+      return firstKey.localeCompare(secondKey);
+    })
+  };
+}
+
 export function buildPortfolioChartData({
   data,
   activeTab,

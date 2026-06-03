@@ -1,4 +1,5 @@
 import type { ChartPoint } from "@/types/chart";
+import { getEuropeRomeDateKey } from "@/shared/date-keys";
 
 export type BinanceTimeRange = "ALL" | "1Y" | "6M" | "3M" | "1M" | "1W";
 
@@ -51,7 +52,7 @@ export function formatBinanceTooltipSeriesLabel() {
 }
 
 function toDateKey(date: Date) {
-  return date.toISOString().split("T")[0];
+  return getEuropeRomeDateKey(date);
 }
 
 function toChartPoint(dateKey: string, valueEur: number): ChartPoint {

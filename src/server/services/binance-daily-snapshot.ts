@@ -17,6 +17,7 @@ import {
   measurePerformanceStep,
   type PerformanceTrace
 } from "@/server/logging/performance";
+import { getEuropeRomeDateKey } from "@/shared/date-keys";
 
 export const BINANCE_DAILY_SNAPSHOT_TIME_ZONE = "Europe/Rome";
 
@@ -68,15 +69,7 @@ type CreateProfileSnapshotOptions = BinanceDailySnapshotDependencies & {
 };
 
 export function getBinanceDailySnapshotDateKey(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: BINANCE_DAILY_SNAPSHOT_TIME_ZONE,
-    year: "numeric"
-  }).formatToParts(now);
-  const byType = new Map(parts.map((part) => [part.type, part.value]));
-
-  return `${byType.get("year")}-${byType.get("month")}-${byType.get("day")}`;
+  return getEuropeRomeDateKey(now);
 }
 
 function toSnapshotToken(balance: PricedBinanceBalance): BinanceDailySnapshotTokenInput {

@@ -10,7 +10,13 @@ import { useBinanceBalances } from "@/components/dashboard/use-binance-balances"
 import {
   useCurrentValuationSnapshot
 } from "@/components/finance-shell/current-valuations-store";
-import { buildPortfolioChartData, getPortfolioXAxisTicks } from "./chart-data";
+import {
+  buildPortfolioChartData,
+  getPortfolioXAxisTicks,
+  mergePortfolioDataWithProviderHistory,
+  type PortfolioProviderHistoricalPoint
+} from "./chart-data";
+import { getEuropeRomeDateKey } from "@/shared/date-keys";
 import { formatProviderLabel } from "./formatters";
 import { mergePortfolioDataWithBinance } from "./binance-portfolio-provider";
 import { PortfolioChart } from "./portfolio-chart";
@@ -52,7 +58,8 @@ export function PortfolioDashboard({
   onCloseUserSelect,
   userSelectElement,
   onImportRefreshComplete,
-  binanceRefreshKey = 0
+  binanceRefreshKey = 0,
+  hasBinanceCredentials = false
 }: PortfolioDashboardProps) {
   const { data, dataFresh, loading, error, importRefreshVersion } = usePortfolioDashboardData({
     endpoint: config.endpoint,
@@ -68,6 +75,7 @@ export function PortfolioDashboard({
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const [showSoldAssets, setShowSoldAssets] = useState(false);
   const [chartReady, setChartReady] = useState(false);
+  const [binanceHistoricalPoints, setBinanceHistoricalPoints] = useState<PortfolioProviderHistoricalPoint[]>([]);
   const hasInitialData = !!data && !loading;
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(!hasInitialData);
   const [contentVisible, setContentVisible] = useState(hasInitialData);
@@ -106,6 +114,12 @@ export function PortfolioDashboard({
     () => data && isCryptoDashboard ? mergePortfolioDataWithBinance(data, liveBinanceBalances) : data,
     [data, isCryptoDashboard, liveBinanceBalances]
   );
+  const dataForChart = useMemo(
+    () => dataForDisplay && isCryptoDashboard
+      ? mergePortfolioDataWithProviderHistory(dataForDisplay, "BINANCE", binanceHistoricalPoints)
+      : dataForDisplay,
+    [binanceHistoricalPoints, dataForDisplay, isCryptoDashboard]
+  );
   const [activeChartPoint, setActiveChartPoint] = useState<ChartPoint | null>(null);
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
   const todayKey = useMemo(() => getTodayKey(), []);
@@ -142,18 +156,18 @@ export function PortfolioDashboard({
   ]);
 
   const chartData = useMemo(() => {
-    if (!dataForDisplay) return [];
+    if (!dataForChart) return [];
     return buildPortfolioChartData({
       activeProvider,
       activeTab,
       applyLiveToday: false,
       currentValuationPoint,
-      data: dataForDisplay,
+      data: dataForChart,
       livePrices,
       timeRange,
       todayKey
     });
-  }, [activeProvider, activeTab, currentValuationPoint, dataForDisplay, livePrices, timeRange, todayKey]);
+  }, [activeProvider, activeTab, currentValuationPoint, dataForChart, livePrices, timeRange, todayKey]);
   const currentSnapshot = currentValuationPoint;
   const currentDisplayPoint = activeChartPoint ?? currentSnapshot;
   const currentValuesKnown = dataFresh && !!currentSnapshot;
@@ -225,6 +239,39 @@ export function PortfolioDashboard({
       });
     });
   }, [importRefreshSettled, importRefreshVersion]);
+
+  useEffect(() => {
+    if (!isCryptoDashboard || !shouldLoad || !hasBinanceCredentials) {
+      const clearTimer = window.setTimeout(() => setBinanceHistoricalPoints([]), 0);
+      return () => window.clearTimeout(clearTimer);
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/binance/history?userId=${encodeURIComponent(userId)}`, {
+        signal: controller.signal
+      })
+        .then(async (response) => {
+          if (!response.ok) return null;
+          return (await response.json()) as {
+            snapshots?: Array<{ dateKey: string; totalEurValue: number }>;
+          };
+        })
+        .then((payload) => {
+          if (!payload || !Array.isArray(payload.snapshots)) return;
+          setBinanceHistoricalPoints(payload.snapshots.map((snapshot) => ({
+            dateKey: snapshot.dateKey,
+            valueCents: Math.round(snapshot.totalEurValue * 100)
+          })));
+        })
+        .catch(() => {});
+    }, 0);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [hasBinanceCredentials, isCryptoDashboard, shouldLoad, userId]);
 
   if (error) return (
     <div
@@ -336,10 +383,5 @@ export function PortfolioDashboard({
 }
 
 function getTodayKey() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return getEuropeRomeDateKey();
 }

@@ -3,7 +3,7 @@
 Ultimo aggiornamento: 2026-06-03
 Commit baseline corrente: `3610ebd` (cleanup ownership Binance current-sync pushato)
 Ultimo checkpoint smoke su Vercel: `3610ebd` (cold login e diagnostica di coerenza cross-dashboard)
-Slice locale corrente: primo connect Binance coerente completato; crypto current surfaces snapshot-driven completate; storico Binance server-side implementato e collegato alla Binance dashboard localmente.
+Slice locale corrente: primo connect Binance coerente completato; crypto current surfaces snapshot-driven completate; storico Binance server-side implementato e collegato alle linee Binance in Binance dashboard e Crypto dashboard localmente.
 Prossima fase: push/deploy Vercel, poi verificare il primo run cron e la comparsa del primo punto storico reale.
 
 Questo file e' la memoria durevole del refactor valuation/topbar/Binance.
@@ -126,6 +126,8 @@ Stato verificato alla baseline `3610ebd`:
 - storico Binance server-side implementato localmente: schema `BinanceDailySnapshot`, servizio idempotente, route cron protetta da `CRON_SECRET` e configurazione Vercel Cron `0 23 * * *`;
 - produzione preparata: `CRON_SECRET` configurato su Vercel Production e migration `20260603070000_binance_daily_snapshots` applicata su Neon production.
 - Binance dashboard collegata allo storico daily snapshot: la linea non viene piu' ricostruita piatta dal solo valore corrente; usa gli snapshot giornalieri reali e aggiunge/sostituisce il punto di oggi con il committed current valuation snapshot.
+- Crypto dashboard ALL collegata allo stesso storico daily snapshot per il provider `BINANCE`: la linea Binance non deve piu' essere un salto verticale da zero/current; i bucket storici sommano Binance daily snapshot al totale crypto storico, mentre il punto di oggi resta il committed current valuation snapshot.
+- I date key current per chart Binance/Crypto usano `Europe/Rome`, come il cron storico.
 
 Risultati smoke manuale comunicati il 2026-06-03:
 
@@ -239,6 +241,8 @@ pnpm exec vitest run tests/unit/server/services/binance-daily-snapshot.test.ts
   pass, history reader normalizzato per client chart
 pnpm exec vitest run tests/api/binance-history-route.test.ts
   pass, ownership richiesta e snapshot restituiti
+pnpm exec vitest run tests/unit/ui/chart-data/portfolio-chart-data.test.ts
+  pass, storico Binance fuso nel chart Crypto provider/history e current point di oggi prevale
 ```
 
 Nota sicurezza: le credenziali Binance reali sono state passate solo come variabili d'ambiente di processo nei comandi E2E locali. Non sono state salvate in file tracciati.
@@ -299,6 +303,7 @@ Policy live quote:
 - Integrazione Binance: `src/integrations/binance/binance-service.ts`
 - Storico Binance daily snapshot: `src/server/services/binance-daily-snapshot.ts`, `src/server/repositories/binance-daily-snapshot-repository.ts`, `src/app/api/cron/binance-daily-snapshot/route.ts`, `src/app/api/binance/history/route.ts`
 - Binance chart storico: `src/components/binance-dashboard.tsx`, `src/components/binance-dashboard/binance-chart-model.ts`
+- Crypto chart Binance storico: `src/components/portfolio-dashboard/portfolio-dashboard.tsx`, `src/components/portfolio-dashboard/chart-data.ts`
 
 ## Problemi Risolti
 
@@ -329,7 +334,7 @@ Policy live quote:
 | P2 | Stale crypto cache non renderizza prima del background refresh ritardato | `realistic` conferma cache crypto in sessionStorage, refresh background partito e reload ok, ma `cachedCryptoRenderedBeforeRefreshReleased=false`. | Usare cache stale solo come stage data se versione/data key combaciano; current values restano snapshot-driven. Correggere hook/mount order dopo audit snapshot/current surfaces. |
 | P2 | Lavoro dashboard inattive montate | Le dashboard inattive possono warmare dati. Serve confidenza che non pubblichino current totals o facciano hidden rendering costoso. | Aggiungere instrumentation/assertions per hidden dashboard transitions; mantenere warmup cache/data-only. |
 | P2 | Primo run cron da osservare | Il codice e Vercel Cron sono pronti, ma il primo punto reale arriva solo dopo il run schedulato. | Dopo il primo run controllare log Vercel e DB; la Binance dashboard deve mostrare il nuovo punto storico piu' il punto current di oggi. |
-| P2 | Storico Binance dentro grafici aggregati | La Binance dashboard usa lo storico daily; main/crypto/heritage chart aggregati non usano ancora quei punti storici. | Valutare dopo il primo run se aggiungere la serie Binance daily anche agli aggregati, evitando double counting e mantenendo current snapshot separato. |
+| P2 | Storico Binance nel grafico main/heritage | Binance dashboard e Crypto dashboard usano lo storico daily; il grafico main/heritage aggregato puo' ancora essere valutato dopo il primo run. | Valutare se aggiungere Binance daily anche al chart main/heritage, evitando double counting e mantenendo current snapshot separato. |
 | P3 | Futuro desktop/SQLite | Lo schema SQLite valida, ma il runtime desktop non e' implementato. | Tenere valuation/domain logic target-neutral; poi aggiungere storage adapter e migrazioni SQLite. |
 
 ## Piano Attivo
@@ -358,6 +363,8 @@ Policy live quote:
    - fatto: migration Neon production applicata;
    - fatto: deploy Vercel registrato con cron attivo;
    - fatto localmente: endpoint `/api/binance/history` e Binance dashboard collegata agli snapshot daily;
+   - fatto localmente: Crypto dashboard ALL usa gli snapshot daily per la linea provider `BINANCE`;
+   - fatto localmente: date key chart allineato a `Europe/Rome`;
    - resta: pushare il collegamento UI e verificare il primo run schedulato.
 
 4. Audit superfici current:
