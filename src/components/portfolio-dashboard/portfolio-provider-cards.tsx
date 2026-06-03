@@ -126,6 +126,7 @@ export function PortfolioProviderCards({
   return createPortal(
     <div className={cn("flex flex-col gap-5 w-full pb-6 lg:pb-0", !isActive && "absolute pointer-events-none opacity-0 invisible")}>
       {providers.map((provider) => {
+        const isCryptoPortfolio = config.priceQueryParam === "cryptos";
         const providerHasLivePrice = provider.products.some((product) => {
           const priceKey = getProductPriceKey(product, config);
           return priceKey ? livePrices[priceKey] != null : false;
@@ -140,7 +141,9 @@ export function PortfolioProviderCards({
         );
         const providerCurrentValue = currentValuationSnapshot
           ? valuationProviderValue ?? null
-          : getPortfolioPointValue(currentPoint, provider.sourceInstitution);
+          : isCryptoPortfolio
+            ? null
+            : getPortfolioPointValue(currentPoint, provider.sourceInstitution);
 
         return (
           <div key={provider.sourceInstitution} className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
@@ -151,8 +154,11 @@ export function PortfolioProviderCards({
                 </span>
                 <span className="text-sm font-bold text-[color:var(--text-main)]">
                   <CurrentValueDisplay
-                    animateChanges={providerHasLivePrice || typeof valuationProviderValue === "number"}
-                    value={formatPointValue(providerCurrentValue, valuesKnown || !!currentValuationSnapshot)}
+                    animateChanges={typeof valuationProviderValue === "number" || (!isCryptoPortfolio && providerHasLivePrice)}
+                    value={formatPointValue(
+                      providerCurrentValue,
+                      isCryptoPortfolio ? !!currentValuationSnapshot : valuesKnown || !!currentValuationSnapshot
+                    )}
                   />
                 </span>
               </div>
@@ -181,7 +187,7 @@ export function PortfolioProviderCards({
                           const hasValuationProductValue = valuationProductValue !== undefined;
                           const productReady = hasValuationProductValue
                             ? valuationProductValue !== null
-                            : !currentValuationSnapshot && (!priceKey || price != null || valuesKnown);
+                            : !isCryptoPortfolio && !currentValuationSnapshot && (!priceKey || price != null || valuesKnown);
                           const valuationUnitPriceCents = getUnitPriceCentsFromCurrentValue(
                             valuationProductValue,
                             product.investedValue,
@@ -189,13 +195,16 @@ export function PortfolioProviderCards({
                           );
                           const priceCents = hasValuationProductValue
                             ? valuationUnitPriceCents
-                            : !currentValuationSnapshot && price != null
+                            : !isCryptoPortfolio && !currentValuationSnapshot && price != null
                               ? Math.round(price * 100)
                               : valuationUnitPriceCents;
 
                           return (
                             <CurrentValueDisplay
-                              animateChanges={price != null && !hasValuationProductValue}
+                              animateChanges={
+                                typeof valuationProductValue === "number"
+                                || (!isCryptoPortfolio && price != null && !hasValuationProductValue)
+                              }
                               value={productReady ? formatEuroCents(priceCents) : "--"}
                             />
                           );
@@ -254,6 +263,13 @@ export function PortfolioProviderCards({
                             return (
                               <span className="font-semibold text-[color:var(--text-main)]">
                                 <SlotValue animateChanges value={formatEuroCents(valuationProductValue)} />
+                              </span>
+                            );
+                          }
+                          if (isCryptoPortfolio) {
+                            return (
+                              <span className="font-semibold text-[color:var(--text-dim)]">
+                                <CurrentValueDisplay value="--" />
                               </span>
                             );
                           }

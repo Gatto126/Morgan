@@ -123,6 +123,7 @@ Stato verificato alla baseline `3610ebd`:
 - `binanceRefreshKey` viene persistito in `localStorage`, cosi' un reload immediato dopo connect continua a leggere la cache/versione Binance nuova invece della vecchia `binance:0` vuota;
 - la dashboard Binance non usa piu' una schermata muta: mostra chart, preparing, no-material o unavailable in modo esplicito;
 - crypto current surfaces completate localmente: prezzo unitario/current value token e totali provider crypto/investment nelle card main dashboard e portfolio dashboard leggono il committed valuation snapshot invece del punto chart/stage fallback.
+- follow-up locale: le card crypto non usano piu' fallback legacy a `currentPoint`, live price diretto o invested value quando manca lo snapshot; mostrano pending/skeleton finche' il committed snapshot non e' valido.
 
 Risultati smoke manuale comunicati il 2026-06-03:
 
@@ -200,6 +201,7 @@ Nota sicurezza: le credenziali Binance reali sono state passate solo come variab
 - Non hardcodare comportamenti per un singolo account, profilo, asset, token o wallet Binance.
 - Non cancellare transazioni/profili sorgente per sistemare stato derivato.
 - Le transazioni sorgente sono autorevoli; stage data, snapshot e live quote sono derivati.
+- Non fetchare la stessa quote live piu' volte nello stesso ciclo globale solo perche' appare in piu' profili, provider o dashboard.
 
 ## Policy Atomic Valuation
 
@@ -226,6 +228,8 @@ Policy live quote:
 - `LIVE_PRICES_UPDATED_EVENT` puo' aggiornare diagnostica e cache, ma non dovrebbe ricostruire direttamente i totali correnti visibili.
 - I totali correnti si aggiornano tramite `ensureFinanceCurrentValuation(...)`.
 - Gli stage warmup possono precaricare dati e cache quote, ma non devono pubblicare current totals in modo indipendente.
+- Il global valuation scheduler target deve deduplicare le quote richieste per chiave normalizzata su tutti i profili rilevanti e tutti i provider. Esempio: Pino ha BTC, Apple e MSCI World; Luca ha BTC, Apple e MSCI Europe; il ciclo globale deve richiedere una sola volta `BTC`, una sola volta `Apple`, una sola volta `MSCI World` e una sola volta `MSCI Europe`, poi distribuire quelle quote agli snapshot dei profili/provider che le usano.
+- La deduplica vale per crypto, ETF e azioni. Le posizioni restano separate per profilo/provider/asset, ma la quote live normalizzata e' unica nel ciclo.
 
 ## Mappa Codice Chiave
 
@@ -266,7 +270,7 @@ Policy live quote:
 | Priorita' | Problema | Comprensione Attuale | Risoluzione Prevista |
 | --- | --- | --- | --- |
 | P1 | E2E coherence automatizzati | La coerenza e' verificata manualmente con browser diagnostics. | Aggiungere assert E2E su `window.morganFinanceCoherenceDiagnostics?.()` per cold login, F5, dashboard switching e refresh-in-flight. |
-| P1 | Global valuation scheduler multi-profilo non formalizzato | Esiste refresh per profilo attivo e profili inattivi in background, ma non e' ancora un contratto testato che Home/topbar/card siano globalmente coerenti su tutti i profili rilevanti. | Formalizzare scheduler centrale: attivo alta priorita', inattivi/Home background, commit atomico per profilo, Home aggrega solo committed snapshot validi. |
+| P1 | Global valuation scheduler multi-profilo non formalizzato | Esiste refresh per profilo attivo e profili inattivi in background, ma non e' ancora un contratto testato che Home/topbar/card siano globalmente coerenti su tutti i profili rilevanti. La deduplica quote oggi e' forte dentro il singolo snapshot, ma va formalizzata globalmente su profili/provider condivisi. | Formalizzare scheduler centrale: attivo alta priorita', inattivi/Home background, raccolta quote normalizzate deduplicata cross-profilo, commit atomico per profilo, Home aggrega solo committed snapshot validi. |
 | P1 | Audit topbar/card/detail/Home | Molti valori sono gia' snapshot-driven, ma serve verifica sistematica di tutte le superfici current. | Mappare ogni valore current visibile e assicurare che legga da selector committed snapshot, non da calcoli dashboard-local. |
 | P2 | Leggibilita' diagnostica | La diagnostica e' utile ma verbosa; l'indagine production richiede ancora interpretazione. | Aggiungere summary compatto: profilo attivo, visible snapshot id, committed/draft ids, totali, missing/unavailable keys, current sync status. |
 | P2 | Stale crypto cache non renderizza prima del background refresh ritardato | `realistic` conferma cache crypto in sessionStorage, refresh background partito e reload ok, ma `cachedCryptoRenderedBeforeRefreshReleased=false`. | Usare cache stale solo come stage data se versione/data key combaciano; current values restano snapshot-driven. Correggere hook/mount order solo dopo P1 scheduler/audit. |
@@ -291,12 +295,15 @@ Policy live quote:
    - rendere esplicito un solo scheduler centrale per refresh current;
    - profilo attivo alta priorita';
    - profili inattivi/Home background ma stesso modello snapshot;
+   - deduplicare le quote live nel ciclo globale per chiave normalizzata cross-profilo/cross-provider: BTC condiviso si fetcha una volta, Apple condivisa si fetcha una volta, ETF/azioni condivisi si fetchano una volta;
+   - mantenere separate le posizioni e i totali per profilo/provider, anche quando condividono la stessa quote;
    - Home aggrega solo committed snapshot validi;
-   - gate: unit test selector multi-profilo + E2E Home con due profili e refresh-in-flight.
+   - gate: unit test scheduler con due profili che condividono BTC/Apple e hanno ETF distinti + E2E Home con due profili e refresh-in-flight.
 
 4. Audit superfici current:
    - fatto localmente: crypto current surfaces completate;
    - fatto: aggiunto selector provider totals da committed valuation snapshot e usato da main dashboard crypto card e portfolio/crypto dashboard card;
+   - fatto: rimosso il fallback iniziale non snapshot-driven per crypto card; senza snapshot committed valido, prezzo/current value/totale provider crypto restano pending/skeleton;
    - fatto: test unitari coprono provider Trade Republic crypto, Binance separato e provider mancante;
    - gate completato: Docker preprod + `active-components` + `realistic` con Binance reale passano senza HTTP/browser errors;
    - regola: ogni prezzo/current value crypto visibile deve leggere dallo stesso committed valuation snapshot usato da Binance/topbar;

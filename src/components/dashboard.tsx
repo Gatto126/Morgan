@@ -301,7 +301,6 @@ export function Dashboard({
                 timeRange={timeRange}
                 currentPoint={currentPoint}
                 currentValuationSnapshot={currentValuationSnapshot}
-                cryptoValuesKnown={topbarCryptoValuesKnown}
                 investmentValuesKnown={topbarInvestmentValuesKnown}
                 livePrices={livePrices}
                 binanceBalances={liveBinanceBalances}

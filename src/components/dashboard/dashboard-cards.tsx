@@ -18,7 +18,6 @@ type DashboardCardsProps = {
   timeRange: TimeRange;
   currentPoint: DashboardChartPoint | null;
   currentValuationSnapshot?: CurrentValuationSnapshot | null;
-  cryptoValuesKnown: boolean;
   investmentValuesKnown: boolean;
   livePrices: Record<string, number | null>;
   binanceBalances: BinanceBalanceRow[];
@@ -36,7 +35,6 @@ export function DashboardCards({
   timeRange,
   currentPoint,
   currentValuationSnapshot,
-  cryptoValuesKnown,
   investmentValuesKnown,
   livePrices,
   binanceBalances,
@@ -76,14 +74,11 @@ export function DashboardCards({
       <DashboardCryptoCards
         binanceBalances={binanceBalances}
         binanceListRef={binanceListRef}
-        currentPoint={currentPoint}
         currentValuationSnapshot={currentValuationSnapshot}
         filterSmallBinance={filterSmallBinance}
         isBinanceSyncing={isBinanceSyncing}
-        livePrices={livePrices}
         providers={data.providerSummaries}
         setFilterSmallBinance={setFilterSmallBinance}
-        valuesKnown={cryptoValuesKnown}
       />
     </div>,
     cardsPortalNode

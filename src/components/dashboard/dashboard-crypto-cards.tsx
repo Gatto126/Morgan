@@ -13,16 +13,12 @@ import {
   DashboardCardShell,
   DashboardMetricRow
 } from "./dashboard-card-parts";
-import type { DashboardChartPoint } from "./dashboard-chart-types";
 import { formatEuroCents, formatProviderLabel } from "./formatters";
 import type { BinanceBalanceRow, ProviderSummary } from "./types";
 
 type DashboardCryptoCardsProps = {
   providers: ProviderSummary[];
-  currentPoint: DashboardChartPoint | null;
   currentValuationSnapshot?: CurrentValuationSnapshot | null;
-  valuesKnown: boolean;
-  livePrices: Record<string, number | null>;
   binanceBalances: BinanceBalanceRow[];
   isBinanceSyncing: boolean;
   filterSmallBinance: boolean;
@@ -30,31 +26,15 @@ type DashboardCryptoCardsProps = {
   binanceListRef: RefObject<HTMLDivElement | null>;
 };
 
-function getFallbackUnitPriceCents(investedValue: number, quantity: number) {
-  return Math.abs(quantity) > 0.000001 ? Math.round(investedValue / quantity) : investedValue;
-}
-
-function getPointValue(point: DashboardChartPoint | null, key: string, valuesKnown: boolean) {
-  if (!valuesKnown || !point) {
-    return null;
-  }
-
-  const value = point[key];
-  return typeof value === "number" ? value : null;
-}
-
-function getUnitPriceCentsFromCurrentValue(currentValueCents: number | null, investedValue: number, quantity: number) {
+function getUnitPriceCentsFromCurrentValue(currentValueCents: number | null, quantity: number) {
   return currentValueCents !== null && Math.abs(quantity) > 0.000001
     ? Math.round(currentValueCents / quantity)
-    : getFallbackUnitPriceCents(investedValue, quantity);
+    : null;
 }
 
 export function DashboardCryptoCards({
   providers,
-  currentPoint,
   currentValuationSnapshot,
-  valuesKnown,
-  livePrices,
   binanceBalances,
   isBinanceSyncing,
   filterSmallBinance,
@@ -75,10 +55,6 @@ export function DashboardCryptoCards({
   return (
     <div className="flex flex-col gap-5">
       {providersWithTokens.map((provider) => {
-        const providerHasLivePrice = provider.cryptoTokens.some((token) => {
-          const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
-          return tokenSymbol ? livePrices[tokenSymbol] != null : false;
-        });
         const valuationProviderValue = getCurrentValuationProviderValueCents(
           currentValuationSnapshot,
           {
@@ -88,11 +64,11 @@ export function DashboardCryptoCards({
         );
         const providerCurrentValue = currentValuationSnapshot
           ? valuationProviderValue ?? null
-          : getPointValue(currentPoint, `crypto_inst_${provider.sourceInstitution}`, valuesKnown);
+          : null;
 
         return (
           <DashboardCardShell
-            animateValueChanges={providerHasLivePrice || typeof valuationProviderValue === "number"}
+            animateValueChanges={typeof valuationProviderValue === "number"}
             key={`crypto-${provider.sourceInstitution}`}
             title={formatProviderLabel(provider.sourceInstitution)}
             value={formatCurrentValue(providerCurrentValue)}
@@ -100,7 +76,6 @@ export function DashboardCryptoCards({
             <div className="space-y-4">
               {provider.cryptoTokens.map((token) => {
               const tokenSymbol = normalizeCryptoSymbol(token.tokenSymbol);
-              const price = tokenSymbol ? livePrices[tokenSymbol] : null;
               const valuationTokenValue = getCurrentValuationAssetValueCents(
                 currentValuationSnapshot,
                 {
@@ -112,11 +87,9 @@ export function DashboardCryptoCards({
               );
               const currentValueCents = currentValuationSnapshot
                 ? valuationTokenValue ?? null
-                : getPointValue(currentPoint, token.tokenName, valuesKnown);
-              const liveTokenReady = currentValueCents !== null;
+                : null;
               const unitPriceCents = getUnitPriceCentsFromCurrentValue(
                 currentValueCents,
-                token.investedValue,
                 token.quantity
               );
 
@@ -125,9 +98,9 @@ export function DashboardCryptoCards({
                   <hr className="mb-3 border-[color:var(--line-strong)] opacity-50" />
                   <DashboardAssetHeader
                     align="center"
-                    animateValueChanges={price != null || typeof valuationTokenValue === "number"}
+                    animateValueChanges={typeof valuationTokenValue === "number"}
                     name={token.tokenName}
-                    value={liveTokenReady ? formatEuroCents(unitPriceCents) : "--"}
+                    value={unitPriceCents !== null ? formatEuroCents(unitPriceCents) : "--"}
                   />
                   <div className="space-y-1.5 text-sm">
                     <DashboardMetricRow
@@ -136,7 +109,7 @@ export function DashboardCryptoCards({
                     />
                     <DashboardMetricRow label="Invested Value" value={formatEuroCents(token.investedValue)} />
                     <DashboardMetricRow
-                      animateValueChanges={price != null || currentValueCents !== null}
+                      animateValueChanges={currentValueCents !== null}
                       label="Current Value"
                       value={currentValueCents !== null ? formatEuroCents(currentValueCents) : "--"}
                       valueClassName={currentValueCents === null
