@@ -28,6 +28,30 @@ export function shouldStartDashboardVisualStateVisible({
   return dataDependenciesReady && !!data && !loading;
 }
 
+export function isDashboardVisualReady({
+  chartReady,
+  data,
+  dataDependenciesReady,
+  hasRenderableChartData = false,
+  loading,
+  requireRenderableChartData = false,
+  shouldShowUploadPanel,
+  transactionCount
+}: {
+  chartReady: boolean;
+  data: DashboardData | null;
+  dataDependenciesReady: boolean;
+  hasRenderableChartData?: boolean;
+  loading: boolean;
+  requireRenderableChartData?: boolean;
+  shouldShowUploadPanel: boolean;
+  transactionCount: number;
+}) {
+  const chartReadyForContext = requireRenderableChartData ? chartReady && hasRenderableChartData : chartReady;
+
+  return dataDependenciesReady && !!data && !loading && (shouldShowUploadPanel || transactionCount === 0 || chartReadyForContext);
+}
+
 export function useDashboardVisualState({
   dataDependenciesReady = true,
   data,
@@ -55,10 +79,24 @@ export function useDashboardVisualState({
     onImportRefreshCompleteRef.current = onImportRefreshComplete;
   }, [onImportRefreshComplete]);
 
-  const initialDashboardVisualReady =
-    dataDependenciesReady && !!data && !loading && (shouldShowUploadPanel || transactionCount === 0 || chartReady);
-  const importDashboardVisualReady =
-    dataDependenciesReady && !!data && !loading && (shouldShowUploadPanel || transactionCount === 0 || (chartReady && hasRenderableChartData));
+  const initialDashboardVisualReady = isDashboardVisualReady({
+    chartReady,
+    data,
+    dataDependenciesReady,
+    loading,
+    shouldShowUploadPanel,
+    transactionCount
+  });
+  const importDashboardVisualReady = isDashboardVisualReady({
+    chartReady,
+    data,
+    dataDependenciesReady,
+    hasRenderableChartData,
+    loading,
+    requireRenderableChartData: true,
+    shouldShowUploadPanel,
+    transactionCount
+  });
   const importRefreshSettled = !loading && (error !== null || importDashboardVisualReady);
 
   useEffect(() => {

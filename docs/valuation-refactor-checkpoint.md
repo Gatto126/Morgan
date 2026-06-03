@@ -390,6 +390,7 @@ Policy live quote:
    - mappare topbar, card, detail row, chart today e Home;
    - regola Home: storico/preview possono arrivare da cache o payload leggero, ma il grafico non deve essere mostrato prima del current aggregate committed;
    - fatto: rimosse le animazioni di comparsa una tantum da chart/card/dashboard background; le vecchie classi sono state rinominate in `visibility-gate`, che mantiene solo visibilita' `data-visible` e `pointer-events` senza fade/slide;
+   - fatto: la readiness dei casi bloccanti resta esplicita e testata: profilo senza transazioni e upload panel possono diventare visibili senza attendere misura chart;
    - futuro: aggiungere una stage-enter animation dedicata che scatti a ogni cambio dashboard senza rimontare componenti o perdere cache/stato;
    - sostituire eventuali calcoli locali con selector committed snapshot;
    - gate: test unitari per selector e smoke browser con confronto topbar/card/detail/Home.

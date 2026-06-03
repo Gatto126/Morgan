@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { shouldStartDashboardVisualStateVisible } from "@/components/dashboard/use-dashboard-visual-state";
+import { isDashboardVisualReady, shouldStartDashboardVisualStateVisible } from "@/components/dashboard/use-dashboard-visual-state";
 import type { DashboardData } from "@/components/dashboard/types";
 
 const data = {
@@ -30,5 +30,40 @@ describe("dashboard visual state", () => {
       dataDependenciesReady: true,
       loading: false
     })).toBe(true);
+  });
+
+  it("shows the empty profile state without waiting for chart measurement", () => {
+    expect(isDashboardVisualReady({
+      chartReady: false,
+      data,
+      dataDependenciesReady: true,
+      loading: false,
+      shouldShowUploadPanel: false,
+      transactionCount: 0
+    })).toBe(true);
+  });
+
+  it("shows a blocking upload panel without waiting for chart measurement", () => {
+    expect(isDashboardVisualReady({
+      chartReady: false,
+      data,
+      dataDependenciesReady: true,
+      loading: false,
+      shouldShowUploadPanel: true,
+      transactionCount: 4
+    })).toBe(true);
+  });
+
+  it("waits for a renderable chart during import refresh when transactions exist", () => {
+    expect(isDashboardVisualReady({
+      chartReady: true,
+      data,
+      dataDependenciesReady: true,
+      hasRenderableChartData: false,
+      loading: false,
+      requireRenderableChartData: true,
+      shouldShowUploadPanel: false,
+      transactionCount: 4
+    })).toBe(false);
   });
 });
