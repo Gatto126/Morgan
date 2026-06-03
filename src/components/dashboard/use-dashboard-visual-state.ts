@@ -16,6 +16,18 @@ type UseDashboardVisualStateParams = {
   transactionCount: number;
 };
 
+export function shouldStartDashboardVisualStateVisible({
+  data,
+  dataDependenciesReady,
+  loading
+}: {
+  data: DashboardData | null;
+  dataDependenciesReady: boolean;
+  loading: boolean;
+}) {
+  return dataDependenciesReady && !!data && !loading;
+}
+
 export function useDashboardVisualState({
   dataDependenciesReady = true,
   data,
@@ -27,7 +39,11 @@ export function useDashboardVisualState({
   shouldShowUploadPanel,
   transactionCount
 }: UseDashboardVisualStateParams) {
-  const hasInitialData = !!data && !loading;
+  const hasInitialData = shouldStartDashboardVisualStateVisible({
+    data,
+    dataDependenciesReady,
+    loading
+  });
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(!hasInitialData);
   const [contentVisible, setContentVisible] = useState(hasInitialData);
   const [chartReady, setChartReady] = useState(false);

@@ -171,7 +171,7 @@ export function Dashboard({
   const dashboardCryptoValuesKnown = cryptoPricesReady && (!hasBinanceCredentials || binanceBalancesKnown);
   const hasCurrentValuationPoint = !!currentValuationChartPoint;
   const binanceInitialDataReady =
-    !hasBinanceCredentials || hasCurrentValuationPoint || binanceBalancesKnown;
+    !hasBinanceCredentials || hasCurrentValuationPoint;
   const topbarCryptoValuesKnown = hasCurrentValuationPoint || dashboardCryptoValuesKnown;
   const topbarInvestmentValuesKnown = hasCurrentValuationPoint || investmentPricesReady;
   const requiresInitialUpload = transactionCount === 0 && !hasBinancePortfolio;

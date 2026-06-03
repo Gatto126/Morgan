@@ -68,23 +68,22 @@ export function PortfolioDashboard({
     isActive,
     shouldLoad
   });
+  const isCryptoDashboard = config.priceQueryParam === "cryptos";
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [timeRange, setTimeRange] = useState<TimeRange>("ALL");
   const [selectedPoint, setSelectedPoint] = useState<PortfolioSelectedPoint | null>(null);
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const [showSoldAssets, setShowSoldAssets] = useState(false);
   const [chartReady, setChartReady] = useState(false);
-  const hasInitialData = !!data && !loading;
+  const hasInitialData = !!data && !loading && !(isCryptoDashboard && hasBinanceCredentials);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(!hasInitialData);
   const [contentVisible, setContentVisible] = useState(hasInitialData);
   const firstLoadCompletedRef = useRef(hasInitialData);
   const completedImportRefreshVersionRef = useRef(0);
   const onImportRefreshCompleteRef = useRef(onImportRefreshComplete);
   const isMobile = useIsMobile();
-  const isCryptoDashboard = config.priceQueryParam === "cryptos";
   const {
     binanceBalances,
-    binanceBalancesKnown,
     isBinanceSyncing,
     filterSmallBinance,
     setFilterSmallBinance,
@@ -206,7 +205,7 @@ export function PortfolioDashboard({
 
   const effectiveChartReady = !isPanelOpen && chartReady;
   const binanceInitialDataReady =
-    !isCryptoDashboard || !hasBinanceCredentials || binanceBalancesKnown || !!currentValuationPoint;
+    !isCryptoDashboard || !hasBinanceCredentials || !!currentValuationPoint;
   const initialVisualReady =
     binanceInitialDataReady && !!dataForDisplay && !loading && (isPanelOpen || (effectiveChartReady && hasRenderableChartData));
   const importRefreshSettled =
