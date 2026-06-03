@@ -54,8 +54,7 @@ export function DashboardCards({
         gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
         alignItems: "start",
         opacity: contentVisible ? 1 : 0,
-        transform: contentVisible ? "none" : "translateY(10px)",
-        transition: contentVisible ? "opacity 0.5s ease-out 0.06s, transform 0.5s ease-out 0.06s" : "none"
+        transition: "none"
       }}
     >
       <DashboardCheckingCards

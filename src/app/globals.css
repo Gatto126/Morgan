@@ -325,17 +325,15 @@ button:active *,
 .chart-content-reveal,
 .panel-content-reveal {
   opacity: 0;
-  transform: translateY(8px);
-  transition:
-    opacity 0.34s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.34s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, transform;
+  transform: none;
+  transition: none;
+  will-change: auto;
 }
 
 .chart-content-reveal[data-visible="true"],
 .panel-content-reveal[data-visible="true"] {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
   will-change: auto;
 }
 
@@ -382,16 +380,6 @@ button:active *,
     will-change: auto;
   }
 
-  .chart-content-reveal,
-  .chart-content-reveal[data-visible="true"],
-  .panel-content-reveal,
-  .panel-content-reveal[data-visible="true"] {
-    opacity: 1;
-    transform: none;
-    filter: none;
-    transition: none;
-    will-change: auto;
-  }
 }
 
 @keyframes dashboardSpinner {

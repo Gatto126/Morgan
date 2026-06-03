@@ -203,8 +203,7 @@ export function CheckingDashboard({
             className="flex-1 min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px] relative w-full flex flex-col justify-center"
             style={{
               opacity: contentVisible ? 1 : 0,
-              transform: contentVisible ? "none" : "translateY(10px)",
-              transition: contentVisible ? "opacity 0.5s ease-out 0.06s, transform 0.5s ease-out 0.06s" : "none"
+              transition: "none"
             }}
           >
             <DashboardPanelHost

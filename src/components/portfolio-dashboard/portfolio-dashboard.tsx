@@ -283,8 +283,7 @@ export function PortfolioDashboard({
             className="relative flex w-full flex-1 flex-col min-h-[240px] sm:min-h-[400px] md:min-h-[440px] lg:min-h-[520px] justify-center"
             style={{
               opacity: contentVisible ? 1 : 0,
-              transform: contentVisible ? "none" : "translateY(10px)",
-              transition: contentVisible ? "opacity 0.5s ease-out 0.06s, transform 0.5s ease-out 0.06s" : "none"
+              transition: "none"
             }}
           >
             <DashboardPanelHost
