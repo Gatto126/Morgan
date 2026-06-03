@@ -83,6 +83,18 @@ export async function getCachedProfileData<TData>(
   return promise;
 }
 
+export function invalidateProfileDataCache(userId: string, stages?: string[]) {
+  const stageSet = stages ? new Set(stages) : null;
+
+  for (const key of profileDataCache.keys()) {
+    const [stage, entryUserId] = key.split(":");
+
+    if (entryUserId === userId && (!stageSet || stageSet.has(stage))) {
+      profileDataCache.delete(key);
+    }
+  }
+}
+
 export function getVersionedProfileDataCacheTtlMs(date = new Date()) {
   return Math.max(
     DEFAULT_PROFILE_DATA_CACHE_TTL_MS,

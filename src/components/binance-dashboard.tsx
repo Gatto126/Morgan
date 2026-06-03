@@ -7,6 +7,7 @@ import { ChartLegend } from "./chart-primitives/chart-legend";
 import { ChartReferenceLabel } from "./chart-primitives/chart-reference-label";
 import { ChartTimeRangeControls } from "./chart-primitives/chart-time-range-controls";
 import { SelectableChartDot } from "./chart-primitives/selectable-chart-dot";
+import { BINANCE_VISIBLE_VALUE_THRESHOLD_EUR } from "./dashboard/binance-live-values";
 import { BinanceChartTooltip } from "./binance-dashboard/binance-chart-tooltip";
 import {
   BINANCE_CHART_LEGEND_ITEMS,
@@ -31,6 +32,7 @@ import { cn } from "@/shared/utils";
 import type { ActiveDotProps } from "@/types/chart";
 
 const FALLBACK_CHART_SIZE = { width: 960, height: 460 };
+const MATERIAL_BALANCE_LABEL = `EUR ${BINANCE_VISIBLE_VALUE_THRESHOLD_EUR.toFixed(2)}`;
 
 type BinanceBalance = {
   id: string;
@@ -77,6 +79,7 @@ export function BinanceDashboard({
   reviewElement,
   previewTransactionsCount = 0,
   binanceRefreshKey = 0,
+  hasBinanceCredentials = false,
   isActive = true,
   shouldLoad = isActive,
   showSettingsView = false,
@@ -94,6 +97,8 @@ export function BinanceDashboard({
   const [balances, setBalances] = useState<BinanceBalance[]>([]);
   const [balancesKnown, setBalancesKnown] = useState(false);
   const valuationSnapshot = useCurrentValuationSnapshot(userId);
+  const hasCurrentValuationSnapshot = valuationSnapshot?.version.binanceRefreshKey === binanceRefreshKey
+    && valuationSnapshot.status === "ready";
   const hasValuationBinanceProvider = !!valuationSnapshot?.providers.BINANCE?.hasBinance;
   const valuationBinanceCents = valuationSnapshot?.version.binanceRefreshKey === binanceRefreshKey && hasValuationBinanceProvider
     ? valuationSnapshot.totals.binance.cents
@@ -157,7 +162,10 @@ export function BinanceDashboard({
   const allDailyData = useMemo(() => buildBinanceDailyChartData(totalEur), [totalEur]);
   const chartData = useMemo(() => filterBinanceChartData(allDailyData, timeRange), [allDailyData, timeRange]);
   const hasRenderableChartData = typeof valuationBinanceCents === "number" && totalEur > 0;
-  const isCurrentValuationPending = balancesKnown && balances.length > 0 && typeof valuationBinanceCents !== "number";
+  const isCurrentValuationPending = !!hasBinanceCredentials && (
+    !hasCurrentValuationSnapshot ||
+    (balancesKnown && balances.length > 0 && typeof valuationBinanceCents !== "number")
+  );
   const xAxisTicks = useMemo(() => getBinanceXAxisTicks(chartData), [chartData]);
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;
   const isPanelClosing =
@@ -208,15 +216,25 @@ export function BinanceDashboard({
             data-visible={shouldRevealChartContent ? "true" : "false"}
           >
             {isCurrentValuationPending ? (
-              <div className="flex h-full w-full items-center justify-center">
+              <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center">
                 <CurrentValueSkeleton className="h-10 w-40 rounded-[18px]" />
+                <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-dim)]">
+                  Preparing current value
+                </p>
               </div>
             ) : !hasRenderableChartData ? (
-              <div className="flex h-full w-full items-center justify-center">
+              <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
                 {balancesKnown ? (
-                  <h1 className="text-3xl font-bold tracking-[-0.06em] text-white sm:text-[2.35rem]">
-                    Binance
-                  </h1>
+                  <>
+                    <h1 className="text-3xl font-bold tracking-normal text-white sm:text-[2.35rem]">
+                      Binance
+                    </h1>
+                    <p className="max-w-[18rem] text-sm font-medium leading-6 text-[color:var(--text-dim)]">
+                      {balances.length > 0
+                        ? "Current value unavailable for synced balances."
+                        : `No material balances above ${MATERIAL_BALANCE_LABEL}.`}
+                    </p>
+                  </>
                 ) : (
                   <CurrentValueSkeleton className="h-10 w-40 rounded-[18px]" />
                 )}

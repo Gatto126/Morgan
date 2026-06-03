@@ -8,6 +8,7 @@ import {
   ensureFinanceStageReady,
   invalidateFinanceProfile
 } from "./finance-session-orchestrator";
+import type { CurrentValuationSnapshot } from "./current-valuations-store";
 import type { SettingsSection } from "./settings-panel-types";
 import type { UserRecord } from "./types";
 
@@ -24,6 +25,80 @@ type UseFinanceBinanceActionsParams = {
   setUsers: Dispatch<SetStateAction<UserRecord[]>>;
 };
 
+const BINANCE_REFRESH_KEY_STORAGE_KEY = "morgan:finance:binance-refresh-key:v1";
+
+type BinanceConnectNoticeOptions = {
+  binanceRefreshKey: number;
+  tokenCount: number;
+  valuationSnapshot?: CurrentValuationSnapshot | null;
+};
+
+function readStoredBinanceRefreshKey() {
+  if (typeof window === "undefined") {
+    return 0;
+  }
+
+  try {
+    const value = Number(window.localStorage.getItem(BINANCE_REFRESH_KEY_STORAGE_KEY));
+    return Number.isSafeInteger(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeStoredBinanceRefreshKey(value: number) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(BINANCE_REFRESH_KEY_STORAGE_KEY, String(Math.max(0, value)));
+  } catch {
+    // Persistence is best-effort; the in-memory key still protects the current page.
+  }
+}
+
+function formatTokenCount(count: number) {
+  return `${count} token${count !== 1 ? "s" : ""}`;
+}
+
+export function getBinanceConnectNotice({
+  binanceRefreshKey,
+  tokenCount,
+  valuationSnapshot
+}: BinanceConnectNoticeOptions) {
+  if (tokenCount <= 0) {
+    return "Connected! No material balance above EUR 0.49.";
+  }
+
+  const prefix = `Connected! ${formatTokenCount(tokenCount)} found.`;
+  const isCurrentSnapshot = valuationSnapshot?.version.binanceRefreshKey === binanceRefreshKey;
+  if (!isCurrentSnapshot) {
+    return `${prefix} Values are still preparing.`;
+  }
+
+  const binanceValue = valuationSnapshot.totals.binance;
+  if (
+    valuationSnapshot.status === "ready"
+    && binanceValue.status === "ready"
+    && typeof binanceValue.cents === "number"
+    && binanceValue.cents > 0
+    && valuationSnapshot.providers.BINANCE?.hasBinance
+  ) {
+    return prefix;
+  }
+
+  if (
+    valuationSnapshot.status === "ready"
+    && binanceValue.status === "ready"
+    && typeof binanceValue.cents === "number"
+  ) {
+    return `${prefix} Current value unavailable.`;
+  }
+
+  return `${prefix} Values are still preparing.`;
+}
+
 export function useFinanceBinanceActions({
   activeUser,
   onBinanceCredentialsDeleted,
@@ -35,10 +110,20 @@ export function useFinanceBinanceActions({
   const [notice, setNotice] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [binanceRefreshKey, setBinanceRefreshKey] = useState(0);
+  const [binanceRefreshKey, setBinanceRefreshKeyState] = useState(readStoredBinanceRefreshKey);
   const [showDeleteApiConfirm, setShowDeleteApiConfirm] = useState(false);
   const [binanceFading, setBinanceFading] = useState(false);
   const [forceApiSettingsSection, setForceApiSettingsSection] = useState(false);
+
+  const setBinanceRefreshKey = useCallback<Dispatch<SetStateAction<number>>>((value) => {
+    setBinanceRefreshKeyState((currentValue) => {
+      const nextValue = typeof value === "function"
+        ? value(currentValue)
+        : value;
+      writeStoredBinanceRefreshKey(nextValue);
+      return nextValue;
+    });
+  }, []);
 
   const clearApiKeyDraft = useCallback(() => {
     setShowSecret(false);
@@ -116,12 +201,6 @@ export function useFinanceBinanceActions({
       });
       const balances = syncResult.balances;
       const tokenCount = balances.length;
-      setNotice(
-        tokenCount > 0
-          ? `Connected! ${tokenCount} token${tokenCount !== 1 ? "s" : ""} found.`
-          : "Connected! Empty wallet."
-      );
-      keepApiSettingsOpen();
 
       setBinanceRefreshKey(nextRefreshKey);
       setActiveUser(updatedUser);
@@ -130,7 +209,10 @@ export function useFinanceBinanceActions({
         prevUsers.map((user) => (user.id === activeUser.id ? updatedUser : user))
       );
       invalidateFinanceProfile(activeUser.id);
-      void Promise.allSettled([
+      setNotice(tokenCount > 0 ? "Preparing Binance valuation..." : "Checking Binance balances...");
+      keepApiSettingsOpen();
+
+      const [, valuationResult] = await Promise.allSettled([
         ensureFinanceStageReady({
           binanceRefreshKey: nextRefreshKey,
           event: "binance-connect",
@@ -147,9 +229,14 @@ export function useFinanceBinanceActions({
           priority: "user",
           user: updatedUser
         })
-      ]).catch(() => {
-        // The last committed valuation remains visible if live quote refresh fails.
-      });
+      ]);
+      setNotice(getBinanceConnectNotice({
+        binanceRefreshKey: nextRefreshKey,
+        tokenCount,
+        valuationSnapshot: valuationResult.status === "fulfilled"
+          ? valuationResult.value.snapshot
+          : null
+      }));
     } catch (err) {
       keepApiSettingsOpen();
       setError(err instanceof Error ? err.message : "Error saving API keys.");
@@ -163,6 +250,7 @@ export function useFinanceBinanceActions({
     clearApiKeyDraft,
     keepApiSettingsOpen,
     setActiveUser,
+    setBinanceRefreshKey,
     setUsers
   ]);
 
@@ -232,6 +320,7 @@ export function useFinanceBinanceActions({
     clearApiKeyDraft,
     onBinanceCredentialsDeleted,
     setActiveUser,
+    setBinanceRefreshKey,
     setUsers
   ]);
 

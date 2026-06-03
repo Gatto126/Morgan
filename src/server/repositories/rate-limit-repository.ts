@@ -12,9 +12,18 @@ export type RateLimitRepository = {
   clear(key: string): Promise<void>;
 };
 
+function isRetryableWriteError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error.code === "P2002" || error.code === "P2034")
+  );
+}
+
 export const rateLimitRepository: RateLimitRepository = {
   async consume({ key, windowMs, maxAttempts, nowMs = Date.now() }) {
-    return prisma.$transaction(async (tx) => {
+    const consumeOnce = () => prisma.$transaction(async (tx) => {
       const record = await tx.rateLimit.findUnique({ where: { key } });
       const windowStartMs = record ? Number(record.lastRequest) : nowMs;
       const isExpired = !record || nowMs < windowStartMs || nowMs - windowStartMs >= windowMs;
@@ -25,11 +34,17 @@ export const rateLimitRepository: RateLimitRepository = {
       }
 
       if (!record) {
-        await tx.rateLimit.create({
-          data: {
+        await tx.rateLimit.upsert({
+          where: { key },
+          create: {
             key,
             count: 1,
             lastRequest: BigInt(nowMs)
+          },
+          update: {
+            count: {
+              increment: 1
+            }
           }
         });
         return null;
@@ -51,6 +66,16 @@ export const rateLimitRepository: RateLimitRepository = {
 
       return null;
     });
+
+    try {
+      return await consumeOnce();
+    } catch (error) {
+      if (!isRetryableWriteError(error)) {
+        throw error;
+      }
+
+      return consumeOnce();
+    }
   },
 
   async clear(key) {

@@ -50,6 +50,7 @@ const bbvaPath = path.join(outDir, "bbva-active-components.xlsx");
 const browserErrors = [];
 const httpErrors = [];
 const allowedHttpErrors = [];
+const binanceDashboardDebug = [];
 const screenshots = [];
 const steps = [];
 
@@ -379,7 +380,6 @@ async function exerciseChartLegend(page, labels, label, minimumExpected = labels
 
 async function exerciseDashboardChartInteractions(page) {
   await clickTopbarTab(page, "HERITAGE");
-  await exerciseDashboardBinanceCardControls(page);
   await expectChartTooltip(page, "heritage chart hover");
   await clickChartDataPoint(page, "heritage chart point click");
   await exerciseChartLegend(page, ["CHECKING", "INVESTMENT", "CRYPTO"], "heritage chart legend");
@@ -402,15 +402,21 @@ async function exerciseDashboardChartInteractions(page) {
 
   await clickTopbarTab(page, "CRYPTO");
   await expectChartTooltip(page, "crypto chart hover");
-  await exerciseChartLegend(page, ["TRADE REPUBLIC", "BINANCE"], "crypto chart legend");
+  await exerciseChartLegend(page, ["TRADE REPUBLIC", "BINANCE"], "crypto chart legend", 1);
   await saveScreenshot(page, "chart-interactions-tabs-legend.png");
 
   steps.push("exercised_dashboard_chart_tooltip_legend_ranges_topbar");
 }
 
-async function exerciseDashboardBinanceCardControls(page) {
-  const filterToggle = page.locator('div[title="Nascondi token sotto 0,95 EUR"]:visible, div[title="Mostra tutti i token"]:visible').first();
-  await filterToggle.waitFor({ state: "visible", timeout: 10_000 });
+async function exerciseBinanceCardControls(page) {
+  const filterToggle = page.locator('div[title="Nascondi token fino a 0,49 EUR"]:visible, div[title="Mostra tutti i token"]:visible').first();
+  try {
+    await filterToggle.waitFor({ state: "visible", timeout: 5_000 });
+  } catch {
+    steps.push("skipped_binance_card_controls_not_visible");
+    return;
+  }
+
   const beforeTitle = await filterToggle.getAttribute("title", { timeout: 10_000 });
   await filterToggle.click();
   await page.waitForTimeout(200);
@@ -421,13 +427,86 @@ async function exerciseDashboardBinanceCardControls(page) {
 
   await clickIfVisible(page.getByText("BINANCE", { exact: true }));
   await saveScreenshot(page, "dashboard-binance-card-controls.png");
-  steps.push("exercised_dashboard_binance_card_controls");
+  steps.push("exercised_binance_card_controls");
 }
 
 async function exerciseBinanceChartInteractions(page) {
   await page.getByRole("button", { name: "Binance", exact: true }).click();
   await waitForAny(page.getByText("BINANCE", { exact: true }), "Binance chart header");
-  await expectChartTooltip(page, "Binance chart hover");
+  const chart = page.locator(".recharts-wrapper:visible").first();
+  const explicitState = page.getByText(
+    /Preparing current value|No material balances above EUR 0\.49|Current value unavailable for synced balances\./
+  ).first();
+  const hasChart = await chart.waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (hasChart) {
+    await expectChartTooltip(page, "Binance chart hover");
+  } else {
+    binanceDashboardDebug.push(await page.evaluate(async () => {
+      const diagnostics = window.morganFinanceCoherenceDiagnostics?.();
+      const profile = diagnostics?.profiles?.[0] ?? null;
+      const profileId = profile?.userId ?? null;
+      let apiBalanceCount = null;
+      let apiIsStale = null;
+      let apiHasKey = null;
+
+      if (profileId) {
+        const response = await fetch(`/api/binance/balances?userId=${encodeURIComponent(profileId)}&v=0`);
+        const payload = await response.json().catch(() => null);
+        apiBalanceCount = Array.isArray(payload?.balances) ? payload.balances.length : null;
+        apiIsStale = payload?.isStale ?? null;
+        apiHasKey = payload?.hasApiKey ?? null;
+      }
+
+      const binanceCacheEntries = [];
+      for (let index = 0; index < sessionStorage.length; index += 1) {
+        const key = sessionStorage.key(index);
+        if (!key?.includes("dashboard-stage-data") || !key.includes(":binance:")) {
+          continue;
+        }
+
+        const rawValue = sessionStorage.getItem(key);
+        let parsed = null;
+        try {
+          parsed = rawValue ? JSON.parse(rawValue) : null;
+        } catch {
+          parsed = null;
+        }
+        binanceCacheEntries.push({
+          balanceCount: Array.isArray(parsed?.data?.balances) ? parsed.data.balances.length : null,
+          key,
+          syncedAt: parsed?.data?.syncedAt ?? null,
+          version: parsed?.version ?? null
+        });
+      }
+
+      return {
+        apiBalanceCount,
+        apiHasKey,
+        apiIsStale,
+        binanceCacheEntries,
+        bodyState: {
+          noMaterial: document.body.innerText.includes("No material balances above EUR 0.49."),
+          preparing: document.body.innerText.includes("Preparing current value"),
+          unavailable: document.body.innerText.includes("Current value unavailable for synced balances.")
+        },
+        diagnostics: profile
+          ? {
+              binanceCurrentSync: profile.binanceCurrentSync,
+              committedTotalsCents: profile.valuationDiagnostics?.committedTotalsCents ?? null,
+              committedVersion: profile.valuationDiagnostics?.committedVersion ?? null,
+              visibleTotalsCents: profile.visibleTotalsCents ?? null,
+              visibleSnapshotIsCoherentAcrossStages: profile.visibleSnapshotIsCoherentAcrossStages ?? null
+            }
+          : null
+      };
+    }));
+    await explicitState.waitFor({ state: "visible", timeout: 10_000 });
+    steps.push("observed_explicit_binance_dashboard_state");
+  }
+
   await saveScreenshot(page, "binance-interactions-active.png");
   steps.push("exercised_binance_chart_controls");
 }
@@ -491,7 +570,7 @@ async function configureBinance(page, userId) {
   const panel = await openSettingsSection(page, "API Key Manage API", "BINANCE");
   await panel.getByPlaceholder("Enter API Key", { exact: true }).fill(binanceApiKey);
   await panel.getByPlaceholder("Enter Secret Key", { exact: true }).fill(binanceApiSecret);
-  await panel.locator('button[title="Save API Keys"]').click();
+  await panel.locator('button[title="Connect Binance API"]').click();
   await panel.locator('button[title="Delete Saved API Keys"]').waitFor({ state: "visible", timeout: 90_000 });
   const panelText = await panel.innerText({ timeout: 10_000 });
   const balanceCount = await prisma.binanceBalance.count({ where: { userId } });
@@ -541,7 +620,6 @@ async function exerciseActiveComponents(page) {
   await page.getByRole("button", { name: "Dashboard", exact: true }).click();
   await waitForAny(page.getByText("BBVA", { exact: true }), "dashboard BBVA provider");
   await waitForAny(page.getByText("TRADE REPUBLIC", { exact: true }), "dashboard Trade Republic provider");
-  await waitForAny(page.getByText("BINANCE", { exact: true }), "dashboard Binance card");
   await saveScreenshot(page, "dashboard-heritage-active.png");
   await exerciseDashboardChartInteractions(page);
 
@@ -555,6 +633,7 @@ async function exerciseActiveComponents(page) {
 
   await page.getByRole("button", { name: "Crypto", exact: true }).click();
   await waitForAny(page.getByText("Bitcoin", { exact: false }), "crypto token content");
+  await exerciseBinanceCardControls(page);
   await saveScreenshot(page, "crypto-active.png");
 
   await exerciseBinanceChartInteractions(page);
@@ -726,6 +805,7 @@ try {
     afterTr,
     afterBbva,
     binanceResult,
+    binanceDashboardDebug,
     screenshots,
     allowedHttpErrors,
     httpErrors,

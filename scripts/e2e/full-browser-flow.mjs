@@ -253,7 +253,7 @@ try {
     await page.getByRole("heading", { name: "BINANCE", exact: true }).waitFor({ state: "visible", timeout: 10_000 });
     await page.getByPlaceholder("Enter API Key", { exact: true }).fill(binanceApiKey);
     await page.getByPlaceholder("Enter Secret Key", { exact: true }).fill(binanceApiSecret);
-    await page.locator('button[title="Save API Keys"]').click();
+    await page.locator('button[title="Connect Binance API"]').click();
 
     await page.locator('button[title="Delete Saved API Keys"]').waitFor({ state: "visible", timeout: 35_000 });
     const settingsText = await page.locator('[role="dialog"][data-modal-panel="settings"]').innerText({ timeout: 5_000 });
@@ -276,7 +276,7 @@ try {
 
     await page.locator('button[title="Delete Saved API Keys"]').click();
     await page.getByRole("button", { name: "API + Data", exact: true }).click();
-    await page.locator('button[title="Save API Keys"]').waitFor({ state: "visible", timeout: 15_000 });
+    await page.locator('button[title="Connect Binance API"]').waitFor({ state: "visible", timeout: 15_000 });
     const profileAfterDeleteApi = (await getProfiles(page)).users.find((user) => user.name === profileName);
     const balancesAfterDeleteApi = await prisma.binanceBalance.count({ where: { userId: profileId } });
     assert(profileAfterDeleteApi?.hasBinanceCredentials === false, "Binance credentials were not cleared from profile summary.");

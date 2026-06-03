@@ -462,7 +462,7 @@ async function connectBinance(page) {
   const stopTopbarFlashMonitor = await startTopbarZeroFlashMonitor(page, "binance connect");
 
   try {
-    await panel.locator('button[title="Save API Keys"]').click();
+    await panel.locator('button[title="Connect Binance API"]').click();
     await panel.getByText("Connected!", { exact: false }).waitFor({ state: "visible", timeout: 120_000 });
     await panel.locator('button[title="Delete Saved API Keys"]').waitFor({ state: "visible", timeout: 90_000 });
   } finally {

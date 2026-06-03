@@ -16,6 +16,7 @@ import {
   BinanceMissingCredentialsError,
   syncBinanceProfile
 } from "@/server/services/binance-sync";
+import { invalidateProfileDataCache } from "@/server/services/profile-data-cache";
 
 type BinanceRouteLogger = ReturnType<typeof apiLogger>;
 
@@ -64,6 +65,7 @@ export async function handleBinanceSyncRoute(
     await measurePerformanceStep(trace, "auth.requireOwnedProfile", () => requireOwnedProfile(request, userId));
 
     const { balances, syncedAt } = await syncBinanceProfile(userId, { trace });
+    invalidateProfileDataCache(userId);
 
     log.response("POST", endpoint, 200, { tokensFound: balances.length });
     const responsePayload = {

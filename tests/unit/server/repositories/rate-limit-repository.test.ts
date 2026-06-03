@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   findUnique: vi.fn(),
   create: vi.fn(),
+  upsert: vi.fn(),
   update: vi.fn(),
   deleteMany: vi.fn()
 }));
@@ -30,11 +31,13 @@ describe("rate limit repository", () => {
         rateLimit: {
           findUnique: mocks.findUnique,
           create: mocks.create,
+          upsert: mocks.upsert,
           update: mocks.update
         }
       })
     );
     mocks.create.mockResolvedValue({});
+    mocks.upsert.mockResolvedValue({});
     mocks.update.mockResolvedValue({});
     mocks.deleteMany.mockResolvedValue({ count: 1 });
   });
@@ -49,11 +52,45 @@ describe("rate limit repository", () => {
       nowMs: 100
     })).resolves.toBeNull();
 
-    expect(mocks.create).toHaveBeenCalledWith({
-      data: {
+    expect(mocks.upsert).toHaveBeenCalledWith({
+      where: { key: "morgan:test:user-1" },
+      create: {
         key: "morgan:test:user-1",
         count: 1,
         lastRequest: BigInt(100)
+      },
+      update: {
+        count: {
+          increment: 1
+        }
+      }
+    });
+  });
+
+  it("retries after a retryable write conflict", async () => {
+    mocks.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        key: "morgan:test:user-1",
+        count: 1,
+        lastRequest: BigInt(100)
+      });
+    mocks.upsert.mockRejectedValueOnce({ code: "P2034" });
+
+    await expect(rateLimitRepository.consume({
+      key: "morgan:test:user-1",
+      windowMs: 1000,
+      maxAttempts: 3,
+      nowMs: 100
+    })).resolves.toBeNull();
+
+    expect(mocks.transaction).toHaveBeenCalledTimes(2);
+    expect(mocks.update).toHaveBeenCalledWith({
+      where: { key: "morgan:test:user-1" },
+      data: {
+        count: {
+          increment: 1
+        }
       }
     });
   });

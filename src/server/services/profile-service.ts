@@ -3,6 +3,7 @@ import { z } from "zod";
 import { toSafeUser, toSafeUserSummary } from "@/server/auth/user-response";
 import { profileRepository } from "@/server/repositories/profile-repository";
 import { encryptSecret, makeBinanceApiKeyPreview } from "@/server/security/secrets";
+import { invalidateProfileDataCache } from "@/server/services/profile-data-cache";
 
 export class ProfileConflictError extends Error {
   constructor(message = "This profile already exists.") {
@@ -176,6 +177,9 @@ export async function updateProfileBinanceSettings(id: string, input: unknown) {
   }
 
   const user = await profileRepository.updateBinanceCredentials(id, data);
+  if (hasApiKeyField || json.deleteBalances === true) {
+    invalidateProfileDataCache(id);
+  }
 
   return toSafeUser(user);
 }

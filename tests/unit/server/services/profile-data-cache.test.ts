@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getCachedProfileData,
   getVersionedProfileDataCacheTtlMs,
+  invalidateProfileDataCache,
   makeProfileStageCacheKey
 } from "@/server/services/profile-data-cache";
 
@@ -27,6 +28,24 @@ describe("profile data cache", () => {
     await getCachedProfileData(null, load, 60_000);
 
     expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it("invalidates cached entries for one profile", async () => {
+    const profileLoad = vi.fn()
+      .mockResolvedValueOnce({ ok: "first" })
+      .mockResolvedValueOnce({ ok: "second" });
+    const otherProfileLoad = vi.fn(async () => ({ ok: "other" }));
+
+    await expect(getCachedProfileData("binance:profile-1:0:2026-06-01", profileLoad, 60_000)).resolves.toEqual({ ok: "first" });
+    await expect(getCachedProfileData("binance:profile-2:0:2026-06-01", otherProfileLoad, 60_000)).resolves.toEqual({ ok: "other" });
+
+    invalidateProfileDataCache("profile-1");
+
+    await expect(getCachedProfileData("binance:profile-1:0:2026-06-01", profileLoad, 60_000)).resolves.toEqual({ ok: "second" });
+    await expect(getCachedProfileData("binance:profile-2:0:2026-06-01", otherProfileLoad, 60_000)).resolves.toEqual({ ok: "other" });
+
+    expect(profileLoad).toHaveBeenCalledTimes(2);
+    expect(otherProfileLoad).toHaveBeenCalledTimes(1);
   });
 
   it("builds a key only when the client sends a version", () => {
