@@ -5,6 +5,6 @@ export function getPortfolioPointValue(point: ChartPoint | null, tabKey: string)
     return null;
   }
 
-  const value = tabKey === "ALL" ? point.heritage : point[tabKey];
+  const value = tabKey === "ALL" ? (point.topbar_heritage ?? point.heritage) : point[tabKey];
   return typeof value === "number" ? value : null;
 }

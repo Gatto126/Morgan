@@ -294,6 +294,7 @@ function removeStandaloneBinanceFromPortfolioAggregate(chartPoints: ChartPoint[]
 
     return {
       ...point,
+      topbar_heritage: aggregateValue,
       heritage: aggregateValue - binanceValue
     };
   });

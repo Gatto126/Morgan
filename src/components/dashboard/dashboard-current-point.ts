@@ -7,10 +7,16 @@ export function getDashboardPointValue(point: DashboardChartPoint | null, tabKey
   }
 
   if (tabKey === "crypto") {
+    if (typeof point.topbar_crypto === "number") {
+      return point.topbar_crypto;
+    }
     return typeof point.crypto === "number" ? point.crypto : null;
   }
 
   if (tabKey === "heritage") {
+    if (typeof point.topbar_heritage === "number") {
+      return point.topbar_heritage;
+    }
     return typeof point.heritage === "number" ? point.heritage : null;
   }
 

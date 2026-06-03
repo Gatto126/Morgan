@@ -440,6 +440,8 @@ describe("dashboard chart data model", () => {
       crypto: 71_000,
       crypto_inst_trade_republic: 71_000,
       heritage: 131_000,
+      topbar_crypto: 91_000,
+      topbar_heritage: 151_000,
       value: 71_000
     });
   });

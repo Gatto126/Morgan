@@ -285,6 +285,7 @@ describe("portfolio chart data", () => {
     expect(todayPoint).toMatchObject({
       BINANCE: 28_000,
       heritage: 42_000,
+      topbar_heritage: 70_000,
       trade_republic: 42_000
     });
   });

@@ -20,6 +20,8 @@ describe("current chart point values", () => {
     expect(getDashboardPointValue(point, "heritage")).toBe(300);
     expect(getDashboardPointValue(point, "investment")).toBe(125);
     expect(getDashboardPointValue(point, "crypto")).toBe(75);
+    expect(getDashboardPointValue({ ...point, topbar_crypto: 100, topbar_heritage: 325 }, "crypto")).toBe(100);
+    expect(getDashboardPointValue({ ...point, topbar_crypto: 100, topbar_heritage: 325 }, "heritage")).toBe(325);
     expect(getDashboardPointValue({ binance: 25, rawMonth: "2026-06-01" }, "crypto")).toBeNull();
     expect(getDashboardPointValue({ binance: 0, rawMonth: "2026-06-01" }, "crypto")).toBeNull();
   });
@@ -50,6 +52,7 @@ describe("current chart point values", () => {
     };
 
     expect(getPortfolioPointValue(point, "ALL")).toBe(42000);
+    expect(getPortfolioPointValue({ ...point, topbar_heritage: 53000 }, "ALL")).toBe(53000);
     expect(getPortfolioPointValue(point, "trade_republic")).toBe(31000);
     expect(getPortfolioPointValue(point, "missing")).toBeNull();
   });

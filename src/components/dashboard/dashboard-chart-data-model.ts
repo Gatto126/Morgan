@@ -475,6 +475,15 @@ function removeStandaloneBinanceFromAggregateSeries(chartPoints: DashboardChartP
     }
 
     const nextPoint: DashboardChartPoint = { ...point };
+    const cryptoValue = nextPoint.crypto;
+    const heritageValue = nextPoint.heritage;
+
+    if (isFinitePointValue(cryptoValue)) {
+      nextPoint.topbar_crypto = cryptoValue;
+    }
+    if (isFinitePointValue(heritageValue)) {
+      nextPoint.topbar_heritage = heritageValue;
+    }
 
     aggregateKeys.forEach((key) => {
       const value = nextPoint[key];
