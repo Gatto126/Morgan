@@ -31,17 +31,12 @@ vi.mock("@/server/logging/logger", () => ({
   })
 }));
 
-import {
-  importPreviewTransactions,
-  resolveBbvaMovementOnlyBalanceAnchor
-} from "@/server/services/transaction-import";
+import { importPreviewTransactions } from "@/server/services/transaction-import";
 
 function createRepository(): TransactionImportRepository {
   return {
     getExistingFingerprints: vi.fn().mockResolvedValue(new Set<string>()),
     findUser: vi.fn().mockResolvedValue({ id: "profile-1", name: "Main" }),
-    findLatestCheckingBalanceBefore: vi.fn().mockResolvedValue(null),
-    findEarliestCheckingBalanceAfter: vi.fn().mockResolvedValue(null),
     createTransactions: vi.fn().mockResolvedValue(undefined),
     listExistingAssetIsins: vi.fn().mockResolvedValue(new Set<string>()),
     upsertAssetMetadata: vi.fn().mockResolvedValue(undefined),
@@ -174,31 +169,4 @@ describe("transaction import service", () => {
     });
   });
 
-  it("resolves BBVA movement-only imports from the nearest existing balance anchor", async () => {
-    const repository = createRepository();
-    vi.mocked(repository.findLatestCheckingBalanceBefore).mockResolvedValue({ balanceCents: 12_345 });
-    vi.mocked(repository.findEarliestCheckingBalanceAfter).mockResolvedValue({ balanceCents: 67_890 });
-
-    await expect(resolveBbvaMovementOnlyBalanceAnchor(
-      "profile-1",
-      {
-        earliestBookingDate: "2026-05-03T00:00:00.000Z",
-        latestBookingDate: "2026-05-05T00:00:00.000Z"
-      },
-      repository
-    )).resolves.toEqual({
-      kind: "before-start",
-      balanceCents: 12_345
-    });
-    expect(repository.findLatestCheckingBalanceBefore).toHaveBeenCalledWith(
-      "profile-1",
-      "bbva",
-      new Date("2026-05-03T00:00:00.000Z")
-    );
-    expect(repository.findEarliestCheckingBalanceAfter).toHaveBeenCalledWith(
-      "profile-1",
-      "bbva",
-      new Date("2026-05-05T00:00:00.000Z")
-    );
-  });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { parseBbvaXlsxStatement } from "@/domain/imports/bbva-xlsx-parser";
 import { BBVA_INSTITUTION } from "@/shared/institutions";
@@ -61,18 +61,7 @@ describe("parseBbvaXlsxStatement", () => {
     });
   });
 
-  it("parses BBVA movement-only rows when an existing balance anchor is available", async () => {
-    const resolveMovementOnlyBalanceAnchor = vi.fn(async (range) => {
-      expect(range).toEqual({
-        earliestBookingDate: "2026-05-03T00:00:00.000Z",
-        latestBookingDate: "2026-05-05T00:00:00.000Z"
-      });
-
-      return {
-        kind: "before-start" as const,
-        balanceCents: 10_000
-      };
-    });
+  it("parses BBVA movement-only rows from the first chronological incoming transaction", async () => {
     const document = await parseBbvaXlsxStatement(
       buildXlsxFile([
         ["Movimenti"],
@@ -80,11 +69,9 @@ describe("parseBbvaXlsxStatement", () => {
         [null, "01/05/2026", "05/05/2026", "LIQUIDAZIONE INTERESSI-COMMISSIONI-SPESE", null, "-\n-", "0.02 EUR"],
         [null, "04/05/2026", "04/05/2026", "CASHBACK PROMOZIONE COMMERCIALE", "ALTRO", "-\n-", "0.12 EUR"],
         [null, "03/05/2026", "03/05/2026", "IPER SERRAVALLE 19", "PAGAMENTO CON CARTA", "-\n-", "-3.38 EUR"]
-      ], "bbva-alice.excel"),
-      { resolveMovementOnlyBalanceAnchor }
+      ], "bbva-alice.excel")
     );
 
-    expect(resolveMovementOnlyBalanceAnchor).toHaveBeenCalledTimes(1);
     expect(document.fileName).toBe("bbva-alice.excel");
     expect(document.transactions).toHaveLength(3);
     expect(document.transactions[0]).toMatchObject({
@@ -93,7 +80,7 @@ describe("parseBbvaXlsxStatement", () => {
       description: "LIQUIDAZIONE INTERESSI-COMMISSIONI-SPESE",
       direction: "IN",
       amountCents: 2,
-      balanceCents: 9_676
+      balanceCents: 14
     });
     expect(document.transactions[1]).toMatchObject({
       rawDateLabel: "04/05/2026",
@@ -101,7 +88,7 @@ describe("parseBbvaXlsxStatement", () => {
       description: "CASHBACK PROMOZIONE COMMERCIALE",
       direction: "IN",
       amountCents: 12,
-      balanceCents: 9_674
+      balanceCents: 12
     });
     expect(document.transactions[2]).toMatchObject({
       rawDateLabel: "03/05/2026",
@@ -109,7 +96,7 @@ describe("parseBbvaXlsxStatement", () => {
       description: "IPER SERRAVALLE 19",
       direction: "OUT",
       amountCents: 338,
-      balanceCents: 9_662
+      balanceCents: 0
     });
   });
 

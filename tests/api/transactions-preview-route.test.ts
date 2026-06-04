@@ -116,9 +116,7 @@ describe("transactions preview API route", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.parseTradeRepublicCsv).not.toHaveBeenCalled();
-    expect(mocks.parseBbvaXlsxStatement).toHaveBeenCalledWith(file, {
-      resolveMovementOnlyBalanceAnchor: expect.any(Function)
-    });
+    expect(mocks.parseBbvaXlsxStatement).toHaveBeenCalledWith(file);
     expect(payload.summary).toMatchObject({
       fileName: "bbva alice.excel",
       sourceInstitution: "bbva",

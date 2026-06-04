@@ -38,21 +38,6 @@ type ParsedBbvaTransactionDraft = Omit<ParsedBbvaTransaction, "fingerprint" | "b
   balanceCents?: number;
 };
 
-export type BbvaMovementOnlyBalanceAnchor =
-  | { kind: "before-start"; balanceCents: number }
-  | { kind: "after-end"; balanceCents: number };
-
-export type BbvaMovementOnlyBalanceRange = {
-  earliestBookingDate: string;
-  latestBookingDate: string;
-};
-
-export type ParseBbvaXlsxStatementOptions = {
-  resolveMovementOnlyBalanceAnchor?: (
-    range: BbvaMovementOnlyBalanceRange
-  ) => BbvaMovementOnlyBalanceAnchor | null | Promise<BbvaMovementOnlyBalanceAnchor | null>;
-};
-
 export class BbvaXlsxParseError extends Error {
   constructor(message: string) {
     super(message);
@@ -257,57 +242,18 @@ function compareMovementOnlyAscending(
   return right.pageNumber - left.pageNumber;
 }
 
-function compareMovementOnlyDescending(
-  left: ParsedBbvaTransactionDraft,
-  right: ParsedBbvaTransactionDraft
-) {
-  const dateDelta = new Date(right.bookingDate).getTime() - new Date(left.bookingDate).getTime();
-  if (dateDelta !== 0) return dateDelta;
-
-  return left.pageNumber - right.pageNumber;
-}
-
-function movementOnlyDateRange(transactions: ParsedBbvaTransactionDraft[]): BbvaMovementOnlyBalanceRange {
-  const sorted = [...transactions].sort(compareMovementOnlyAscending);
-
-  return {
-    earliestBookingDate: sorted[0].bookingDate,
-    latestBookingDate: sorted[sorted.length - 1].bookingDate
-  };
-}
-
-function applyMovementOnlyBalances(
-  transactions: ParsedBbvaTransactionDraft[],
-  anchor: BbvaMovementOnlyBalanceAnchor
-) {
-  if (anchor.kind === "before-start") {
-    let runningBalanceCents = anchor.balanceCents;
-
-    for (const transaction of [...transactions].sort(compareMovementOnlyAscending)) {
-      runningBalanceCents += signedAmountCents(transaction);
-      transaction.balanceCents = runningBalanceCents;
-    }
-
-    return;
-  }
-
-  let runningBalanceCents = anchor.balanceCents;
-
-  for (const transaction of [...transactions].sort(compareMovementOnlyDescending)) {
-    transaction.balanceCents = runningBalanceCents;
-    runningBalanceCents -= signedAmountCents(transaction);
-  }
-}
-
 function applyMovementOnlyBootstrapBalances(transactions: ParsedBbvaTransactionDraft[]) {
   const sortedTransactions = [...transactions].sort(compareMovementOnlyAscending);
   const firstIncomingIndex = sortedTransactions.findIndex((transaction) => transaction.direction === "IN");
 
   if (firstIncomingIndex === -1) {
-    applyMovementOnlyBalances(transactions, {
-      kind: "before-start",
-      balanceCents: 0
-    });
+    let runningBalanceCents = 0;
+
+    for (const transaction of sortedTransactions) {
+      runningBalanceCents += signedAmountCents(transaction);
+      transaction.balanceCents = runningBalanceCents;
+    }
+
     return;
   }
 
@@ -326,23 +272,6 @@ function applyMovementOnlyBootstrapBalances(transactions: ParsedBbvaTransactionD
   }
 }
 
-async function resolveMovementOnlyBalances(
-  transactions: ParsedBbvaTransactionDraft[],
-  options: ParseBbvaXlsxStatementOptions
-) {
-  const resolveAnchor = options.resolveMovementOnlyBalanceAnchor;
-  const anchor = resolveAnchor
-    ? await resolveAnchor(movementOnlyDateRange(transactions))
-    : null;
-
-  if (!anchor) {
-    applyMovementOnlyBootstrapBalances(transactions);
-    return;
-  }
-
-  applyMovementOnlyBalances(transactions, anchor);
-}
-
 function buildParsedTransaction(transaction: ParsedBbvaTransactionDraft): ParsedBbvaTransaction {
   if (transaction.balanceCents === undefined) {
     throw new BbvaXlsxParseError("Saldo BBVA non risolto per una transazione importabile.");
@@ -359,10 +288,7 @@ function buildParsedTransaction(transaction: ParsedBbvaTransactionDraft): Parsed
   };
 }
 
-export async function parseBbvaXlsxStatement(
-  file: File,
-  options: ParseBbvaXlsxStatementOptions = {}
-): Promise<ParsedBbvaDocument> {
+export async function parseBbvaXlsxStatement(file: File): Promise<ParsedBbvaDocument> {
   const rows = (await readSheet(await file.arrayBuffer())) as SheetRow[];
   const header = mapHeaderColumns(rows);
 
@@ -416,7 +342,7 @@ export async function parseBbvaXlsxStatement(
   }
 
   if (header.layout === "movement-only") {
-    await resolveMovementOnlyBalances(transactionDrafts, options);
+    applyMovementOnlyBootstrapBalances(transactionDrafts);
   }
 
   const transactions = transactionDrafts.map(buildParsedTransaction);

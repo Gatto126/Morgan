@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   checkingFindMany: vi.fn(),
-  checkingFindFirst: vi.fn(),
   checkingCreateMany: vi.fn(),
   investmentFindMany: vi.fn(),
   investmentCreateMany: vi.fn(),
@@ -21,7 +20,6 @@ vi.mock("@/server/db/prisma", () => ({
   prisma: {
     checkingTransaction: {
       findMany: mocks.checkingFindMany,
-      findFirst: mocks.checkingFindFirst,
       createMany: mocks.checkingCreateMany
     },
     investmentTransaction: {
@@ -95,7 +93,6 @@ describe("transaction import repository", () => {
     }
 
     mocks.checkingFindMany.mockResolvedValue([]);
-    mocks.checkingFindFirst.mockResolvedValue(null);
     mocks.investmentFindMany.mockResolvedValue([]);
     mocks.cryptoFindMany.mockResolvedValue([]);
     mocks.checkingCreateMany.mockReturnValue("checking-query");
@@ -133,30 +130,6 @@ describe("transaction import repository", () => {
       skipDuplicates: true
     });
     expect(mocks.transaction).toHaveBeenCalledWith(["checking-query"]);
-  });
-
-  it("finds the latest checking balance before a movement-only BBVA import range", async () => {
-    const bookingDate = new Date("2026-05-03T00:00:00.000Z");
-    mocks.checkingFindFirst.mockResolvedValueOnce({ balanceCents: 12_345 });
-
-    await expect(transactionImportRepository.findLatestCheckingBalanceBefore(
-      "profile-1",
-      "bbva",
-      bookingDate
-    )).resolves.toEqual({ balanceCents: 12_345 });
-    expect(mocks.checkingFindFirst).toHaveBeenCalledWith({
-      where: {
-        userId: "profile-1",
-        sourceInstitution: "bbva",
-        bookingDate: { lt: bookingDate }
-      },
-      orderBy: [
-        { bookingDate: "desc" },
-        { importedAt: "desc" },
-        { id: "desc" }
-      ],
-      select: { balanceCents: true }
-    });
   });
 
   it("upserts asset metadata and skips empty history inserts", async () => {

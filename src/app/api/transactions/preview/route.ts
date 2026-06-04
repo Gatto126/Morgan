@@ -4,8 +4,7 @@ import { authGuardResponse, requireAuth, requireOwnedProfile } from "@/server/au
 import {
   assertUserExists,
   getExistingFingerprints,
-  markPreviewTransactions,
-  resolveBbvaMovementOnlyBalanceAnchor
+  markPreviewTransactions
 } from "@/server/services/transaction-import";
 import { parseTradeRepublicCsv } from "@/domain/imports/trade-republic-csv-parser";
 import { BbvaXlsxParseError, parseBbvaXlsxStatement } from "@/domain/imports/bbva-xlsx-parser";
@@ -87,9 +86,7 @@ export async function POST(request: Request) {
       parsedDocument = await parseTradeRepublicCsv(file);
     } else {
       log.info(`Parsing XLSX BBVA: "${file.name}"`);
-      parsedDocument = await parseBbvaXlsxStatement(file, {
-        resolveMovementOnlyBalanceAnchor: (range) => resolveBbvaMovementOnlyBalanceAnchor(userId, range)
-      });
+      parsedDocument = await parseBbvaXlsxStatement(file);
     }
 
     const existingFingerprints = await getExistingFingerprints(
