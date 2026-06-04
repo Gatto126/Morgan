@@ -40,6 +40,7 @@ export type ProfileRepository = {
   deleteCryptoAssets(tokens: string[]): Promise<void>;
   deletePriceCache(keys: string[]): Promise<void>;
   deleteBinanceBalances(userId: string): Promise<void>;
+  deleteBinanceDailySnapshots(userId: string): Promise<void>;
   deleteProfile(userId: string): Promise<void>;
   updateBinanceCredentials(userId: string, data: BinanceCredentialUpdate): Promise<ProfileRecord>;
 };
@@ -199,6 +200,10 @@ export const profileRepository: ProfileRepository = {
 
   async deleteBinanceBalances(userId) {
     await prisma.binanceBalance.deleteMany({ where: { userId } });
+  },
+
+  async deleteBinanceDailySnapshots(userId) {
+    await prisma.binanceDailySnapshot.deleteMany({ where: { userId } });
   },
 
   async deleteProfile(userId) {

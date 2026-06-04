@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   deleteCryptoAssets: vi.fn(),
   deletePriceCache: vi.fn(),
   deleteBinanceBalances: vi.fn(),
+  deleteBinanceDailySnapshots: vi.fn(),
   deleteProfile: vi.fn(),
   updateBinanceCredentials: vi.fn(),
   encryptSecret: vi.fn((value: string | null | undefined) => value ? `encrypted:${value.trim()}` : null),
@@ -39,6 +40,7 @@ vi.mock("@/server/repositories/profile-repository", () => ({
     deleteCryptoAssets: mocks.deleteCryptoAssets,
     deletePriceCache: mocks.deletePriceCache,
     deleteBinanceBalances: mocks.deleteBinanceBalances,
+    deleteBinanceDailySnapshots: mocks.deleteBinanceDailySnapshots,
     deleteProfile: mocks.deleteProfile,
     updateBinanceCredentials: mocks.updateBinanceCredentials
   }
@@ -95,6 +97,7 @@ describe("profile service", () => {
     mocks.deleteCryptoAssets.mockResolvedValue(undefined);
     mocks.deletePriceCache.mockResolvedValue(undefined);
     mocks.deleteBinanceBalances.mockResolvedValue(undefined);
+    mocks.deleteBinanceDailySnapshots.mockResolvedValue(undefined);
     mocks.deleteProfile.mockResolvedValue(undefined);
     mocks.updateBinanceCredentials.mockResolvedValue(profile);
   });
@@ -191,7 +194,7 @@ describe("profile service", () => {
     });
   });
 
-  it("clears Binance credentials and optional cached balances", async () => {
+  it("clears Binance credentials and optional cached data", async () => {
     await updateProfileBinanceSettings("profile-1", {
       apiKey: null,
       apiSecret: null,
@@ -199,6 +202,25 @@ describe("profile service", () => {
     });
 
     expect(mocks.deleteBinanceBalances).toHaveBeenCalledWith("profile-1");
+    expect(mocks.deleteBinanceDailySnapshots).toHaveBeenCalledWith("profile-1");
+    expect(mocks.deletePriceCache).toHaveBeenCalledWith(["binance_sync_profile-1"]);
+    expect(mocks.updateBinanceCredentials).toHaveBeenCalledWith("profile-1", {
+      binanceApiKeyEncrypted: null,
+      binanceApiSecretEncrypted: null,
+      binanceApiKeyPreview: null
+    });
+  });
+
+  it("clears Binance credentials without deleting data when requested", async () => {
+    await updateProfileBinanceSettings("profile-1", {
+      apiKey: null,
+      apiSecret: null,
+      deleteBalances: false
+    });
+
+    expect(mocks.deleteBinanceBalances).not.toHaveBeenCalled();
+    expect(mocks.deleteBinanceDailySnapshots).not.toHaveBeenCalled();
+    expect(mocks.deletePriceCache).not.toHaveBeenCalled();
     expect(mocks.updateBinanceCredentials).toHaveBeenCalledWith("profile-1", {
       binanceApiKeyEncrypted: null,
       binanceApiSecretEncrypted: null,

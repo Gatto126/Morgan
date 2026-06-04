@@ -1,10 +1,10 @@
 # Morgan Valuation Memory Checkpoint
 
-Ultimo aggiornamento: 2026-06-04
-Commit baseline corrente: `3610ebd` (cleanup ownership Binance current-sync pushato)
+Ultimo aggiornamento: 2026-06-05
+Commit baseline corrente: `879ada6` (storico daily snapshot Binance esposto alla UI)
 Ultimo checkpoint smoke su Vercel: `3610ebd` (cold login e diagnostica di coerenza cross-dashboard)
-Slice locale corrente: primo connect Binance coerente completato; crypto current surfaces snapshot-driven completate; storico Binance server-side implementato e precaricato nei payload stage di Binance dashboard, Crypto dashboard e main dashboard localmente.
-Prossima fase: push/deploy Vercel, poi verificare il primo run cron e la comparsa del primo punto storico reale.
+Slice locale corrente: primo connect Binance coerente completato; crypto current surfaces snapshot-driven completate; storico Binance server-side implementato e precaricato nei payload stage; settings `API + DATA` deve cancellare anche lo storico Binance.
+Prossima fase: verificare il primo run cron schedulato reale e la crescita progressiva dello storico Binance.
 
 Questo file e' la memoria durevole del refactor valuation/topbar/Binance.
 Quando una conversazione Codex viene compattata, leggere questo file prima di toccare codice.
@@ -139,6 +139,7 @@ Stato verificato alla baseline `3610ebd`:
 - Cache stage client bumpata a versione 3 per scartare payload `sessionStorage` vecchi senza `binanceHistoricalPoints`.
 - Con Binance collegata, main e crypto non devono rendere visibile il chart solo perche' hanno stage data o balances: devono aspettare il `currentValuationPoint` committed, cosi' scala, topbar e punto corrente entrano insieme.
 - I date key current per chart Binance/Crypto usano `Europe/Rome`, come il cron storico.
+- Settings Binance delete semantics: `API ONLY` scollega solo le credenziali e preserva saldi/storico; `API + DATA` elimina credenziali, `BinanceBalance`, `BinanceDailySnapshot` con righe token in cascade e marker cache `binance_sync_*`, poi invalida la cache profilo.
 
 Risultati smoke manuale comunicati il 2026-06-03:
 
@@ -600,6 +601,7 @@ Questa e' la memoria storica che piu' probabilmente servira' in futuro.
 - Se current sync fallisce, mantenere visibile l'ultima valuation committed e pubblicare diagnostica.
 - Dopo sync/update/delete credenziali Binance, invalidare la cache profilo server-side per evitare payload Binance/dashboard/crypto stale entro TTL.
 - Dopo connect, persistere il `binanceRefreshKey` client-side: il reload immediato deve continuare a leggere la versione Binance appena sincronizzata, non una vecchia cache `binance:0` prodotta prima delle credenziali.
+- In Settings, `API ONLY` cancella solo le credenziali cifrate e lascia i dati Binance raccolti. `API + DATA` cancella anche current balances, storico daily snapshot e marker cache di sync per quel profilo.
 
 Primo connect Binance target:
 
@@ -675,6 +677,7 @@ Decisione operativa:
 - Lo snapshot e' idempotente: una sola riga per `userId + dateKey`; se esiste, il job non richiama Binance per quel profilo.
 - Lo storico salva tutto quello che Binance restituisce con saldo positivo, anche se sotto `0,49 EUR`.
 - La UI current continua a usare `BinanceBalance` filtrato/materiale e committed valuation snapshot.
+- Lo storico daily snapshot e' considerato dato Binance del profilo: deve essere eliminato da Settings quando l'utente sceglie `API + DATA`, ma non quando sceglie `API ONLY`.
 
 Non risolvere Binance history riusando current sync come se fosse un ledger storico. Il lavoro futuro su Binance history deve decidere:
 

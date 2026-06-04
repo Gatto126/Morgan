@@ -173,7 +173,11 @@ export async function updateProfileBinanceSettings(id: string, input: unknown) {
   }
 
   if (apiKey === null && apiSecret === null && json.deleteBalances === true) {
-    await profileRepository.deleteBinanceBalances(id);
+    await Promise.all([
+      profileRepository.deleteBinanceBalances(id),
+      profileRepository.deleteBinanceDailySnapshots(id),
+      profileRepository.deletePriceCache([`binance_sync_${id}`])
+    ]);
   }
 
   const user = await profileRepository.updateBinanceCredentials(id, data);

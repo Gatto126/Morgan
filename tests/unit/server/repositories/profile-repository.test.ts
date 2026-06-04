@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   cryptoFindMany: vi.fn(),
   binanceBalanceFindMany: vi.fn(),
   binanceBalanceDeleteMany: vi.fn(),
+  binanceDailySnapshotDeleteMany: vi.fn(),
   assetHistoryDeleteMany: vi.fn(),
   assetDeleteMany: vi.fn(),
   cryptoAssetDeleteMany: vi.fn(),
@@ -30,6 +31,9 @@ vi.mock("@/server/db/prisma", () => ({
     binanceBalance: {
       findMany: mocks.binanceBalanceFindMany,
       deleteMany: mocks.binanceBalanceDeleteMany
+    },
+    binanceDailySnapshot: {
+      deleteMany: mocks.binanceDailySnapshotDeleteMany
     },
     assetHistory: { deleteMany: mocks.assetHistoryDeleteMany },
     asset: { deleteMany: mocks.assetDeleteMany },
@@ -107,6 +111,14 @@ describe("profile repository", () => {
         binanceApiSecretEncrypted: "secret",
         binanceApiKeyPreview: "apikey12..."
       }
+    });
+  });
+
+  it("deletes Binance daily snapshots by profile", async () => {
+    await profileRepository.deleteBinanceDailySnapshots("profile-1");
+
+    expect(mocks.binanceDailySnapshotDeleteMany).toHaveBeenCalledWith({
+      where: { userId: "profile-1" }
     });
   });
 });
