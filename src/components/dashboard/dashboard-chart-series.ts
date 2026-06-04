@@ -21,3 +21,25 @@ export function shouldRenderStandalonePointSeries(
 ) {
   return hasStandalonePointSeries(chartData, seriesKey);
 }
+
+export function shouldRenderDashboardStandalonePointSeries({
+  activeTab,
+  chartData,
+  hiddenSeries,
+  seriesKey
+}: {
+  activeTab: string;
+  chartData: DashboardChartPoint[];
+  hiddenSeries: Record<string, boolean>;
+  seriesKey: string;
+}) {
+  if (!shouldRenderStandalonePointSeries(chartData, seriesKey)) {
+    return false;
+  }
+
+  if (activeTab === "crypto" && seriesKey === "binance" && !hiddenSeries.crypto) {
+    return false;
+  }
+
+  return true;
+}

@@ -10,6 +10,7 @@ import {
 import {
   hasRenderableLineSeries,
   hasStandalonePointSeries,
+  shouldRenderDashboardStandalonePointSeries,
   shouldRenderStandalonePointSeries
 } from "@/components/dashboard/dashboard-chart-series";
 import {
@@ -402,10 +403,10 @@ describe("dashboard chart data model", () => {
     expect(todayPoint).toMatchObject({
       Bitcoin: 710_000,
       binance: 20_000,
-      crypto: 710_000,
-      heritage: 770_000,
+      crypto: 730_000,
+      heritage: 790_000,
       investment: 50_000,
-      value: 710_000
+      value: 730_000
     });
   });
 
@@ -446,7 +447,7 @@ describe("dashboard chart data model", () => {
     expect(todayPoint?.topbar_heritage).toBeUndefined();
   });
 
-  it("does not fold a standalone current Binance point into the main crypto aggregate history", () => {
+  it("folds a standalone current Binance point into the main crypto aggregate data", () => {
     const points = buildDashboardChartData({
       activeTab: "crypto",
       binanceTotalCents: 2000,
@@ -474,13 +475,13 @@ describe("dashboard chart data model", () => {
 
     expect(todayPoint).toMatchObject({
       binance: 20_000,
-      crypto: 71_000,
+      crypto: 91_000,
       crypto_inst_trade_republic: 71_000,
-      heritage: 131_000,
-      topbar_crypto: 91_000,
-      topbar_heritage: 151_000,
-      value: 71_000
+      heritage: 151_000,
+      value: 91_000
     });
+    expect(todayPoint?.topbar_crypto).toBeUndefined();
+    expect(todayPoint?.topbar_heritage).toBeUndefined();
   });
 
   it("does not add a local live today point when valuation-only current points are requested", () => {
@@ -603,7 +604,7 @@ describe("dashboard chart data model", () => {
     expect(points[0]).toMatchObject({
       rawMonth: "2026-01-02",
       binance: 2_000,
-      value: 0
+      value: 2_000
     });
     expect(points.map((point) => point.rawMonth)).not.toContain("2026-01-01");
   });
@@ -798,6 +799,18 @@ describe("dashboard chart display model", () => {
     expect(hasRenderableLineSeries(points, "binance")).toBe(false);
     expect(hasStandalonePointSeries(points, "binance")).toBe(true);
     expect(shouldRenderStandalonePointSeries(points, "binance")).toBe(true);
+    expect(shouldRenderDashboardStandalonePointSeries({
+      activeTab: "crypto",
+      chartData: points,
+      hiddenSeries: {},
+      seriesKey: "binance"
+    })).toBe(false);
+    expect(shouldRenderDashboardStandalonePointSeries({
+      activeTab: "crypto",
+      chartData: points,
+      hiddenSeries: { crypto: true },
+      seriesKey: "binance"
+    })).toBe(true);
     expect(hasRenderableLineSeries(points, "crypto_inst_trade_republic")).toBe(true);
     expect(hasStandalonePointSeries(points, "crypto_inst_trade_republic")).toBe(false);
     expect(hasRenderableLineSeries(points, "value")).toBe(true);

@@ -188,7 +188,7 @@ export function buildDashboardChartData({
   });
 
   if (!todayKey) {
-    return trimDashboardChartDataToActiveWindow(removeStandaloneBinanceFromMainCryptoTabAggregate(chartPoints, activeTab), {
+    return trimDashboardChartDataToActiveWindow(chartPoints, {
       activeTab,
       allCryptoInstitutions,
       cryptoTokens
@@ -196,11 +196,11 @@ export function buildDashboardChartData({
   }
 
   if (currentValuationPoint) {
-    return trimDashboardChartDataToActiveWindow(removeStandaloneBinanceFromMainCryptoTabAggregate(applyCurrentValuationTodayPoint(chartPoints, {
+    return trimDashboardChartDataToActiveWindow(applyCurrentValuationTodayPoint(chartPoints, {
       activeTab,
       currentValuationPoint,
       todayKey
-    }), activeTab), {
+    }), {
       activeTab,
       allCryptoInstitutions,
       cryptoTokens
@@ -222,7 +222,7 @@ export function buildDashboardChartData({
       })
     : chartPoints;
 
-  return trimDashboardChartDataToActiveWindow(removeStandaloneBinanceFromMainCryptoTabAggregate(chartDataWithToday, activeTab), {
+  return trimDashboardChartDataToActiveWindow(chartDataWithToday, {
     activeTab,
     allCryptoInstitutions,
     cryptoTokens
@@ -446,54 +446,6 @@ function isMeaningfulValue(value: number | undefined): value is number {
 
 function isMeaningfulPointValue(value: DashboardChartPoint[string]) {
   return typeof value === "number" && Number.isFinite(value) && Math.abs(value) > NON_ZERO_THRESHOLD;
-}
-
-function isFinitePointValue(value: DashboardChartPoint[string]): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function removeStandaloneBinanceFromMainCryptoTabAggregate(chartPoints: DashboardChartPoint[], activeTab: AccountTab) {
-  if (activeTab !== "crypto") {
-    return chartPoints;
-  }
-
-  const binancePointCount = chartPoints.reduce((count, point) =>
-    isFinitePointValue(point.binance) ? count + 1 : count
-  , 0);
-
-  if (binancePointCount !== 1) {
-    return chartPoints;
-  }
-
-  const aggregateKeys = ["crypto", "heritage", "value"];
-
-  return chartPoints.map((point) => {
-    const binanceValue = point.binance;
-
-    if (!isFinitePointValue(binanceValue)) {
-      return point;
-    }
-
-    const nextPoint: DashboardChartPoint = { ...point };
-    const cryptoValue = nextPoint.crypto;
-    const heritageValue = nextPoint.heritage;
-
-    if (isFinitePointValue(cryptoValue)) {
-      nextPoint.topbar_crypto = cryptoValue;
-    }
-    if (isFinitePointValue(heritageValue)) {
-      nextPoint.topbar_heritage = heritageValue;
-    }
-
-    aggregateKeys.forEach((key) => {
-      const value = nextPoint[key];
-      if (isFinitePointValue(value)) {
-        nextPoint[key] = value - binanceValue;
-      }
-    });
-
-    return nextPoint;
-  });
 }
 
 function trimDashboardChartDataToActiveWindow(
