@@ -24,7 +24,23 @@ export function formatCheckingTransactionDescription(description: string) {
   return description
     .trim()
     .replace(/^Regolamento liquidit.*?\s+crypto:\s*/i, "")
-    .replace(/^Regolamento liquidit.*?:\s*/i, "");
+    .replace(/^Regolamento liquidit.*?:\s*/i, "")
+    .replace(/^Incoming transfer from\s+/i, "")
+    .replace(/^Outgoing transfer for\s+/i, "");
+}
+
+export function formatCheckingTransactionSort(typeLabel: string) {
+  const normalizedType = typeLabel.trim().toUpperCase();
+
+  if (normalizedType.startsWith("TRANSFER") && normalizedType.includes("INBOUND")) {
+    return "INBOUND";
+  }
+
+  if (normalizedType.startsWith("TRANSFER") && normalizedType.includes("OUTBOUND")) {
+    return "OUTBOUND";
+  }
+
+  return normalizedType;
 }
 
 export function getAbbreviatedLabel(label: string) {
