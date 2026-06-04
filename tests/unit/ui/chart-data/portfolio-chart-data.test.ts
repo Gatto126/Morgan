@@ -161,8 +161,13 @@ describe("portfolio chart data", () => {
       todayKey: "2026-03-15"
     });
     const todayPoint = points.find((point) => point.rawMonth === "2026-03-15");
+    const previousPoint = points.find((point) => point.rawMonth === "2026-03-14");
 
     expect(binanceProvider?.total).toBe(25025);
+    expect(previousPoint).toMatchObject({
+      balance: null,
+      BINANCE: null
+    });
     expect(todayPoint).toMatchObject({
       "Bitcoin (BTC)": 28000,
       balance: 28000,

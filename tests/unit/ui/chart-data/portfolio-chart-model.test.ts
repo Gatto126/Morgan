@@ -98,4 +98,27 @@ describe("portfolio chart model", () => {
     expect(hasStandalonePortfolioPointSeries(points, "trade_republic")).toBe(false);
     expect(hasRenderablePortfolioLineSeries(points, "heritage")).toBe(true);
   });
+
+  it("classifies a single provider balance point as standalone", () => {
+    const points = [
+      { rawMonth: "2026-06-01", balance: null, "Bitcoin (BTC)": null },
+      { rawMonth: "2026-06-02", balance: null, "Bitcoin (BTC)": null },
+      { rawMonth: "2026-06-03", balance: 2300, "Bitcoin (BTC)": 2300 }
+    ];
+
+    expect(hasRenderablePortfolioLineSeries(points, "balance")).toBe(false);
+    expect(hasStandalonePortfolioPointSeries(points, "balance")).toBe(true);
+    expect(shouldRenderPortfolioStandalonePointSeries({
+      activeTab: "BINANCE",
+      chartData: points,
+      hiddenSeries: {},
+      seriesKey: "balance"
+    })).toBe(true);
+    expect(shouldRenderPortfolioStandalonePointSeries({
+      activeTab: "BINANCE",
+      chartData: points,
+      hiddenSeries: {},
+      seriesKey: "Bitcoin (BTC)"
+    })).toBe(true);
+  });
 });

@@ -179,7 +179,14 @@ export function buildPortfolioChartData({
         }
       });
 
-      point.balance = Math.abs(bucket.providers[activeTab] || 0);
+      const activeProviderValue = bucket.providers[activeTab];
+      const activeProviderFirstDate = firstProviderAcquisition.get(activeTab);
+      const hasActiveProviderBeenAcquired = activeProviderFirstDate && bucketDate >= activeProviderFirstDate;
+      point.balance = activeProviderValue && Math.abs(activeProviderValue) > 0.000001
+        ? Math.abs(activeProviderValue)
+        : hasActiveProviderBeenAcquired
+          ? 0
+          : null;
       const prodData = bucket.providerProducts[activeTab] || {};
 
       activeProvider?.products.forEach(product => {

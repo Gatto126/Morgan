@@ -234,9 +234,44 @@ export function PortfolioChart({
                   if (!showSoldAssets && isSold) return null;
                   if (hiddenSeries[productKey]) return null;
                   const strokeColor = GRAYSCALE_PALETTE[index % GRAYSCALE_PALETTE.length];
+                  const hasLine = hasRenderablePortfolioLineSeries(chartData, productKey);
+                  const shouldRenderStandalonePoint = !hasLine && shouldRenderPortfolioStandalonePointSeries({
+                    activeTab,
+                    chartData,
+                    hiddenSeries,
+                    seriesKey: productKey
+                  });
+
+                  if (!hasLine && !shouldRenderStandalonePoint) return null;
+
+                  if (shouldRenderStandalonePoint) {
+                    return (
+                      <Line
+                        key={`${productKey}-point-${hiddenSeriesSignature}`}
+                        type="linear"
+                        dataKey={productKey}
+                        name={productKey}
+                        stroke="transparent"
+                        strokeWidth={0}
+                        isAnimationActive={false}
+                        connectNulls={false}
+                        activeDot={false}
+                        dot={(props: ActiveDotProps) => (
+                          <SelectableChartDot
+                            {...props}
+                            color={strokeColor}
+                            onSelectPoint={onSelectPoint}
+                            radius={5}
+                            seriesKey={productKey}
+                          />
+                        )}
+                      />
+                    );
+                  }
+
                   return (
                     <Line
-                      key={productKey}
+                      key={`${productKey}-line-${hiddenSeriesSignature}`}
                       type="linear"
                       dataKey={productKey}
                       name={productKey}
@@ -257,26 +292,64 @@ export function PortfolioChart({
                     />
                   );
                 })}
-                <Line
-                  key={`balance-${hiddenSeriesSignature}`}
-                  type="linear"
-                  dataKey="balance"
-                  name="balance"
-                  stroke="#ffffff"
-                  strokeWidth={2.5}
-                  isAnimationActive={false}
-                  connectNulls={false}
-                  hide={!!hiddenSeries.balance}
-                  activeDot={(props: ActiveDotProps) => (
-                    <SelectableChartDot
-                      {...props}
-                      color="#ffffff"
-                      onSelectPoint={onSelectPoint}
-                      seriesKey="balance"
+                {!hiddenSeries.balance && (() => {
+                  const hasLine = hasRenderablePortfolioLineSeries(chartData, "balance");
+                  const shouldRenderStandalonePoint = !hasLine && shouldRenderPortfolioStandalonePointSeries({
+                    activeTab,
+                    chartData,
+                    hiddenSeries,
+                    seriesKey: "balance"
+                  });
+
+                  if (!hasLine && !shouldRenderStandalonePoint) return null;
+
+                  if (shouldRenderStandalonePoint) {
+                    return (
+                      <Line
+                        key={`balance-point-${hiddenSeriesSignature}`}
+                        type="linear"
+                        dataKey="balance"
+                        name="balance"
+                        stroke="transparent"
+                        strokeWidth={0}
+                        isAnimationActive={false}
+                        connectNulls={false}
+                        activeDot={false}
+                        dot={(props: ActiveDotProps) => (
+                          <SelectableChartDot
+                            {...props}
+                            color="#ffffff"
+                            onSelectPoint={onSelectPoint}
+                            radius={5}
+                            seriesKey="balance"
+                          />
+                        )}
+                      />
+                    );
+                  }
+
+                  return (
+                    <Line
+                      key={`balance-line-${hiddenSeriesSignature}`}
+                      type="linear"
+                      dataKey="balance"
+                      name="balance"
+                      stroke="#ffffff"
+                      strokeWidth={2.5}
+                      isAnimationActive={false}
+                      connectNulls={false}
+                      activeDot={(props: ActiveDotProps) => (
+                        <SelectableChartDot
+                          {...props}
+                          color="#ffffff"
+                          onSelectPoint={onSelectPoint}
+                          seriesKey="balance"
+                        />
+                      )}
+                      dot={false}
                     />
-                  )}
-                  dot={false}
-                />
+                  );
+                })()}
               </>
             ) : null}
             {seriesReady && selectedPoint ? (
