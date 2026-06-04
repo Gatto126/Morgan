@@ -76,8 +76,8 @@ export function DashboardTopbarTab({
       aria-label={ariaLabel}
       aria-disabled={active ? "true" : undefined}
       className={cn(
-        "dashboard-topbar-tab flex h-12 w-[178px] flex-shrink-0 items-center justify-center rounded-[16px] border-2 px-3 text-[11px] font-extrabold uppercase has-lucide",
-        onClick && !active ? "cursor-pointer" : "cursor-default",
+        "dashboard-topbar-tab flex h-12 w-[178px] flex-shrink-0 items-center justify-center rounded-[16px] border-2 px-3 text-[11px] font-extrabold uppercase transition-[background-color,border-color,color,transform,opacity] duration-200 has-lucide",
+        onClick && !active ? "cursor-pointer active:scale-[0.985]" : "cursor-default",
         active
           ? "border-white bg-[color:var(--surface-panel)] text-white"
           : "border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--text-dim)]"

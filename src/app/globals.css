@@ -159,10 +159,18 @@ button:disabled:hover svg.lucide {
   color: #4C4C4C !important;
 }
 
-button.dashboard-topbar-tab,
-button.dashboard-topbar-tab:hover {
+button.dashboard-topbar-tab {
   background-color: var(--surface-panel) !important;
-  transition: none !important;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    transform 200ms ease,
+    opacity 200ms ease !important;
+}
+
+button.dashboard-topbar-tab:hover {
+  background-color: var(--surface-elevated) !important;
 }
 
 button.dashboard-topbar-tab[data-active="false"],
@@ -186,7 +194,9 @@ button.dashboard-topbar-tab .dashboard-topbar-identity-icon,
 button.dashboard-topbar-tab:hover .dashboard-topbar-identity-icon {
   color: #4C4C4C !important;
   stroke: #4C4C4C !important;
-  transition: none !important;
+  transition:
+    color 200ms ease,
+    stroke 200ms ease !important;
 }
 
 button.dashboard-topbar-tab[data-active="false"][data-hovered="true"]:hover .dashboard-topbar-identity-icon {
@@ -204,7 +214,9 @@ button.dashboard-topbar-tab .dashboard-topbar-currency-icon,
 button.dashboard-topbar-tab:hover .dashboard-topbar-currency-icon {
   color: #FFFFFF !important;
   stroke: #FFFFFF !important;
-  transition: none !important;
+  transition:
+    color 200ms ease,
+    stroke 200ms ease !important;
 }
 
 .current-value-skeleton {
