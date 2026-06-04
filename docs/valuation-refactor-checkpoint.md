@@ -142,6 +142,8 @@ Stato verificato alla baseline `3610ebd`:
 - Settings Binance delete semantics: `API ONLY` scollega solo le credenziali e preserva saldi/storico; `API + DATA` elimina credenziali, `BinanceBalance`, `BinanceDailySnapshot` con righe token in cascade, marker cache `binance_sync_*`, `ProfileStageSnapshot` del profilo e cache stage browser/sessionStorage, poi invalida la cache profilo.
 - Se una cancellazione Binance precedente e' stata parziale, la UI Settings deve permettere un wipe `DATA` anche quando non ci sono piu' API salvate, cosi' l'utente non deve ricollegare Binance solo per pulire lo storico/cache residui.
 - Dopo una cancellazione Binance `API ONLY`, `API + DATA` o `DATA`, la UI deve svuotare subito anche lo store topbar del profilo e la relativa persistenza browser: le tab/valori `BINANCE` devono sparire senza F5, poi le superfici crypto rimaste si ripopolano dai nuovi snapshot/cache validi.
+- Il pannello Settings mostra il bidone Binance solo se il profilo ha API salvate o dati Binance residui (`BinanceBalance`/`BinanceDailySnapshot`) da cancellare.
+- Quando cambia la chiave refresh Binance, main dashboard e Crypto/Investment dashboard non devono smontare card/chart gia' renderizzati: mantengono lo stage data corrente come stale-while-refresh e lo sostituiscono appena arriva il payload pulito.
 
 Risultati smoke manuale comunicati il 2026-06-03:
 

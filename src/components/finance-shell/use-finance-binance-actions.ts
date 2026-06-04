@@ -15,7 +15,7 @@ import type { UserRecord } from "./types";
 
 type UpdateProfileBinancePayload = {
   error?: string;
-  user?: Pick<UserRecord, "hasBinanceCredentials" | "binanceApiKeyPreview">;
+  user?: Pick<UserRecord, "hasBinanceCredentials" | "hasBinanceData" | "binanceApiKeyPreview">;
 };
 
 type UseFinanceBinanceActionsParams = {
@@ -183,6 +183,7 @@ export function useFinanceBinanceActions({
       updatedUser = {
         ...activeUser,
         hasBinanceCredentials: payload.user.hasBinanceCredentials,
+        hasBinanceData: payload.user.hasBinanceData,
         binanceApiKeyPreview: payload.user.binanceApiKeyPreview
       };
 
@@ -202,6 +203,10 @@ export function useFinanceBinanceActions({
       });
       const balances = syncResult.balances;
       const tokenCount = balances.length;
+      updatedUser = {
+        ...updatedUser,
+        hasBinanceData: updatedUser.hasBinanceData || tokenCount > 0
+      };
 
       setBinanceRefreshKey(nextRefreshKey);
       setActiveUser(updatedUser);
@@ -285,6 +290,7 @@ export function useFinanceBinanceActions({
       const updatedUser: UserRecord = {
         ...activeUser,
         hasBinanceCredentials: false,
+        hasBinanceData: deleteData ? false : payload.user?.hasBinanceData ?? activeUser.hasBinanceData,
         binanceApiKeyPreview: null
       };
       setActiveUser(updatedUser);

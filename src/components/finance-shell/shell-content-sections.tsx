@@ -197,6 +197,7 @@ export function FinanceShellSettingsContent({
       binanceApiKeyPreview={activeUser?.binanceApiKeyPreview ?? null}
       error={error}
       hasActiveUser={!!activeUser}
+      hasBinanceData={!!activeUser?.hasBinanceData}
       isApiKeySaved={!!activeUser?.hasBinanceCredentials}
       isTesting={isTesting}
       notice={notice}

@@ -9,14 +9,31 @@ type TransactionCounts = {
     checkingTransactions: number;
     investmentTransactions: number;
     cryptoTransactions: number;
+    binanceBalances?: number;
+    binanceDailySnapshots?: number;
   };
 };
 
-export function toSafeUser(user: User) {
+type BinanceDataCounts = {
+  _count?: {
+    binanceBalances?: number;
+    binanceDailySnapshots?: number;
+  };
+};
+
+function hasBinanceData(user: BinanceDataCounts) {
+  const balanceCount = user._count?.binanceBalances ?? 0;
+  const snapshotCount = user._count?.binanceDailySnapshots ?? 0;
+
+  return balanceCount > 0 || snapshotCount > 0;
+}
+
+export function toSafeUser(user: User & BinanceDataCounts) {
   return {
     id: user.id,
     name: user.name,
     hasBinanceCredentials: hasBinanceCredentials(user),
+    hasBinanceData: hasBinanceData(user),
     binanceApiKeyPreview: getBinanceApiKeyPreview(user),
   };
 }

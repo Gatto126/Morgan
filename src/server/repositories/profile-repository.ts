@@ -7,7 +7,9 @@ const profileSummaryInclude = {
     select: {
       checkingTransactions: true,
       investmentTransactions: true,
-      cryptoTransactions: true
+      cryptoTransactions: true,
+      binanceBalances: true,
+      binanceDailySnapshots: true
     }
   }
 } as const;
@@ -16,7 +18,9 @@ export type ProfileSummaryRecord = Prisma.UserGetPayload<{
   include: typeof profileSummaryInclude;
 }>;
 
-export type ProfileRecord = Prisma.UserGetPayload<Record<string, never>>;
+export type ProfileRecord = Prisma.UserGetPayload<{
+  include: typeof profileSummaryInclude;
+}>;
 
 export type BinanceCredentialUpdate = {
   binanceApiKeyEncrypted?: string | null;
@@ -67,7 +71,8 @@ export const profileRepository: ProfileRepository = {
       where: {
         id,
         ownerId
-      }
+      },
+      include: profileSummaryInclude
     });
   },
 
@@ -76,7 +81,8 @@ export const profileRepository: ProfileRepository = {
       where: {
         ownerId,
         name
-      }
+      },
+      include: profileSummaryInclude
     });
   },
 
@@ -85,7 +91,8 @@ export const profileRepository: ProfileRepository = {
       data: {
         ownerId,
         name
-      }
+      },
+      include: profileSummaryInclude
     });
   },
 
@@ -215,7 +222,8 @@ export const profileRepository: ProfileRepository = {
   async updateBinanceCredentials(userId, data) {
     return prisma.user.update({
       where: { id: userId },
-      data
+      data,
+      include: profileSummaryInclude
     });
   }
 };

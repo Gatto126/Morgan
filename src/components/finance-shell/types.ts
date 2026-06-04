@@ -6,6 +6,7 @@ export type UserRecord = {
   investmentCount: number;
   cryptoCount: number;
   hasBinanceCredentials: boolean;
+  hasBinanceData?: boolean;
   binanceApiKeyPreview?: string | null;
 };
 

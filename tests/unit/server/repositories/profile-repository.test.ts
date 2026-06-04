@@ -61,7 +61,9 @@ describe("profile repository", () => {
           select: {
             checkingTransactions: true,
             investmentTransactions: true,
-            cryptoTransactions: true
+            cryptoTransactions: true,
+            binanceBalances: true,
+            binanceDailySnapshots: true
           }
         }
       },
@@ -110,6 +112,17 @@ describe("profile repository", () => {
         binanceApiKeyEncrypted: "key",
         binanceApiSecretEncrypted: "secret",
         binanceApiKeyPreview: "apikey12..."
+      },
+      include: {
+        _count: {
+          select: {
+            checkingTransactions: true,
+            investmentTransactions: true,
+            cryptoTransactions: true,
+            binanceBalances: true,
+            binanceDailySnapshots: true
+          }
+        }
       }
     });
   });

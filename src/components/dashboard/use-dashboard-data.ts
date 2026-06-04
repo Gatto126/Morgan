@@ -180,7 +180,6 @@ export function useDashboardData({
     }
 
     lastRefreshKeyRef.current = refreshKey;
-    setData(null);
     setHasFreshData(false);
     setLoading(true);
     setError(null);

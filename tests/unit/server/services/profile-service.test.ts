@@ -115,7 +115,9 @@ describe("profile service", () => {
         _count: {
           checkingTransactions: 2,
           investmentTransactions: 3,
-          cryptoTransactions: 5
+          cryptoTransactions: 5,
+          binanceBalances: 1,
+          binanceDailySnapshots: 2
         }
       }
     ]);
@@ -129,7 +131,8 @@ describe("profile service", () => {
         transactionCount: 10,
         checkingCount: 2,
         investmentCount: 3,
-        cryptoCount: 5
+        cryptoCount: 5,
+        hasBinanceData: true
       })
     ]);
     expect(mocks.listByOwner).toHaveBeenCalledWith("owner-1");
@@ -142,7 +145,9 @@ describe("profile service", () => {
         _count: {
           checkingTransactions: 0,
           investmentTransactions: 0,
-          cryptoTransactions: 0
+          cryptoTransactions: 0,
+          binanceBalances: 0,
+          binanceDailySnapshots: 0
         }
       }
     ]);
@@ -201,10 +206,13 @@ describe("profile service", () => {
   });
 
   it("clears Binance credentials and optional cached data", async () => {
-    await updateProfileBinanceSettings("profile-1", {
+    await expect(updateProfileBinanceSettings("profile-1", {
       apiKey: null,
       apiSecret: null,
       deleteBalances: true
+    })).resolves.toMatchObject({
+      hasBinanceCredentials: false,
+      hasBinanceData: false
     });
 
     expect(mocks.deleteBinanceBalances).toHaveBeenCalledWith("profile-1");

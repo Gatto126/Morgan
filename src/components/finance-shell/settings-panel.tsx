@@ -15,6 +15,7 @@ type SettingsPanelProps = {
   activeSection: SettingsSection | null;
   activeUserId: string | null;
   hasActiveUser: boolean;
+  hasBinanceData: boolean;
   isApiKeySaved: boolean;
   binanceApiKeyPreview: string | null;
   showSecret: boolean;
@@ -37,6 +38,7 @@ export function SettingsPanel({
   activeSection,
   activeUserId,
   hasActiveUser,
+  hasBinanceData,
   isApiKeySaved,
   binanceApiKeyPreview,
   showSecret,
@@ -93,9 +95,10 @@ export function SettingsPanel({
 
                 {activeSection === "apiKey" ? (
                   <SettingsApiKeySection
-                    key={`${activeUserId ?? "no-profile"}:${isApiKeySaved ? "saved" : "editable"}`}
+                    key={`${activeUserId ?? "no-profile"}:${isApiKeySaved ? "saved" : "editable"}:${hasBinanceData ? "binance-data" : "no-binance-data"}`}
                     binanceApiKeyPreview={binanceApiKeyPreview}
                     error={error}
+                    hasBinanceData={hasBinanceData}
                     isApiKeySaved={isApiKeySaved}
                     isTesting={isTesting}
                     notice={notice}

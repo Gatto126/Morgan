@@ -4,9 +4,12 @@ import { CircleCheckBig, Eye, EyeOff, RefreshCcwDot, Trash2 } from "lucide-react
 import { Input } from "@/components/ui/input";
 import { cn } from "@/shared/utils";
 
+import { hasDeletableBinanceSettings } from "./settings-api-key-state";
+
 type SettingsApiKeySectionProps = {
   binanceApiKeyPreview: string | null;
   error: string | null;
+  hasBinanceData: boolean;
   isApiKeySaved: boolean;
   isTesting: boolean;
   notice: string | null;
@@ -21,6 +24,7 @@ type SettingsApiKeySectionProps = {
 export function SettingsApiKeySection({
   binanceApiKeyPreview,
   error,
+  hasBinanceData,
   isApiKeySaved,
   isTesting,
   notice,
@@ -38,6 +42,7 @@ export function SettingsApiKeySection({
     onConnectBinanceApi(binanceKeyInput, binanceSecretInput);
   }
 
+  const canDeleteBinanceSettings = hasDeletableBinanceSettings({ hasBinanceData, isApiKeySaved });
   const dangerButtonClassName = "flex h-10 md:h-12 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] text-[color:var(--danger)] hover:text-red-400 hover:bg-[color:var(--surface-elevated)] hover:border-red-400 transition-colors cursor-pointer text-[10px] md:text-[11px] font-extrabold uppercase tracking-[0.14em] px-3 md:px-5 whitespace-nowrap";
 
   return (
@@ -91,7 +96,7 @@ export function SettingsApiKeySection({
 
       <div className="mt-auto pt-4 md:pt-6 shrink-0 flex items-center gap-2 h-10 md:h-12">
         <div className="flex-1 min-w-0 flex items-center justify-end overflow-hidden">
-          {showDeleteApiConfirm ? (
+          {showDeleteApiConfirm && canDeleteBinanceSettings ? (
             <div className="flex items-center gap-2 animate-delete-confirm-in">
               {isApiKeySaved ? (
                 <button
@@ -102,13 +107,15 @@ export function SettingsApiKeySection({
                   API Only
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={() => onDeleteApiKeys(true)}
-                className={dangerButtonClassName}
-              >
-                {isApiKeySaved ? "API + Data" : "Data"}
-              </button>
+              {hasBinanceData || isApiKeySaved ? (
+                <button
+                  type="button"
+                  onClick={() => onDeleteApiKeys(true)}
+                  className={dangerButtonClassName}
+                >
+                  {isApiKeySaved ? "API + Data" : "Data"}
+                </button>
+              ) : null}
             </div>
           ) : (
             <div className="text-[10px] md:text-[11px] font-semibold tracking-wider truncate">
@@ -144,14 +151,16 @@ export function SettingsApiKeySection({
                 <CircleCheckBig className="h-4 w-4 md:h-5 md:w-5" strokeWidth={2.3} />
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={onToggleDeleteApiConfirm}
-              title={showDeleteApiConfirm ? "Cancel" : isApiKeySaved ? "Delete Saved API Keys" : "Delete Binance Data"}
-              className={cn("trash-danger flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] hover:bg-[color:var(--surface-elevated)] transition-colors cursor-pointer focus:outline-none", showDeleteApiConfirm && "is-open")}
-            >
-              <Trash2 className="h-4 w-4 md:h-5 md:w-5" strokeWidth={2.3} />
-            </button>
+            {canDeleteBinanceSettings ? (
+              <button
+                type="button"
+                onClick={onToggleDeleteApiConfirm}
+                title={showDeleteApiConfirm ? "Cancel" : isApiKeySaved ? "Delete Saved API Keys" : "Delete Binance Data"}
+                className={cn("trash-danger flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-[16px] border-2 border-[color:var(--line-strong)] bg-[color:var(--surface-panel)] hover:bg-[color:var(--surface-elevated)] transition-colors cursor-pointer focus:outline-none", showDeleteApiConfirm && "is-open")}
+              >
+                <Trash2 className="h-4 w-4 md:h-5 md:w-5" strokeWidth={2.3} />
+              </button>
+            ) : null}
           </div>
         )}
       </div>
