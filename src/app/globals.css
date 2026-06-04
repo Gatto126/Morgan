@@ -141,7 +141,7 @@ button.has-lucide[data-active="true"] .initials {
   color: #FFFFFF !important;
 }
 
-button.has-lucide:hover {
+button.has-lucide:not([data-active="true"]):hover {
   border-color: #D9D9D9 !important;
   color: #D9D9D9 !important;
 }
@@ -169,7 +169,7 @@ button.dashboard-topbar-tab {
     opacity 200ms ease !important;
 }
 
-button.dashboard-topbar-tab:hover {
+button.dashboard-topbar-tab[data-active="false"]:hover {
   background-color: var(--surface-elevated) !important;
 }
 
