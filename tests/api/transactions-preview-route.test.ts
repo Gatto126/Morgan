@@ -32,6 +32,7 @@ vi.mock("@/domain/imports/trade-republic-csv-parser", () => ({
 }));
 
 vi.mock("@/domain/imports/bbva-xlsx-parser", () => ({
+  BbvaXlsxParseError: class BbvaXlsxParseError extends Error {},
   parseBbvaXlsxStatement: mocks.parseBbvaXlsxStatement
 }));
 
@@ -81,5 +82,47 @@ describe("transactions preview API route", () => {
 
     expect(response.status).toBe(401);
     expect(formData).not.toHaveBeenCalled();
+  });
+
+  it("routes BBVA .excel files through the BBVA XLSX parser", async () => {
+    const file = new File(["xlsx"], "bbva alice.excel", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+    const formData = new FormData();
+    formData.set("userId", "profile-1");
+    formData.set("file", file);
+    const transaction = {
+      fingerprint: "bbva-1",
+      sourceInstitution: "bbva",
+      pageNumber: 1,
+      bookingDate: "2026-05-03T00:00:00.000Z",
+      rawDateLabel: "03/05/2026",
+      typeLabel: "PAGAMENTO CON CARTA",
+      description: "IPER SERRAVALLE 19",
+      direction: "OUT",
+      amountCents: 338,
+      balanceCents: 9662,
+      currency: "EUR"
+    };
+
+    mocks.parseBbvaXlsxStatement.mockResolvedValue({
+      sourceInstitution: "bbva",
+      fileName: "bbva alice.excel",
+      transactions: [transaction]
+    });
+
+    const response = await POST(makeRequest(async () => formData));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.parseTradeRepublicCsv).not.toHaveBeenCalled();
+    expect(mocks.parseBbvaXlsxStatement).toHaveBeenCalledWith(file, {
+      resolveMovementOnlyBalanceAnchor: expect.any(Function)
+    });
+    expect(payload.summary).toMatchObject({
+      fileName: "bbva alice.excel",
+      sourceInstitution: "bbva",
+      totalTransactions: 1
+    });
   });
 });

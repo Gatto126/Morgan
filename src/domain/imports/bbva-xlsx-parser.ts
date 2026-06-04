@@ -26,10 +26,54 @@ export type ParsedBbvaDocument = {
 type SheetCell = string | number | boolean | Date | null | undefined;
 type SheetRow = SheetCell[];
 
-type BbvaColumnKey = "bookingDate" | "typeLabel" | "amount" | "balance" | "description";
-type BbvaColumnMap = Record<BbvaColumnKey, number>;
+type BbvaStatementColumnKey = "bookingDate" | "typeLabel" | "amount" | "balance" | "description";
+type BbvaMovementOnlyColumnKey = "bookingDate" | "causale" | "movement" | "beneficiary" | "amount";
+type BbvaStatementColumnMap = Record<BbvaStatementColumnKey, number>;
+type BbvaMovementOnlyColumnMap = Record<BbvaMovementOnlyColumnKey, number>;
+type BbvaHeader =
+  | { rowIndex: number; layout: "statement"; columns: BbvaStatementColumnMap }
+  | { rowIndex: number; layout: "movement-only"; columns: BbvaMovementOnlyColumnMap };
 
-const REQUIRED_COLUMN_KEYS: BbvaColumnKey[] = ["bookingDate", "typeLabel", "amount", "balance", "description"];
+type ParsedBbvaTransactionDraft = Omit<ParsedBbvaTransaction, "fingerprint" | "balanceCents"> & {
+  balanceCents?: number;
+};
+
+export type BbvaMovementOnlyBalanceAnchor =
+  | { kind: "before-start"; balanceCents: number }
+  | { kind: "after-end"; balanceCents: number };
+
+export type BbvaMovementOnlyBalanceRange = {
+  earliestBookingDate: string;
+  latestBookingDate: string;
+};
+
+export type ParseBbvaXlsxStatementOptions = {
+  resolveMovementOnlyBalanceAnchor?: (
+    range: BbvaMovementOnlyBalanceRange
+  ) => BbvaMovementOnlyBalanceAnchor | null | Promise<BbvaMovementOnlyBalanceAnchor | null>;
+};
+
+export class BbvaXlsxParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BbvaXlsxParseError";
+  }
+}
+
+const REQUIRED_STATEMENT_COLUMN_KEYS: BbvaStatementColumnKey[] = [
+  "bookingDate",
+  "typeLabel",
+  "amount",
+  "balance",
+  "description"
+];
+const REQUIRED_MOVEMENT_ONLY_COLUMN_KEYS: BbvaMovementOnlyColumnKey[] = [
+  "bookingDate",
+  "causale",
+  "movement",
+  "beneficiary",
+  "amount"
+];
 
 function formatItalianDateLabel(date: Date) {
   const day = String(date.getUTCDate()).padStart(2, "0");
@@ -41,7 +85,7 @@ function formatItalianDateLabel(date: Date) {
 function parseItalianDate(dateStr: string): string {
   const match = dateStr.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!match) {
-    throw new Error(`Formato data BBVA non riconosciuto: ${dateStr}`);
+    throw new BbvaXlsxParseError(`Formato data BBVA non riconosciuto: ${dateStr}`);
   }
 
   const day = Number(match[1]);
@@ -50,7 +94,7 @@ function parseItalianDate(dateStr: string): string {
   const date = new Date(Date.UTC(year, month - 1, day));
 
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-    throw new Error(`Data BBVA non valida: ${dateStr}`);
+    throw new BbvaXlsxParseError(`Data BBVA non valida: ${dateStr}`);
   }
 
   return date.toISOString();
@@ -87,7 +131,7 @@ function normalizeHeader(cell: SheetCell) {
 function parseNumberCell(cell: SheetCell) {
   if (typeof cell === "number") return cell;
 
-  const rawValue = stringifyCell(cell).replace(/\s/g, "");
+  const rawValue = stringifyCell(cell).replace(/\s/g, "").replace(/[^\d,.\-+]/g, "");
   if (!rawValue) return NaN;
 
   const lastComma = rawValue.lastIndexOf(",");
@@ -106,24 +150,42 @@ function parseNumberCell(cell: SheetCell) {
 
 function mapHeaderColumns(rows: SheetRow[]) {
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-    const columns: Partial<BbvaColumnMap> = {};
+    const statementColumns: Partial<BbvaStatementColumnMap> = {};
+    const movementOnlyColumns: Partial<BbvaMovementOnlyColumnMap> = {};
 
     rows[rowIndex].forEach((cell, columnIndex) => {
       const header = normalizeHeader(cell);
 
-      if (header === "data") columns.bookingDate ??= columnIndex;
-      if (header === "parola chiave") columns.typeLabel ??= columnIndex;
-      if (header === "importo") columns.amount ??= columnIndex;
-      if (header === "disponibile") columns.balance ??= columnIndex;
-      if (header === "osservazioni") columns.description ??= columnIndex;
+      if (header === "data") {
+        statementColumns.bookingDate ??= columnIndex;
+        movementOnlyColumns.bookingDate ??= columnIndex;
+      }
+      if (header === "parola chiave") statementColumns.typeLabel ??= columnIndex;
+      if (header === "importo") {
+        statementColumns.amount ??= columnIndex;
+        movementOnlyColumns.amount ??= columnIndex;
+      }
+      if (header === "disponibile") statementColumns.balance ??= columnIndex;
+      if (header === "osservazioni") statementColumns.description ??= columnIndex;
+      if (header === "causale") movementOnlyColumns.causale ??= columnIndex;
+      if (header === "movimento") movementOnlyColumns.movement ??= columnIndex;
+      if (header === "beneficiario") movementOnlyColumns.beneficiary ??= columnIndex;
     });
 
-    if (REQUIRED_COLUMN_KEYS.every((key) => columns[key] !== undefined)) {
-      return { rowIndex, columns: columns as BbvaColumnMap };
+    if (REQUIRED_STATEMENT_COLUMN_KEYS.every((key) => statementColumns[key] !== undefined)) {
+      return { rowIndex, layout: "statement", columns: statementColumns as BbvaStatementColumnMap } satisfies BbvaHeader;
+    }
+
+    if (REQUIRED_MOVEMENT_ONLY_COLUMN_KEYS.every((key) => movementOnlyColumns[key] !== undefined)) {
+      return {
+        rowIndex,
+        layout: "movement-only",
+        columns: movementOnlyColumns as BbvaMovementOnlyColumnMap
+      } satisfies BbvaHeader;
     }
   }
 
-  throw new Error("Il file BBVA non contiene le colonne attese per le transazioni.");
+  throw new BbvaXlsxParseError("Il file BBVA non contiene le colonne attese per le transazioni.");
 }
 
 function isEmptyRow(row: SheetRow) {
@@ -150,50 +212,191 @@ function buildFingerprint(transaction: Omit<ParsedBbvaTransaction, "fingerprint"
     .digest("hex");
 }
 
-export async function parseBbvaXlsxStatement(file: File): Promise<ParsedBbvaDocument> {
+function cleanMovementOnlyBeneficiary(cell: SheetCell) {
+  const value = stringifyCell(cell)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && line !== "-")
+    .join(" ");
+
+  return value === "-" ? "" : value;
+}
+
+function getMovementOnlyLabels(row: SheetRow, columns: BbvaMovementOnlyColumnMap) {
+  const causale = stringifyCell(row[columns.causale]);
+  const movement = stringifyCell(row[columns.movement]);
+  const beneficiary = cleanMovementOnlyBeneficiary(row[columns.beneficiary]);
+  const normalizedMovement = normalizeHeader(movement);
+  const typeLabel =
+    normalizedMovement && normalizedMovement !== "altro"
+      ? movement
+      : causale;
+  const descriptionParts = [
+    typeLabel === causale ? "" : causale,
+    beneficiary
+  ].filter(Boolean);
+  const description = descriptionParts.join(" - ") || causale || movement;
+
+  return {
+    description,
+    typeLabel
+  };
+}
+
+function signedAmountCents(transaction: Pick<ParsedBbvaTransactionDraft, "amountCents" | "direction">) {
+  return transaction.direction === "IN" ? transaction.amountCents : -transaction.amountCents;
+}
+
+function compareMovementOnlyAscending(
+  left: ParsedBbvaTransactionDraft,
+  right: ParsedBbvaTransactionDraft
+) {
+  const dateDelta = new Date(left.bookingDate).getTime() - new Date(right.bookingDate).getTime();
+  if (dateDelta !== 0) return dateDelta;
+
+  return right.pageNumber - left.pageNumber;
+}
+
+function compareMovementOnlyDescending(
+  left: ParsedBbvaTransactionDraft,
+  right: ParsedBbvaTransactionDraft
+) {
+  const dateDelta = new Date(right.bookingDate).getTime() - new Date(left.bookingDate).getTime();
+  if (dateDelta !== 0) return dateDelta;
+
+  return left.pageNumber - right.pageNumber;
+}
+
+function movementOnlyDateRange(transactions: ParsedBbvaTransactionDraft[]): BbvaMovementOnlyBalanceRange {
+  const sorted = [...transactions].sort(compareMovementOnlyAscending);
+
+  return {
+    earliestBookingDate: sorted[0].bookingDate,
+    latestBookingDate: sorted[sorted.length - 1].bookingDate
+  };
+}
+
+function applyMovementOnlyBalances(
+  transactions: ParsedBbvaTransactionDraft[],
+  anchor: BbvaMovementOnlyBalanceAnchor
+) {
+  if (anchor.kind === "before-start") {
+    let runningBalanceCents = anchor.balanceCents;
+
+    for (const transaction of [...transactions].sort(compareMovementOnlyAscending)) {
+      runningBalanceCents += signedAmountCents(transaction);
+      transaction.balanceCents = runningBalanceCents;
+    }
+
+    return;
+  }
+
+  let runningBalanceCents = anchor.balanceCents;
+
+  for (const transaction of [...transactions].sort(compareMovementOnlyDescending)) {
+    transaction.balanceCents = runningBalanceCents;
+    runningBalanceCents -= signedAmountCents(transaction);
+  }
+}
+
+async function resolveMovementOnlyBalances(
+  transactions: ParsedBbvaTransactionDraft[],
+  options: ParseBbvaXlsxStatementOptions
+) {
+  const resolveAnchor = options.resolveMovementOnlyBalanceAnchor;
+  if (!resolveAnchor) {
+    throw new BbvaXlsxParseError(
+      "Il file BBVA contiene movimenti senza colonna Disponibile. Serve un import BBVA precedente con saldo, oppure esporta il formato BBVA con la colonna Disponibile."
+    );
+  }
+
+  const anchor = await resolveAnchor(movementOnlyDateRange(transactions));
+  if (!anchor) {
+    throw new BbvaXlsxParseError(
+      "Il file BBVA contiene movimenti senza colonna Disponibile, ma Morgan non ha trovato un saldo BBVA gia importato a cui agganciarli."
+    );
+  }
+
+  applyMovementOnlyBalances(transactions, anchor);
+}
+
+function buildParsedTransaction(transaction: ParsedBbvaTransactionDraft): ParsedBbvaTransaction {
+  if (transaction.balanceCents === undefined) {
+    throw new BbvaXlsxParseError("Saldo BBVA non risolto per una transazione importabile.");
+  }
+
+  const transactionWithoutFingerprint = {
+    ...transaction,
+    balanceCents: transaction.balanceCents
+  };
+
+  return {
+    ...transactionWithoutFingerprint,
+    fingerprint: buildFingerprint(transactionWithoutFingerprint)
+  };
+}
+
+export async function parseBbvaXlsxStatement(
+  file: File,
+  options: ParseBbvaXlsxStatementOptions = {}
+): Promise<ParsedBbvaDocument> {
   const rows = (await readSheet(await file.arrayBuffer())) as SheetRow[];
   const header = mapHeaderColumns(rows);
 
-  const transactions: ParsedBbvaTransaction[] = [];
+  const transactionDrafts: ParsedBbvaTransactionDraft[] = [];
 
   for (let i = header.rowIndex + 1; i < rows.length; i += 1) {
     const row = rows[i];
-    if (!row || isEmptyRow(row) || !stringifyCell(row[header.columns.bookingDate])) continue;
+    if (!row || isEmptyRow(row)) continue;
 
-    const { bookingDate, rawDateLabel } = parseItalianDateCell(row[header.columns.bookingDate]);
-    const typeLabel = stringifyCell(row[header.columns.typeLabel]);
+    const bookingDateColumn =
+      header.layout === "statement"
+        ? header.columns.bookingDate
+        : header.columns.bookingDate;
+    if (!stringifyCell(row[bookingDateColumn])) continue;
+
+    const { bookingDate, rawDateLabel } = parseItalianDateCell(row[bookingDateColumn]);
     const amount = parseNumberCell(row[header.columns.amount]);
-    const balance = parseNumberCell(row[header.columns.balance]);
-    const description = stringifyCell(row[header.columns.description]);
+    const balance =
+      header.layout === "statement"
+        ? parseNumberCell(row[header.columns.balance])
+        : NaN;
+    const labels =
+      header.layout === "statement"
+        ? {
+            typeLabel: stringifyCell(row[header.columns.typeLabel]),
+            description: stringifyCell(row[header.columns.description])
+          }
+        : getMovementOnlyLabels(row, header.columns);
 
-    if (!Number.isFinite(amount) || !Number.isFinite(balance)) continue;
+    if (!Number.isFinite(amount) || (header.layout === "statement" && !Number.isFinite(balance))) continue;
 
     const amountCents = Math.round(Math.abs(amount) * 100);
-    const balanceCents = Math.round(balance * 100);
     const direction = (amount >= 0 ? "IN" : "OUT") as "IN" | "OUT";
 
-    const transactionWithoutFingerprint = {
+    transactionDrafts.push({
       sourceInstitution: BBVA_INSTITUTION,
       pageNumber: i + 1,
       bookingDate,
       rawDateLabel,
-      typeLabel,
-      description,
+      typeLabel: labels.typeLabel,
+      description: labels.description,
       direction,
       amountCents,
-      balanceCents,
+      ...(header.layout === "statement" ? { balanceCents: Math.round(balance * 100) } : {}),
       currency: "EUR" as const
-    };
-
-    transactions.push({
-      ...transactionWithoutFingerprint,
-      fingerprint: buildFingerprint(transactionWithoutFingerprint)
     });
   }
 
-  if (transactions.length === 0) {
-    throw new Error("Il file BBVA non contiene transazioni importabili.");
+  if (transactionDrafts.length === 0) {
+    throw new BbvaXlsxParseError("Il file BBVA non contiene transazioni importabili.");
   }
+
+  if (header.layout === "movement-only") {
+    await resolveMovementOnlyBalances(transactionDrafts, options);
+  }
+
+  const transactions = transactionDrafts.map(buildParsedTransaction);
 
   return {
     sourceInstitution: BBVA_INSTITUTION,

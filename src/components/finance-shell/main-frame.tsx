@@ -157,7 +157,7 @@ export function FinanceShellMainFrame({
             ) : null}
             <input
               ref={fileInputRef}
-              accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              accept=".csv,text/csv,.xlsx,.excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               aria-hidden="true"
               style={{ display: "none" }}
               onChange={onFileSelection}

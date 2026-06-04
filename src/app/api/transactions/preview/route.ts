@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { authGuardResponse, requireAuth, requireOwnedProfile } from "@/server/auth/auth-guard";
-import { assertUserExists, getExistingFingerprints, markPreviewTransactions } from "@/server/services/transaction-import";
+import {
+  assertUserExists,
+  getExistingFingerprints,
+  markPreviewTransactions,
+  resolveBbvaMovementOnlyBalanceAnchor
+} from "@/server/services/transaction-import";
 import { parseTradeRepublicCsv } from "@/domain/imports/trade-republic-csv-parser";
-import { parseBbvaXlsxStatement } from "@/domain/imports/bbva-xlsx-parser";
+import { BbvaXlsxParseError, parseBbvaXlsxStatement } from "@/domain/imports/bbva-xlsx-parser";
 import { apiLogger } from "@/server/logging/logger";
 import {
   requestSecurityResponse,
@@ -12,7 +17,7 @@ import {
 
 const log = apiLogger("Preview");
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
-const SUPPORTED_EXTENSIONS = [".csv", ".xlsx"] as const;
+const SUPPORTED_EXTENSIONS = [".csv", ".xlsx", ".excel"] as const;
 
 export const runtime = "nodejs";
 
@@ -50,7 +55,7 @@ export async function POST(request: Request) {
     if (!fileExtension) {
       log.response("POST", "/api/transactions/preview", 400, { error: "Formato non supportato", fileName: file.name });
       return NextResponse.json(
-        { error: "Formato file non supportato. Carica un CSV Trade Republic o un XLSX BBVA." },
+        { error: "Formato file non supportato. Carica un CSV Trade Republic o un XLSX/EXCEL BBVA." },
         { status: 400 }
       );
     }
@@ -82,7 +87,9 @@ export async function POST(request: Request) {
       parsedDocument = await parseTradeRepublicCsv(file);
     } else {
       log.info(`Parsing XLSX BBVA: "${file.name}"`);
-      parsedDocument = await parseBbvaXlsxStatement(file);
+      parsedDocument = await parseBbvaXlsxStatement(file, {
+        resolveMovementOnlyBalanceAnchor: (range) => resolveBbvaMovementOnlyBalanceAnchor(userId, range)
+      });
     }
 
     const existingFingerprints = await getExistingFingerprints(
@@ -116,6 +123,11 @@ export async function POST(request: Request) {
 
     const securityResponse = requestSecurityResponse(error);
     if (securityResponse) return securityResponse;
+
+    if (error instanceof BbvaXlsxParseError) {
+      log.response("POST", "/api/transactions/preview", 400, { error: error.message });
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
 
     log.error("POST", "/api/transactions/preview", error);
     return NextResponse.json(

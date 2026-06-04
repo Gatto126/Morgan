@@ -1,10 +1,15 @@
 import crypto from "node:crypto";
 
 import { classifyTransaction } from "@/domain/imports/transaction-classifier";
+import type {
+  BbvaMovementOnlyBalanceAnchor,
+  BbvaMovementOnlyBalanceRange
+} from "@/domain/imports/bbva-xlsx-parser";
 import { fetchAssetMetadata, fetchAssetHistory } from "@/integrations/justetf/justetf-parser";
 import { fetchCryptoHistory } from "@/integrations/binance/binance-parser";
 import { apiLogger } from "@/server/logging/logger";
 import type { PreviewTransactionPayload } from "@/domain/imports/transaction-preview";
+import { BBVA_INSTITUTION } from "@/shared/institutions";
 import {
   transactionImportRepository,
   type CheckingTransactionCreateManyInput,
@@ -57,6 +62,35 @@ export async function assertUserExists(
   }
 
   return user;
+}
+
+export async function resolveBbvaMovementOnlyBalanceAnchor(
+  userId: string,
+  range: BbvaMovementOnlyBalanceRange,
+  repository: TransactionImportRepository = transactionImportRepository
+): Promise<BbvaMovementOnlyBalanceAnchor | null> {
+  const earliestBookingDate = new Date(range.earliestBookingDate);
+  const latestBookingDate = new Date(range.latestBookingDate);
+  const [beforeStart, afterEnd] = await Promise.all([
+    repository.findLatestCheckingBalanceBefore(userId, BBVA_INSTITUTION, earliestBookingDate),
+    repository.findEarliestCheckingBalanceAfter(userId, BBVA_INSTITUTION, latestBookingDate)
+  ]);
+
+  if (beforeStart) {
+    return {
+      kind: "before-start",
+      balanceCents: beforeStart.balanceCents
+    };
+  }
+
+  if (afterEnd) {
+    return {
+      kind: "after-end",
+      balanceCents: afterEnd.balanceCents
+    };
+  }
+
+  return null;
 }
 
 export async function importPreviewTransactions(

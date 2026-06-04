@@ -19,9 +19,23 @@ export type TransactionImportUserRecord = {
   name: string;
 };
 
+export type CheckingBalanceAnchorRecord = {
+  balanceCents: number;
+};
+
 export type TransactionImportRepository = {
   getExistingFingerprints(userId: string, fingerprints: string[]): Promise<Set<string>>;
   findUser(userId: string): Promise<TransactionImportUserRecord | null>;
+  findLatestCheckingBalanceBefore(
+    userId: string,
+    sourceInstitution: string,
+    bookingDate: Date
+  ): Promise<CheckingBalanceAnchorRecord | null>;
+  findEarliestCheckingBalanceAfter(
+    userId: string,
+    sourceInstitution: string,
+    bookingDate: Date
+  ): Promise<CheckingBalanceAnchorRecord | null>;
   createTransactions(batch: TransactionImportBatch): Promise<void>;
   listExistingAssetIsins(isins: string[]): Promise<Set<string>>;
   upsertAssetMetadata(isin: string, metadata: AssetMetadata): Promise<void>;
@@ -107,6 +121,38 @@ export const transactionImportRepository: TransactionImportRepository = {
         id: true,
         name: true
       }
+    });
+  },
+
+  async findLatestCheckingBalanceBefore(userId, sourceInstitution, bookingDate) {
+    return prisma.checkingTransaction.findFirst({
+      where: {
+        userId,
+        sourceInstitution,
+        bookingDate: { lt: bookingDate }
+      },
+      orderBy: [
+        { bookingDate: "desc" },
+        { importedAt: "desc" },
+        { id: "desc" }
+      ],
+      select: { balanceCents: true }
+    });
+  },
+
+  async findEarliestCheckingBalanceAfter(userId, sourceInstitution, bookingDate) {
+    return prisma.checkingTransaction.findFirst({
+      where: {
+        userId,
+        sourceInstitution,
+        bookingDate: { gt: bookingDate }
+      },
+      orderBy: [
+        { bookingDate: "asc" },
+        { importedAt: "asc" },
+        { id: "asc" }
+      ],
+      select: { balanceCents: true }
     });
   },
 
