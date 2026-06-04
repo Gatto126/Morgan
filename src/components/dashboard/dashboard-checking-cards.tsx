@@ -1,7 +1,8 @@
 import { DashboardCardShell, DashboardMetricRow } from "./dashboard-card-parts";
 import type { DashboardChartPoint } from "./dashboard-chart-types";
-import { filterData, formatEuroCents, formatProviderLabel } from "./formatters";
-import type { DashboardData, ProviderSummary, TimeRange } from "./types";
+import { getCheckingMetrics } from "./dashboard-checking-card-metrics";
+import { formatEuroCents, formatProviderLabel } from "./formatters";
+import type { DashboardData, TimeRange } from "./types";
 
 type DashboardCheckingCardsProps = {
   currentPoint: DashboardChartPoint | null;
@@ -9,33 +10,6 @@ type DashboardCheckingCardsProps = {
   timeRange: TimeRange;
   valuesKnown: boolean;
 };
-
-function getCheckingMetrics(provider: ProviderSummary, data: DashboardData, timeRange: TimeRange) {
-  const filteredTimeData = filterData({ monthly: data.monthlyData, daily: data.dailyData }, timeRange);
-  const providerAverage = filteredTimeData.length > 0
-    ? Math.round(filteredTimeData.reduce((sum, bucket) => sum + (bucket.providerChecking?.[provider.sourceInstitution] || 0), 0) / filteredTimeData.length)
-    : 0;
-  const providerIncomePeriod = filteredTimeData.reduce((sum, bucket) => sum + (bucket.providerIncome?.[provider.sourceInstitution] || 0), 0);
-  const providerExpensesPeriod = filteredTimeData.reduce((sum, bucket) => sum + (bucket.providerExpenses?.[provider.sourceInstitution] || 0), 0);
-  const providerInterestPeriod = timeRange === "ALL"
-    ? provider.checking.interest
-    : filteredTimeData.reduce((sum, bucket) => sum + (bucket.providerInterest?.[provider.sourceInstitution] || 0), 0);
-  const providerCashbackPeriod = timeRange === "ALL"
-    ? provider.checking.cashback
-    : filteredTimeData.reduce((sum, bucket) => sum + (bucket.providerCashback?.[provider.sourceInstitution] || 0), 0);
-  const providerTaxPeriod = timeRange === "ALL"
-    ? provider.checking.tax
-    : filteredTimeData.reduce((sum, bucket) => sum + (bucket.providerTax?.[provider.sourceInstitution] || 0), 0);
-
-  return {
-    providerAverage,
-    providerIncomePeriod,
-    providerExpensesPeriod,
-    providerInterestPeriod,
-    providerCashbackPeriod,
-    providerTaxPeriod
-  };
-}
 
 function getPointValue(point: DashboardChartPoint | null, key: string, valuesKnown: boolean) {
   if (!valuesKnown || !point) {
