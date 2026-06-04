@@ -116,8 +116,16 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
   }];
 }
 
-function getHydrationKey(userId: string, stage: DashboardStageKey) {
-  return `${userId}:${stage}`;
+function getHydrationKey(user: UserRecord, stage: DashboardStageKey) {
+  return [
+    user.id,
+    stage,
+    user.transactionCount,
+    user.checkingCount,
+    user.investmentCount,
+    user.cryptoCount,
+    user.hasBinanceCredentials ? "binance" : "no-binance"
+  ].join(":");
 }
 
 function preferStableTopbarItems(
@@ -173,7 +181,7 @@ export function DashboardTopbarShell({
     [activeStage, activeUser, hasTopbarData]
   );
   const hydrationKey = activeUser && activeStage && hasTopbarData
-    ? getHydrationKey(activeUser.id, activeStage)
+    ? getHydrationKey(activeUser, activeStage)
     : null;
   const [hydratedState, setHydratedState] = useState<HydratedTopbarItems | null>(null);
   const hydratedItems = getHydratedTopbarItemsForStage(hydratedState, hydrationKey);

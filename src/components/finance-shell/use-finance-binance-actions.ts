@@ -9,6 +9,7 @@ import {
   invalidateFinanceProfile
 } from "./finance-session-orchestrator";
 import type { CurrentValuationSnapshot } from "./current-valuations-store";
+import { clearDashboardTopbarsForProfile } from "./dashboard-topbar-store";
 import type { SettingsSection } from "./settings-panel-types";
 import type { UserRecord } from "./types";
 
@@ -293,6 +294,7 @@ export function useFinanceBinanceActions({
       );
 
       invalidateFinanceProfile(activeUser.id);
+      clearDashboardTopbarsForProfile(activeUser.id);
       if (deleteData) {
         setBinanceRefreshKey((key) => key + 1);
       }

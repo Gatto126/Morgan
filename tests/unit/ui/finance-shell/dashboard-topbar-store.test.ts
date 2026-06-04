@@ -402,6 +402,62 @@ describe("dashboard topbar store", () => {
     expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
   });
 
+  it("clears every persisted topbar for one profile without touching others", async () => {
+    const sessionStorage = createMemoryStorage();
+    vi.stubGlobal("window", { sessionStorage });
+    let store = await loadTopbarStoreModule();
+
+    store.seedDashboardTopbarLayout("dashboard", "user-1", [{
+      active: true,
+      id: "heritage",
+      value: "9.000,00 \u20ac"
+    }]);
+    store.seedDashboardTopbarLayout("crypto", "user-1", [
+      {
+        active: true,
+        id: "crypto",
+        value: "2.300,00 \u20ac"
+      },
+      {
+        active: false,
+        id: "crypto:trade_republic",
+        label: "TR",
+        value: "30,00 \u20ac"
+      },
+      {
+        active: false,
+        id: "crypto:BINANCE",
+        label: "BINANCE",
+        value: "2.270,00 \u20ac"
+      }
+    ]);
+    store.seedDashboardTopbarLayout("binance", "user-1", [{
+      active: true,
+      id: "binance",
+      value: "2.270,00 \u20ac"
+    }]);
+    store.seedDashboardTopbarLayout("crypto", "user-2", [{
+      active: true,
+      id: "crypto",
+      value: "99,00 \u20ac"
+    }]);
+
+    store.clearDashboardTopbarsForProfile("user-1");
+
+    expect(store.readDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+    expect(store.readDashboardTopbarItems("crypto", "user-1")).toEqual([]);
+    expect(store.readDashboardTopbarItems("binance", "user-1")).toEqual([]);
+    expect(store.readDashboardTopbarItems("crypto", "user-2").map((item) => item.id)).toEqual(["crypto"]);
+    expect(store.readStoredDashboardTopbarItems("crypto", "user-1")).toEqual([]);
+
+    store = await loadTopbarStoreModule();
+
+    expect(store.readStoredDashboardTopbarItems("dashboard", "user-1")).toEqual([]);
+    expect(store.readStoredDashboardTopbarItems("crypto", "user-1")).toEqual([]);
+    expect(store.readStoredDashboardTopbarItems("binance", "user-1")).toEqual([]);
+    expect(store.readStoredDashboardTopbarItems("crypto", "user-2").map((item) => item.id)).toEqual(["crypto"]);
+  });
+
   it("removes stale provider tabs when a valuation layout no longer includes them", async () => {
     vi.stubGlobal("window", { sessionStorage: createMemoryStorage() });
     const store = await loadTopbarStoreModule();

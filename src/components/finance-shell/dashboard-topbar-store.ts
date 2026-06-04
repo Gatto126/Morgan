@@ -489,6 +489,19 @@ export function clearDashboardTopbar(stage: DashboardStageKey, userId: string) {
   emitTopbarChange();
 }
 
+export function clearDashboardTopbarsForProfile(userId: string) {
+  const stages: DashboardStageKey[] = ["binance", "checking", "crypto", "dashboard", "investment"];
+
+  stages.forEach((stage) => {
+    const cacheKey = getEntryKey(userId, stage);
+    clearDelayedTopbarPublish(cacheKey);
+    entries.delete(cacheKey);
+    transientEntries.delete(cacheKey);
+    removeStoredTopbarItems(cacheKey);
+  });
+  emitTopbarChange();
+}
+
 export function readDashboardTopbarItems(stage: DashboardStageKey, userId: string) {
   const cacheKey = getEntryKey(userId, stage);
 
