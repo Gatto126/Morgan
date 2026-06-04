@@ -7,6 +7,7 @@ import { ChartLegend } from "./chart-primitives/chart-legend";
 import { ChartReferenceLabel } from "./chart-primitives/chart-reference-label";
 import { ChartTimeRangeControls } from "./chart-primitives/chart-time-range-controls";
 import { SelectableChartDot } from "./chart-primitives/selectable-chart-dot";
+import { DashboardLoadingSpinner } from "./dashboard/dashboard-status";
 import { BINANCE_VISIBLE_VALUE_THRESHOLD_EUR } from "./dashboard/binance-live-values";
 import { BinanceChartTooltip } from "./binance-dashboard/binance-chart-tooltip";
 import {
@@ -25,7 +26,6 @@ import {
   fetchDashboardStageData,
   readDashboardStageDataCache
 } from "./finance-shell/dashboard-stage-data-cache";
-import { CurrentValueSkeleton } from "./finance-shell/current-value-skeleton";
 import { useCurrentValuationSnapshot } from "./finance-shell/current-valuations-store";
 import { usePublishDashboardTopbar } from "./finance-shell/dashboard-topbar-store";
 import { useStableChartFrame } from "@/hooks/use-stable-chart-frame";
@@ -253,11 +253,8 @@ export function BinanceDashboard({
             data-visible={shouldShowChartContent ? "true" : "false"}
           >
             {isCurrentValuationPending ? (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center">
-                <CurrentValueSkeleton className="h-10 w-40 rounded-[18px]" />
-                <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-dim)]">
-                  Preparing current value
-                </p>
+              <div className="flex h-full w-full items-center justify-center">
+                <DashboardLoadingSpinner />
               </div>
             ) : !hasRenderableChartData ? (
               <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -273,7 +270,7 @@ export function BinanceDashboard({
                     </p>
                   </>
                 ) : (
-                  <CurrentValueSkeleton className="h-10 w-40 rounded-[18px]" />
+                  <DashboardLoadingSpinner />
                 )}
               </div>
             ) : (
