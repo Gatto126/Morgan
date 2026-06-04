@@ -259,7 +259,7 @@ describe("portfolio chart data", () => {
     });
   });
 
-  it("does not fold a standalone current Binance point into the crypto aggregate history", () => {
+  it("folds a standalone current Binance point into the crypto aggregate data", () => {
     const dataWithBinance = mergePortfolioDataWithBinance(portfolioData, [{
       eurValue: 250.25,
       freeAmount: 0.003,
@@ -284,10 +284,10 @@ describe("portfolio chart data", () => {
 
     expect(todayPoint).toMatchObject({
       BINANCE: 28_000,
-      heritage: 42_000,
-      topbar_heritage: 70_000,
+      heritage: 70_000,
       trade_republic: 42_000
     });
+    expect(todayPoint?.topbar_heritage).toBeUndefined();
   });
 
   it("keeps the current provider point pending until live prices are ready", () => {

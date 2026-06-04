@@ -85,3 +85,25 @@ export function shouldRenderStandalonePortfolioPointSeries(
 ) {
   return hasStandalonePortfolioPointSeries(chartData, seriesKey);
 }
+
+export function shouldRenderPortfolioStandalonePointSeries({
+  activeTab,
+  chartData,
+  hiddenSeries,
+  seriesKey
+}: {
+  activeTab: string;
+  chartData: ChartPoint[];
+  hiddenSeries: Record<string, boolean>;
+  seriesKey: string;
+}) {
+  if (!shouldRenderStandalonePortfolioPointSeries(chartData, seriesKey)) {
+    return false;
+  }
+
+  if (activeTab === "ALL" && seriesKey === "BINANCE" && !hiddenSeries.heritage) {
+    return false;
+  }
+
+  return true;
+}

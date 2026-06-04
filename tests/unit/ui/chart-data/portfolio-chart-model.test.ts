@@ -8,6 +8,7 @@ import {
   getPortfolioProviderLegendItems,
   hasRenderablePortfolioLineSeries,
   hasStandalonePortfolioPointSeries,
+  shouldRenderPortfolioStandalonePointSeries,
   shouldRenderStandalonePortfolioPointSeries
 } from "@/components/portfolio-dashboard/portfolio-chart-model";
 import type { PortfolioProviderSummary } from "@/components/portfolio-dashboard/types";
@@ -81,6 +82,18 @@ describe("portfolio chart model", () => {
     expect(hasRenderablePortfolioLineSeries(points, "BINANCE")).toBe(false);
     expect(hasStandalonePortfolioPointSeries(points, "BINANCE")).toBe(true);
     expect(shouldRenderStandalonePortfolioPointSeries(points, "BINANCE")).toBe(true);
+    expect(shouldRenderPortfolioStandalonePointSeries({
+      activeTab: "ALL",
+      chartData: points,
+      hiddenSeries: {},
+      seriesKey: "BINANCE"
+    })).toBe(false);
+    expect(shouldRenderPortfolioStandalonePointSeries({
+      activeTab: "ALL",
+      chartData: points,
+      hiddenSeries: { heritage: true },
+      seriesKey: "BINANCE"
+    })).toBe(true);
     expect(hasRenderablePortfolioLineSeries(points, "trade_republic")).toBe(true);
     expect(hasStandalonePortfolioPointSeries(points, "trade_republic")).toBe(false);
     expect(hasRenderablePortfolioLineSeries(points, "heritage")).toBe(true);

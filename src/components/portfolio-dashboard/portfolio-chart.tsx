@@ -17,7 +17,7 @@ import {
   getPortfolioAllLegendItems,
   getPortfolioProviderLegendItems,
   hasRenderablePortfolioLineSeries,
-  shouldRenderStandalonePortfolioPointSeries,
+  shouldRenderPortfolioStandalonePointSeries,
   PORTFOLIO_TOOLTIP_PRIORITY_NAMES
 } from "./portfolio-chart-model";
 import { formatEuroCents } from "./formatters";
@@ -148,8 +148,12 @@ export function PortfolioChart({
                   if (hiddenSeries[providerKey]) return null;
                   const strokeColor = GRAYSCALE_PALETTE[index % GRAYSCALE_PALETTE.length];
                   const hasLine = hasRenderablePortfolioLineSeries(chartData, providerKey);
-                  const shouldRenderStandalonePoint =
-                    !hasLine && shouldRenderStandalonePortfolioPointSeries(chartData, providerKey);
+                  const shouldRenderStandalonePoint = !hasLine && shouldRenderPortfolioStandalonePointSeries({
+                    activeTab,
+                    chartData,
+                    hiddenSeries,
+                    seriesKey: providerKey
+                  });
 
                   if (!hasLine && !shouldRenderStandalonePoint) return null;
 
