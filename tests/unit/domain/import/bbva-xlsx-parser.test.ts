@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { BbvaXlsxParseError, parseBbvaXlsxStatement } from "@/domain/imports/bbva-xlsx-parser";
+import { parseBbvaXlsxStatement } from "@/domain/imports/bbva-xlsx-parser";
 import { BBVA_INSTITUTION } from "@/shared/institutions";
 import { buildXlsxFile } from "../../../fixtures/imports/xlsx";
 
@@ -113,12 +113,55 @@ describe("parseBbvaXlsxStatement", () => {
     });
   });
 
-  it("rejects BBVA movement-only rows without a safe balance anchor", async () => {
-    await expect(parseBbvaXlsxStatement(
+  it("bootstraps BBVA movement-only rows from the first incoming transaction without an existing anchor", async () => {
+    const document = await parseBbvaXlsxStatement(
+      buildXlsxFile([
+        ["Movimenti"],
+        [null, "Data valuta", "Data", "Causale", "Movimento", "Beneficiario", "Importo"],
+        [null, "05/05/2026", "05/05/2026", "IPER SERRAVALLE 19", "PAGAMENTO CON CARTA", "-\n-", "-3 EUR"],
+        [null, "04/05/2026", "04/05/2026", "CASHBACK PROMOZIONE COMMERCIALE", "ALTRO", "-\n-", "10 EUR"],
+        [null, "03/05/2026", "03/05/2026", "GALASSIA", "PAGAMENTO CON CARTA", "-\n-", "-2 EUR"]
+      ], "bbva-alice.excel")
+    );
+
+    expect(document.transactions).toHaveLength(3);
+    expect(document.transactions[0]).toMatchObject({
+      rawDateLabel: "05/05/2026",
+      direction: "OUT",
+      amountCents: 300,
+      balanceCents: 700
+    });
+    expect(document.transactions[1]).toMatchObject({
+      rawDateLabel: "04/05/2026",
+      direction: "IN",
+      amountCents: 1_000,
+      balanceCents: 1_000
+    });
+    expect(document.transactions[2]).toMatchObject({
+      rawDateLabel: "03/05/2026",
+      direction: "OUT",
+      amountCents: 200,
+      balanceCents: 0
+    });
+  });
+
+  it("bootstraps BBVA movement-only rows from zero when there are no incoming transactions", async () => {
+    const document = await parseBbvaXlsxStatement(
       buildXlsxFile([
         [null, "Data valuta", "Data", "Causale", "Movimento", "Beneficiario", "Importo"],
-        [null, "03/05/2026", "03/05/2026", "IPER SERRAVALLE 19", "PAGAMENTO CON CARTA", "-\n-", "-3.38 EUR"]
+        [null, "04/05/2026", "04/05/2026", "IPER SERRAVALLE 19", "PAGAMENTO CON CARTA", "-\n-", "-3 EUR"],
+        [null, "03/05/2026", "03/05/2026", "GALASSIA", "PAGAMENTO CON CARTA", "-\n-", "-2 EUR"]
       ], "bbva-alice.excel")
-    )).rejects.toThrow(BbvaXlsxParseError);
+    );
+
+    expect(document.transactions).toHaveLength(2);
+    expect(document.transactions[0]).toMatchObject({
+      rawDateLabel: "04/05/2026",
+      balanceCents: -500
+    });
+    expect(document.transactions[1]).toMatchObject({
+      rawDateLabel: "03/05/2026",
+      balanceCents: -200
+    });
   });
 });

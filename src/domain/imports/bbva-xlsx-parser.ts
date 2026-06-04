@@ -299,22 +299,45 @@ function applyMovementOnlyBalances(
   }
 }
 
+function applyMovementOnlyBootstrapBalances(transactions: ParsedBbvaTransactionDraft[]) {
+  const sortedTransactions = [...transactions].sort(compareMovementOnlyAscending);
+  const firstIncomingIndex = sortedTransactions.findIndex((transaction) => transaction.direction === "IN");
+
+  if (firstIncomingIndex === -1) {
+    applyMovementOnlyBalances(transactions, {
+      kind: "before-start",
+      balanceCents: 0
+    });
+    return;
+  }
+
+  let runningBalanceCents = sortedTransactions[firstIncomingIndex].amountCents;
+  sortedTransactions[firstIncomingIndex].balanceCents = runningBalanceCents;
+
+  for (let i = firstIncomingIndex - 1; i >= 0; i -= 1) {
+    runningBalanceCents -= signedAmountCents(sortedTransactions[i + 1]);
+    sortedTransactions[i].balanceCents = runningBalanceCents;
+  }
+
+  runningBalanceCents = sortedTransactions[firstIncomingIndex].balanceCents;
+  for (let i = firstIncomingIndex + 1; i < sortedTransactions.length; i += 1) {
+    runningBalanceCents += signedAmountCents(sortedTransactions[i]);
+    sortedTransactions[i].balanceCents = runningBalanceCents;
+  }
+}
+
 async function resolveMovementOnlyBalances(
   transactions: ParsedBbvaTransactionDraft[],
   options: ParseBbvaXlsxStatementOptions
 ) {
   const resolveAnchor = options.resolveMovementOnlyBalanceAnchor;
-  if (!resolveAnchor) {
-    throw new BbvaXlsxParseError(
-      "Il file BBVA contiene movimenti senza colonna Disponibile. Serve un import BBVA precedente con saldo, oppure esporta il formato BBVA con la colonna Disponibile."
-    );
-  }
+  const anchor = resolveAnchor
+    ? await resolveAnchor(movementOnlyDateRange(transactions))
+    : null;
 
-  const anchor = await resolveAnchor(movementOnlyDateRange(transactions));
   if (!anchor) {
-    throw new BbvaXlsxParseError(
-      "Il file BBVA contiene movimenti senza colonna Disponibile, ma Morgan non ha trovato un saldo BBVA gia importato a cui agganciarli."
-    );
+    applyMovementOnlyBootstrapBalances(transactions);
+    return;
   }
 
   applyMovementOnlyBalances(transactions, anchor);
