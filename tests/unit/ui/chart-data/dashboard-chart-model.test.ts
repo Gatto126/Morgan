@@ -358,12 +358,12 @@ describe("dashboard chart data model", () => {
       "Core ETF": 48000,
       Bitcoin: 700000,
       binance: 2000,
-      crypto: 700000,
+      crypto: 702000,
       crypto_inst_trade_republic: 700000,
-      heritage: 758000,
+      heritage: 760000,
       investment: 48000,
       investment_inst_trade_republic: 48000,
-      value: 758000
+      value: 760000
     });
   });
 
@@ -407,6 +407,43 @@ describe("dashboard chart data model", () => {
       investment: 50_000,
       value: 710_000
     });
+  });
+
+  it("folds a standalone current Binance point into the main heritage aggregate", () => {
+    const points = buildDashboardChartData({
+      activeTab: "heritage",
+      binanceTotalCents: 2000,
+      checkingProviders: collectCheckingProviders(dashboardData),
+      currentValuationPoint: {
+        Bitcoin: 71_000,
+        binance: 20_000,
+        checking: 10_000,
+        crypto: 91_000,
+        crypto_inst_trade_republic: 71_000,
+        heritage: 151_000,
+        investment: 50_000,
+        rawMonth: "2026-01-03",
+        value: 151_000
+      },
+      cryptoInstitutions: collectCryptoInstitutions(dashboardData),
+      cryptoTokens: collectCryptoTokens(dashboardData),
+      data: dashboardData,
+      hasBinancePortfolio: true,
+      investmentProducts: collectInvestmentProducts(dashboardData),
+      todayKey: "2026-01-03",
+      timeRange: "ALL"
+    });
+    const todayPoint = points.find((point) => point.rawMonth === "2026-01-03");
+
+    expect(todayPoint).toMatchObject({
+      binance: 20_000,
+      crypto: 91_000,
+      crypto_inst_trade_republic: 71_000,
+      heritage: 151_000,
+      value: 151_000
+    });
+    expect(todayPoint?.topbar_crypto).toBeUndefined();
+    expect(todayPoint?.topbar_heritage).toBeUndefined();
   });
 
   it("does not fold a standalone current Binance point into the main crypto aggregate history", () => {

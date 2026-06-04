@@ -1,6 +1,6 @@
 # Morgan Valuation Memory Checkpoint
 
-Ultimo aggiornamento: 2026-06-03
+Ultimo aggiornamento: 2026-06-04
 Commit baseline corrente: `3610ebd` (cleanup ownership Binance current-sync pushato)
 Ultimo checkpoint smoke su Vercel: `3610ebd` (cold login e diagnostica di coerenza cross-dashboard)
 Slice locale corrente: primo connect Binance coerente completato; crypto current surfaces snapshot-driven completate; storico Binance server-side implementato e precaricato nei payload stage di Binance dashboard, Crypto dashboard e main dashboard localmente.
@@ -128,9 +128,9 @@ Stato verificato alla baseline `3610ebd`:
 - Binance dashboard collegata allo storico daily snapshot: la linea non viene piu' ricostruita piatta dal solo valore corrente; usa gli snapshot giornalieri reali e aggiunge/sostituisce il punto di oggi con il committed current valuation snapshot.
 - Crypto dashboard ALL collegata allo stesso storico daily snapshot per il provider `BINANCE`: la linea Binance non deve piu' essere un salto verticale da zero/current; i bucket storici sommano Binance daily snapshot al totale crypto storico, mentre il punto di oggi resta il committed current valuation snapshot.
 - Main dashboard collegata allo storico daily snapshot Binance: i punti storici `crypto` e `heritage` sommano il valore Binance giornaliero quando disponibile; nella tab crypto la sottolinea `BINANCE` nasce dallo stesso storico.
-- Le sottolinee `BINANCE` nei grafici crypto main e Crypto dashboard seguono la stessa regola: con almeno due punti disegnano una linea; con un solo punto disegnano un marker standalone quando `BINANCE` e' acceso in legenda. Il marker non viene sommato alla linea aggregata finche' non esiste uno storico Binance reale.
+- Le sottolinee `BINANCE` nei grafici crypto main e Crypto dashboard seguono la stessa regola: con almeno due punti disegnano una linea; con un solo punto disegnano un marker standalone quando `BINANCE` e' acceso in legenda.
 - La tab `CRYPTO` della main dashboard non deve usare come dominio X tutta la storia globale del portfolio: per restare coerente con la Crypto dashboard, taglia i punti iniziali inattivi e parte dal primo punto crypto/Binance reale.
-- Un singolo punto Binance corrente/storico non deve essere sommato dentro la linea aggregata `CRYPTO`/`heritage`: resta disponibile come serie `BINANCE` standalone, ma il totale storico lo incorpora solo quando esistono almeno due punti Binance e quindi una linea reale da disegnare. Sul punto hoverato, invece, la topbar deve mostrare il totale visibile del punto (`Trade Republic + Binance`) tramite campi display dedicati, senza alterare la linea storica.
+- Regola aggregazione punto Binance singolo: nella dashboard principale con topbar `HERITAGE`, il punto Binance corrente/storico entra nella sottolinea `CRYPTO` e quindi nella linea `HERITAGE`; nella tab `CRYPTO` della main dashboard e nella Crypto dashboard separata resta invece una serie `BINANCE` separata/marker finche' non esiste una vera linea storica Binance.
 - Lo storico Binance non deve arrivare come fetch client tardiva per main/crypto: viene arricchito server-side dentro i payload stage `/api/transactions/dashboard` e `/api/transactions/crypto`, anche quando la base arriva da `ProfileStageSnapshot`.
 - Cache stage client bumpata a versione 3 per scartare payload `sessionStorage` vecchi senza `binanceHistoricalPoints`.
 - Con Binance collegata, main e crypto non devono rendere visibile il chart solo perche' hanno stage data o balances: devono aspettare il `currentValuationPoint` committed, cosi' scala, topbar e punto corrente entrano insieme.

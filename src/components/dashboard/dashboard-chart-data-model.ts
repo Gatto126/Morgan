@@ -188,7 +188,7 @@ export function buildDashboardChartData({
   });
 
   if (!todayKey) {
-    return trimDashboardChartDataToActiveWindow(removeStandaloneBinanceFromAggregateSeries(chartPoints, activeTab), {
+    return trimDashboardChartDataToActiveWindow(removeStandaloneBinanceFromMainCryptoTabAggregate(chartPoints, activeTab), {
       activeTab,
       allCryptoInstitutions,
       cryptoTokens
@@ -196,7 +196,7 @@ export function buildDashboardChartData({
   }
 
   if (currentValuationPoint) {
-    return trimDashboardChartDataToActiveWindow(removeStandaloneBinanceFromAggregateSeries(applyCurrentValuationTodayPoint(chartPoints, {
+    return trimDashboardChartDataToActiveWindow(removeStandaloneBinanceFromMainCryptoTabAggregate(applyCurrentValuationTodayPoint(chartPoints, {
       activeTab,
       currentValuationPoint,
       todayKey
@@ -222,7 +222,7 @@ export function buildDashboardChartData({
       })
     : chartPoints;
 
-  return trimDashboardChartDataToActiveWindow(removeStandaloneBinanceFromAggregateSeries(chartDataWithToday, activeTab), {
+  return trimDashboardChartDataToActiveWindow(removeStandaloneBinanceFromMainCryptoTabAggregate(chartDataWithToday, activeTab), {
     activeTab,
     allCryptoInstitutions,
     cryptoTokens
@@ -452,8 +452,8 @@ function isFinitePointValue(value: DashboardChartPoint[string]): value is number
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function removeStandaloneBinanceFromAggregateSeries(chartPoints: DashboardChartPoint[], activeTab: AccountTab) {
-  if (activeTab !== "crypto" && activeTab !== "heritage") {
+function removeStandaloneBinanceFromMainCryptoTabAggregate(chartPoints: DashboardChartPoint[], activeTab: AccountTab) {
+  if (activeTab !== "crypto") {
     return chartPoints;
   }
 
