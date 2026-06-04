@@ -92,8 +92,8 @@ describe("parseBbvaXlsxStatement", () => {
     });
     expect(document.transactions[2]).toMatchObject({
       rawDateLabel: "03/05/2026",
-      typeLabel: "PAGAMENTO CON CARTA",
-      description: "IPER SERRAVALLE 19",
+      typeLabel: "IPER SERRAVALLE 19",
+      description: "PAGAMENTO CON CARTA",
       direction: "OUT",
       amountCents: 338,
       balanceCents: 0
@@ -150,5 +150,26 @@ describe("parseBbvaXlsxStatement", () => {
       rawDateLabel: "03/05/2026",
       balanceCents: -200
     });
+  });
+
+  it("uses the same fingerprint for the same BBVA movement across statement and movement-only layouts", async () => {
+    const statementDocument = await parseBbvaXlsxStatement(
+      buildXlsxFile([
+        ["Data", "Parola chiave", "Importo", "Disponibile", "Osservazioni"],
+        ["22/04/2026", "Costa poco gprs", "-2,25", "3390,70", "5179090010640733 COSTA POCO GPRS"]
+      ], "bbva-luca.xlsx")
+    );
+    const movementOnlyDocument = await parseBbvaXlsxStatement(
+      buildXlsxFile([
+        ["Data", "Causale", "Movimento", "Beneficiario", "Importo"],
+        ["22/04/2026", "COSTA POCO GPRS", "PAGAMENTO CON CARTA", "-\n-", "-2.25 EUR"]
+      ], "bbva-luca.excel")
+    );
+
+    expect(movementOnlyDocument.transactions[0]).toMatchObject({
+      typeLabel: "COSTA POCO GPRS",
+      description: "PAGAMENTO CON CARTA"
+    });
+    expect(movementOnlyDocument.transactions[0].fingerprint).toBe(statementDocument.transactions[0].fingerprint);
   });
 });

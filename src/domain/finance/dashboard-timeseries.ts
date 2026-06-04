@@ -3,6 +3,7 @@ import {
   shouldAlsoCountCheckingFlowAsIncome,
   type CheckingFlowCategory
 } from "@/domain/finance/checking-timeseries";
+import { dedupeCheckingTransactions } from "@/domain/finance/checking-duplicates";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { resolveDailyEndingBalanceCents } from "@/domain/finance/checking-balance";
 
@@ -359,7 +360,7 @@ export function mapDashboardTransactions({
   cryptoTxs
 }: DashboardTransactionRows) {
   return [
-    ...checkingTxs.map((transaction): DashboardMappedTransaction => ({
+    ...dedupeCheckingTransactions(checkingTxs).map((transaction): DashboardMappedTransaction => ({
       sourceInstitution: transaction.sourceInstitution,
       bookingDate: transaction.bookingDate,
       typeLabel: transaction.typeLabel,

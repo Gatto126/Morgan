@@ -1,4 +1,5 @@
 import { resolveDailyEndingBalanceCents } from "@/domain/finance/checking-balance";
+import { dedupeCheckingTransactions } from "@/domain/finance/checking-duplicates";
 import { BBVA_INSTITUTION } from "@/shared/institutions";
 
 export type CheckingTransaction = {
@@ -157,8 +158,9 @@ export function buildCheckingTimeSeries({
   transactions,
   now = new Date()
 }: BuildCheckingTimeSeriesOptions) {
+  const visibleTransactions = dedupeCheckingTransactions(transactions);
   const providerMap = new Map<string, CheckingProviderSummary>();
-  const descendingTransactions = [...transactions].sort(
+  const descendingTransactions = [...visibleTransactions].sort(
     (left, right) => right.bookingDate.getTime() - left.bookingDate.getTime()
   );
 
@@ -188,7 +190,7 @@ export function buildCheckingTimeSeries({
     }
   }
 
-  const ascendingTransactions = [...transactions].sort(
+  const ascendingTransactions = [...visibleTransactions].sort(
     (left, right) => left.bookingDate.getTime() - right.bookingDate.getTime()
   );
   const providerBalances = new Map<string, number>();

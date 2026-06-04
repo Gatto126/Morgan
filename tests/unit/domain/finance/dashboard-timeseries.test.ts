@@ -193,4 +193,108 @@ describe("dashboard time-series", () => {
       ])
     );
   });
+
+  it("dedupes BBVA statement and movement-only rows before building dashboard balances", () => {
+    const rows: DashboardTransactionRows = {
+      checkingTxs: [
+        {
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-02T00:00:00.000Z"),
+          typeLabel: "Bonifico ricevuto",
+          description: "Risparmi",
+          direction: "IN",
+          amountCents: 10000,
+          balanceCents: 10000
+        },
+        {
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-02T00:00:00.000Z"),
+          typeLabel: "Risparmi",
+          description: "BONIFICO RICEVUTO - Luca Ansaldi IT54O0357601601010008013762",
+          direction: "IN",
+          amountCents: 10000,
+          balanceCents: 10000
+        },
+        {
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-02T00:00:00.000Z"),
+          typeLabel: "Bonifico ricevuto",
+          description: "Risparmi",
+          direction: "IN",
+          amountCents: 300000,
+          balanceCents: 310000
+        },
+        {
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-02T00:00:00.000Z"),
+          typeLabel: "Risparmi",
+          description: "BONIFICO RICEVUTO - Luca Ansaldi IT54O0357601601010008013762",
+          direction: "IN",
+          amountCents: 300000,
+          balanceCents: 310000
+        },
+        {
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-03T00:00:00.000Z"),
+          typeLabel: "Costa poco gprs",
+          description: "5179090010640733 COSTA POCO GPRS NOVI LIGUREALIT",
+          direction: "OUT",
+          amountCents: 358,
+          balanceCents: 309642
+        },
+        {
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-03T00:00:00.000Z"),
+          typeLabel: "PAGAMENTO CON CARTA",
+          description: "COSTA POCO GPRS",
+          direction: "OUT",
+          amountCents: 358,
+          balanceCents: 309642
+        },
+        {
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-06-02T00:00:00.000Z"),
+          typeLabel: "LIQUIDAZIONE INTERESSI-COMMISSIONI-SPESE",
+          description: "LIQUIDAZIONE INTERESSI-COMMISSIONI-SPESE",
+          direction: "IN",
+          amountCents: 640,
+          balanceCents: 310282
+        }
+      ],
+      cryptoTxs: [],
+      investmentTxs: []
+    };
+
+    const result = buildDashboardData({
+      transactions: mapDashboardTransactions(rows),
+      historyPrices: [],
+      priceKeys: [],
+      now: new Date("2026-06-02T12:00:00.000Z")
+    });
+
+    expect(result.dailyData.find((day) => day.date === "2026-01-03")).toMatchObject({
+      checking: 309642,
+      heritage: 309642,
+      providerChecking: {
+        [BBVA_INSTITUTION]: 309642
+      }
+    });
+    expect(result.accountTotals).toMatchObject({
+      checking: 310282,
+      heritage: 310282
+    });
+    expect(result.providerSummaries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceInstitution: BBVA_INSTITUTION,
+          checking: expect.objectContaining({
+            expenses: 358,
+            income: 310640,
+            interest: 640,
+            total: 310282
+          })
+        })
+      ])
+    );
+  });
 });

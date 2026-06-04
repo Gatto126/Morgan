@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { readSheet } from "read-excel-file/universal";
 
+import { getCanonicalCheckingMovementLabel } from "@/domain/finance/checking-duplicates";
 import { BBVA_INSTITUTION } from "@/shared/institutions";
 
 export type ParsedBbvaTransaction = {
@@ -177,20 +178,17 @@ function isEmptyRow(row: SheetRow) {
   return row.every((cell) => stringifyCell(cell) === "");
 }
 
-function buildFingerprint(transaction: Omit<ParsedBbvaTransaction, "fingerprint">) {
-  const normalizedDescription = transaction.description.toLowerCase().replace(/\s+/g, " ").trim();
-
+function buildFingerprint(transaction: Omit<ParsedBbvaTransaction, "fingerprint">, duplicateOrdinal: number) {
   return crypto
     .createHash("sha256")
     .update(
       [
         transaction.sourceInstitution,
         transaction.bookingDate,
-        transaction.typeLabel.toLowerCase(),
-        normalizedDescription,
+        getCanonicalCheckingMovementLabel(transaction),
         transaction.direction,
         String(transaction.amountCents),
-        String(transaction.balanceCents),
+        String(duplicateOrdinal),
         transaction.currency
       ].join("|")
     )
@@ -211,20 +209,15 @@ function getMovementOnlyLabels(row: SheetRow, columns: BbvaMovementOnlyColumnMap
   const causale = stringifyCell(row[columns.causale]);
   const movement = stringifyCell(row[columns.movement]);
   const beneficiary = cleanMovementOnlyBeneficiary(row[columns.beneficiary]);
-  const normalizedMovement = normalizeHeader(movement);
-  const typeLabel =
-    normalizedMovement && normalizedMovement !== "altro"
-      ? movement
-      : causale;
   const descriptionParts = [
-    typeLabel === causale ? "" : causale,
+    movement,
     beneficiary
-  ].filter(Boolean);
+  ].filter((part) => part && normalizeHeader(part) !== "altro");
   const description = descriptionParts.join(" - ") || causale || movement;
 
   return {
     description,
-    typeLabel
+    typeLabel: causale
   };
 }
 
@@ -272,7 +265,31 @@ function applyMovementOnlyBootstrapBalances(transactions: ParsedBbvaTransactionD
   }
 }
 
-function buildParsedTransaction(transaction: ParsedBbvaTransactionDraft): ParsedBbvaTransaction {
+function compareTransactionDraftsForFingerprint(
+  left: ParsedBbvaTransactionDraft,
+  right: ParsedBbvaTransactionDraft
+) {
+  const dateDelta = new Date(left.bookingDate).getTime() - new Date(right.bookingDate).getTime();
+  if (dateDelta !== 0) return dateDelta;
+
+  return right.pageNumber - left.pageNumber;
+}
+
+function getFingerprintDuplicateKey(transaction: ParsedBbvaTransactionDraft) {
+  return [
+    transaction.sourceInstitution,
+    transaction.bookingDate,
+    getCanonicalCheckingMovementLabel(transaction),
+    transaction.direction,
+    transaction.amountCents,
+    transaction.currency
+  ].join("|");
+}
+
+function buildParsedTransaction(
+  transaction: ParsedBbvaTransactionDraft,
+  duplicateOrdinal: number
+): ParsedBbvaTransaction {
   if (transaction.balanceCents === undefined) {
     throw new BbvaXlsxParseError("Saldo BBVA non risolto per una transazione importabile.");
   }
@@ -284,8 +301,25 @@ function buildParsedTransaction(transaction: ParsedBbvaTransactionDraft): Parsed
 
   return {
     ...transactionWithoutFingerprint,
-    fingerprint: buildFingerprint(transactionWithoutFingerprint)
+    fingerprint: buildFingerprint(transactionWithoutFingerprint, duplicateOrdinal)
   };
+}
+
+function buildParsedTransactions(transactions: ParsedBbvaTransactionDraft[]) {
+  const duplicateOrdinals = new Map<ParsedBbvaTransactionDraft, number>();
+  const duplicateCounts = new Map<string, number>();
+
+  for (const transaction of [...transactions].sort(compareTransactionDraftsForFingerprint)) {
+    const key = getFingerprintDuplicateKey(transaction);
+    const nextCount = (duplicateCounts.get(key) ?? 0) + 1;
+    duplicateCounts.set(key, nextCount);
+    duplicateOrdinals.set(transaction, nextCount);
+  }
+
+  return transactions.map((transaction) => buildParsedTransaction(
+    transaction,
+    duplicateOrdinals.get(transaction) ?? 1
+  ));
 }
 
 export async function parseBbvaXlsxStatement(file: File): Promise<ParsedBbvaDocument> {
@@ -345,7 +379,7 @@ export async function parseBbvaXlsxStatement(file: File): Promise<ParsedBbvaDocu
     applyMovementOnlyBootstrapBalances(transactionDrafts);
   }
 
-  const transactions = transactionDrafts.map(buildParsedTransaction);
+  const transactions = buildParsedTransactions(transactionDrafts);
 
   return {
     sourceInstitution: BBVA_INSTITUTION,
