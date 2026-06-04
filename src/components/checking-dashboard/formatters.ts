@@ -20,6 +20,13 @@ export function formatProviderLabel(source: string) {
   return source.replace(/_/g, " ").toUpperCase();
 }
 
+export function formatCheckingTransactionDescription(description: string) {
+  return description
+    .trim()
+    .replace(/^Regolamento liquidit.*?\s+crypto:\s*/i, "")
+    .replace(/^Regolamento liquidit.*?:\s*/i, "");
+}
+
 export function getAbbreviatedLabel(label: string) {
   const upper = label.trim().toUpperCase();
   const words = upper.split(/\s+/);

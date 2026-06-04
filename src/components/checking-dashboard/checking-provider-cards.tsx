@@ -9,7 +9,12 @@ import { prefetchTransactionRows, useTransactionRows } from "@/hooks/use-transac
 import { cn } from "@/shared/utils";
 import type { ChartPoint } from "@/types/chart";
 
-import { formatEuroCents, formatProviderLabel, formatSignedEuroCents } from "./formatters";
+import {
+  formatCheckingTransactionDescription,
+  formatEuroCents,
+  formatProviderLabel,
+  formatSignedEuroCents
+} from "./formatters";
 import type { CheckingProviderSummary, CheckingTransaction } from "./types";
 
 type CheckingProviderCardsProps = {
@@ -209,7 +214,7 @@ function CheckingTransactionTable({
                 </td>
                 <td className="px-4 py-2 text-[color:var(--text-main)] hidden md:table-cell whitespace-nowrap">{transaction.typeLabel}</td>
                 <td className="px-1.5 py-2 text-[color:var(--text-main)] sm:px-4 w-full max-w-0">
-                  <div className="leading-5 truncate">{transaction.description}</div>
+                  <div className="leading-5 truncate">{formatCheckingTransactionDescription(transaction.description)}</div>
                 </td>
                 <td className="px-1.5 py-2 text-right text-[color:var(--text-main)] font-semibold whitespace-nowrap sm:px-4">{formatSignedEuroCents(transaction.amountCents, transaction.direction)}</td>
               </tr>
