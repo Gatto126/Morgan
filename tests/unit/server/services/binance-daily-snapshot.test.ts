@@ -18,6 +18,7 @@ vi.mock("@/server/security/secrets", () => ({
 import {
   createBinanceDailySnapshotForProfile,
   createBinanceDailySnapshotsForAllProfiles,
+  getBinanceDailySnapshotCronDateKey,
   getBinanceDailySnapshotDateKey,
   getBinanceDailySnapshotHistory
 } from "@/server/services/binance-daily-snapshot";
@@ -70,6 +71,11 @@ describe("binance daily snapshot service", () => {
   it("uses the Europe/Rome date key for the daily snapshot", () => {
     expect(getBinanceDailySnapshotDateKey(new Date("2026-06-03T23:15:00.000Z")))
       .toBe("2026-06-04");
+  });
+
+  it("uses the previous Europe/Rome date key for the cron batch snapshot", () => {
+    expect(getBinanceDailySnapshotCronDateKey(new Date("2026-06-03T23:15:00.000Z")))
+      .toBe("2026-06-03");
   });
 
   it("creates a complete snapshot including dust and non-material tokens", async () => {
@@ -205,7 +211,7 @@ describe("binance daily snapshot service", () => {
 
     expect(result).toMatchObject({
       created: 1,
-      dateKey: "2026-06-04",
+      dateKey: "2026-06-03",
       failed: 1,
       skippedExisting: 0,
       totalProfiles: 2

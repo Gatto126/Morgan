@@ -14,6 +14,13 @@ export function getEuropeRomeDateKey(date = new Date()) {
   return `${byType.get("year")}-${byType.get("month")}-${byType.get("day")}`;
 }
 
+export function getPreviousEuropeRomeDateKey(date = new Date()) {
+  const [year, month, day] = getEuropeRomeDateKey(date).split("-").map(Number);
+  const previousDate = new Date(Date.UTC(year, month - 1, day - 1));
+
+  return previousDate.toISOString().slice(0, 10);
+}
+
 export function getMillisecondsUntilNextUtcDate(date = new Date()) {
   const nextDate = new Date(Date.UTC(
     date.getUTCFullYear(),

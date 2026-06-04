@@ -17,7 +17,10 @@ import {
   measurePerformanceStep,
   type PerformanceTrace
 } from "@/server/logging/performance";
-import { getEuropeRomeDateKey } from "@/shared/date-keys";
+import {
+  getEuropeRomeDateKey,
+  getPreviousEuropeRomeDateKey
+} from "@/shared/date-keys";
 
 export const BINANCE_DAILY_SNAPSHOT_TIME_ZONE = "Europe/Rome";
 
@@ -57,6 +60,7 @@ export type BinanceDailySnapshotHistoryItem = {
 };
 
 export type BinanceDailySnapshotDependencies = BinanceServiceDependencies & {
+  dateKey?: string;
   fetcher?: BinanceFetch;
   now?: () => Date;
   repository?: BinanceDailySnapshotRepository;
@@ -70,6 +74,10 @@ type CreateProfileSnapshotOptions = BinanceDailySnapshotDependencies & {
 
 export function getBinanceDailySnapshotDateKey(now = new Date()) {
   return getEuropeRomeDateKey(now);
+}
+
+export function getBinanceDailySnapshotCronDateKey(now = new Date()) {
+  return getPreviousEuropeRomeDateKey(now);
 }
 
 function toSnapshotToken(balance: PricedBinanceBalance): BinanceDailySnapshotTokenInput {
@@ -188,7 +196,7 @@ export async function createBinanceDailySnapshotsForAllProfiles(
 ): Promise<BinanceDailySnapshotBatchResult> {
   const repository = dependencies.repository ?? binanceDailySnapshotRepository;
   const snapshotAt = dependencies.now?.() ?? new Date();
-  const dateKey = getBinanceDailySnapshotDateKey(snapshotAt);
+  const dateKey = dependencies.dateKey ?? getBinanceDailySnapshotCronDateKey(snapshotAt);
   const profiles = await measurePerformanceStep(
     dependencies.trace,
     "binanceDailySnapshot.repository.listProfilesWithBinanceCredentials",

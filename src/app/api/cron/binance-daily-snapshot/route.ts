@@ -52,12 +52,16 @@ export async function GET(request: Request) {
 
   try {
     const result = await createBinanceDailySnapshotsForAllProfiles({ trace });
+    const status = result.failed === 0 ? 200 : 500;
     const payload = {
       ok: result.failed === 0,
       ...result
     };
+    console.log(
+      `[BinanceDailySnapshotCron] summary dateKey=${result.dateKey} created=${result.created} failed=${result.failed} profiles=${result.totalProfiles} skippedExisting=${result.skippedExisting} skippedMissingCredentials=${result.skippedMissingCredentials}`
+    );
 
-    log.response("GET", endpoint, 200, {
+    log.response("GET", endpoint, status, {
       created: result.created,
       failed: result.failed,
       profiles: result.totalProfiles,
@@ -68,10 +72,10 @@ export async function GET(request: Request) {
       failed: result.failed,
       payloadBytes: getJsonSizeBytesIfTracing(trace, payload),
       profiles: result.totalProfiles,
-      status: 200
+      status
     });
 
-    return privateNoStoreJson(payload);
+    return privateNoStoreJson(payload, { status });
   } catch (error) {
     log.error("GET", endpoint, error);
     trace.finish(log, { failed: true, status: 500 });

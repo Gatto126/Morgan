@@ -28,6 +28,7 @@ vi.mock("@/server/logging/logger", () => ({
 import { GET } from "@/app/api/cron/binance-daily-snapshot/route";
 
 let restoreEnv: (() => void) | null = null;
+let consoleLogSpy: ReturnType<typeof vi.spyOn> | null = null;
 
 function withCronSecret(value: string | undefined) {
   restoreEnv?.();
@@ -50,6 +51,7 @@ describe("binance daily snapshot cron route", () => {
     mocks.logResponse.mockReset();
     mocks.shouldLogPerformance.mockReset();
     mocks.shouldLogPerformance.mockReturnValue(false);
+    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     mocks.createBinanceDailySnapshotsForAllProfiles.mockResolvedValue({
       created: 1,
       dateKey: "2026-06-04",
@@ -63,6 +65,8 @@ describe("binance daily snapshot cron route", () => {
   });
 
   afterEach(() => {
+    consoleLogSpy?.mockRestore();
+    consoleLogSpy = null;
     restoreEnv?.();
     restoreEnv = null;
   });
@@ -106,5 +110,35 @@ describe("binance daily snapshot cron route", () => {
       ok: true,
       totalProfiles: 1
     });
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("created=1 failed=0 profiles=1"));
+  });
+
+  it("returns 500 when at least one profile snapshot fails", async () => {
+    withCronSecret("cron-secret");
+    mocks.createBinanceDailySnapshotsForAllProfiles.mockResolvedValueOnce({
+      created: 0,
+      dateKey: "2026-06-04",
+      failed: 1,
+      results: [],
+      skippedExisting: 0,
+      skippedMissingCredentials: 0,
+      snapshotAt: "2026-06-03T23:00:00.000Z",
+      totalProfiles: 1
+    });
+
+    const response = await GET(makeCronRequest("cron-secret"));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      failed: 1,
+      ok: false,
+      totalProfiles: 1
+    });
+    expect(mocks.logResponse).toHaveBeenCalledWith(
+      "GET",
+      "/api/cron/binance-daily-snapshot",
+      500,
+      expect.objectContaining({ failed: 1 })
+    );
   });
 });
