@@ -27,6 +27,20 @@ export type BinanceDailySnapshotSummary = {
   userId: string;
 };
 
+export type BinanceDailySnapshotTokenSummary = {
+  eurPrice: number;
+  eurValue: number;
+  freeAmount: number;
+  lockedAmount: number;
+  tokenName: string | null;
+  tokenSymbol: string;
+  totalAmount: number;
+};
+
+export type BinanceDailySnapshotHistorySummary = BinanceDailySnapshotSummary & {
+  tokens: BinanceDailySnapshotTokenSummary[];
+};
+
 export type BinanceDailySnapshotWriteResult = BinanceDailySnapshotSummary & {
   created: boolean;
 };
@@ -42,7 +56,7 @@ export type CreateBinanceDailySnapshotInput = {
 export type BinanceDailySnapshotRepository = {
   createSnapshot(input: CreateBinanceDailySnapshotInput): Promise<BinanceDailySnapshotWriteResult>;
   findSnapshot(userId: string, dateKey: string): Promise<BinanceDailySnapshotSummary | null>;
-  listSnapshots(userId: string): Promise<BinanceDailySnapshotSummary[]>;
+  listSnapshots(userId: string): Promise<BinanceDailySnapshotHistorySummary[]>;
   listProfilesWithBinanceCredentials(): Promise<BinanceDailySnapshotProfile[]>;
 };
 
@@ -53,6 +67,16 @@ const snapshotSelect = {
   tokenCount: true,
   totalEurValue: true,
   userId: true
+} as const;
+
+const tokenSelect = {
+  eurPrice: true,
+  eurValue: true,
+  freeAmount: true,
+  lockedAmount: true,
+  tokenName: true,
+  tokenSymbol: true,
+  totalAmount: true
 } as const;
 
 async function listProfilesWithBinanceCredentials() {
@@ -83,7 +107,16 @@ async function listSnapshots(userId: string) {
   return prisma.binanceDailySnapshot.findMany({
     where: { userId },
     orderBy: { dateKey: "asc" },
-    select: snapshotSelect
+    select: {
+      ...snapshotSelect,
+      tokens: {
+        orderBy: [
+          { eurValue: "desc" },
+          { tokenSymbol: "asc" }
+        ],
+        select: tokenSelect
+      }
+    }
   });
 }
 

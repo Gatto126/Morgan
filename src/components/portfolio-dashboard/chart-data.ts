@@ -44,8 +44,44 @@ type BuildPortfolioChartDataOptions = {
 
 export type PortfolioProviderHistoricalPoint = {
   dateKey: string;
+  tokens?: PortfolioProviderHistoricalToken[];
   valueCents: number;
 };
+
+export type PortfolioProviderHistoricalToken = {
+  tokenName: string | null;
+  tokenSymbol: string;
+  valueCents: number;
+};
+
+function cloneProviderProducts(
+  products: PortfolioBucket["providerProducts"]
+): PortfolioBucket["providerProducts"] {
+  return Object.fromEntries(
+    Object.entries(products).map(([providerKey, providerProducts]) => [
+      providerKey,
+      { ...providerProducts }
+    ])
+  );
+}
+
+function getHistoricalTokenProductName(token: PortfolioProviderHistoricalToken) {
+  return token.tokenName ? `${token.tokenName} (${token.tokenSymbol})` : token.tokenSymbol;
+}
+
+function getHistoricalProviderProducts(point: PortfolioProviderHistoricalPoint) {
+  const products: Record<string, number> = {};
+
+  for (const token of point.tokens ?? []) {
+    if (!token.tokenSymbol) {
+      continue;
+    }
+
+    products[getHistoricalTokenProductName(token)] = token.valueCents;
+  }
+
+  return products;
+}
 
 export function mergePortfolioDataWithProviderHistory(
   data: PortfolioData,
@@ -62,23 +98,32 @@ export function mergePortfolioDataWithProviderHistory(
     const dateKey = bucket.date || bucket.month;
     bucketsByDate.set(dateKey, {
       ...bucket,
-      providerProducts: { ...bucket.providerProducts },
+      providerProducts: cloneProviderProducts(bucket.providerProducts),
       providers: { ...bucket.providers }
     });
   }
 
   for (const point of historicalPoints) {
     const existing = bucketsByDate.get(point.dateKey);
+    const historicalProviderProducts = getHistoricalProviderProducts(point);
     if (existing) {
       const previousValue = existing.providers[providerKey] ?? 0;
       const nextProviders = {
         ...existing.providers,
         [providerKey]: point.valueCents
       };
+      const nextProviderProducts = {
+        ...existing.providerProducts,
+        [providerKey]: {
+          ...(existing.providerProducts[providerKey] ?? {}),
+          ...historicalProviderProducts
+        }
+      };
       bucketsByDate.set(point.dateKey, {
         ...existing,
         date: point.dateKey,
         month: point.dateKey.slice(0, 7),
+        providerProducts: nextProviderProducts,
         providers: nextProviders,
         total: existing.total - previousValue + point.valueCents
       });
@@ -88,7 +133,9 @@ export function mergePortfolioDataWithProviderHistory(
     bucketsByDate.set(point.dateKey, {
       date: point.dateKey,
       month: point.dateKey.slice(0, 7),
-      providerProducts: {},
+      providerProducts: Object.keys(historicalProviderProducts).length > 0
+        ? { [providerKey]: historicalProviderProducts }
+        : {},
       providers: { [providerKey]: point.valueCents },
       total: point.valueCents
     });

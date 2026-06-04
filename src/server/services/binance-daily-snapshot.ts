@@ -56,7 +56,18 @@ export type BinanceDailySnapshotHistoryItem = {
   dateKey: string;
   snapshotAt: string;
   tokenCount: number;
+  tokens: BinanceDailySnapshotHistoryToken[];
   totalEurValue: number;
+};
+
+export type BinanceDailySnapshotHistoryToken = {
+  eurPrice: number;
+  eurValue: number;
+  freeAmount: number;
+  lockedAmount: number;
+  tokenName: string | null;
+  tokenSymbol: string;
+  totalAmount: number;
 };
 
 export type BinanceDailySnapshotDependencies = BinanceServiceDependencies & {
@@ -255,6 +266,15 @@ export async function getBinanceDailySnapshotHistory(
     dateKey: snapshot.dateKey,
     snapshotAt: snapshot.snapshotAt.toISOString(),
     tokenCount: snapshot.tokenCount,
+    tokens: snapshot.tokens.map((token) => ({
+      eurPrice: token.eurPrice,
+      eurValue: token.eurValue,
+      freeAmount: token.freeAmount,
+      lockedAmount: token.lockedAmount,
+      tokenName: token.tokenName,
+      tokenSymbol: token.tokenSymbol,
+      totalAmount: token.totalAmount
+    })),
     totalEurValue: snapshot.totalEurValue
   }));
 }

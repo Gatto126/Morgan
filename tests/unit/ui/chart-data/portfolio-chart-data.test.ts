@@ -264,6 +264,49 @@ describe("portfolio chart data", () => {
     });
   });
 
+  it("merges Binance daily snapshot tokens into the active Binance chart series", () => {
+    const dataWithBinance = mergePortfolioDataWithBinance(portfolioData, [
+      {
+        eurValue: 250.25,
+        freeAmount: 0.003,
+        lockedAmount: 0.001,
+        tokenName: "Bitcoin",
+        tokenSymbol: "BTC"
+      },
+      {
+        eurValue: 25.75,
+        freeAmount: 0.01,
+        lockedAmount: 0,
+        tokenName: "Ethereum",
+        tokenSymbol: "ETH"
+      }
+    ]);
+    const dataWithHistory = mergePortfolioDataWithProviderHistory(dataWithBinance, "BINANCE", [
+      {
+        dateKey: "2026-03-14",
+        tokens: [
+          { tokenName: "Bitcoin", tokenSymbol: "BTC", valueCents: 18_000 },
+          { tokenName: "Ethereum", tokenSymbol: "ETH", valueCents: 2_000 }
+        ],
+        valueCents: 20_000
+      }
+    ]);
+    const binanceProvider = dataWithHistory.providers.find((item) => item.sourceInstitution === "BINANCE");
+    const points = buildPortfolioChartData({
+      activeProvider: binanceProvider ?? null,
+      activeTab: "BINANCE",
+      data: dataWithHistory,
+      timeRange: "ALL"
+    });
+
+    expect(points.find((point) => point.rawMonth === "2026-03-14")).toMatchObject({
+      "Bitcoin (BTC)": 18_000,
+      "Ethereum (ETH)": 2_000,
+      balance: 20_000,
+      BINANCE: 20_000
+    });
+  });
+
   it("folds a standalone current Binance point into the crypto aggregate data", () => {
     const dataWithBinance = mergePortfolioDataWithBinance(portfolioData, [{
       eurValue: 250.25,

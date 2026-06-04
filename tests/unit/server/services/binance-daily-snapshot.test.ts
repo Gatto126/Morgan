@@ -229,6 +229,17 @@ describe("binance daily snapshot service", () => {
         id: "snapshot-1",
         snapshotAt: new Date("2026-06-03T23:00:00.000Z"),
         tokenCount: 9,
+        tokens: [
+          {
+            eurPrice: 75_000,
+            eurValue: 697.36,
+            freeAmount: 0.009298,
+            lockedAmount: 0,
+            tokenName: "Bitcoin",
+            tokenSymbol: "BTC",
+            totalAmount: 0.009298
+          }
+        ],
         totalEurValue: 2311.23,
         userId: "user-1"
       }
@@ -239,6 +250,17 @@ describe("binance daily snapshot service", () => {
         dateKey: "2026-06-04",
         snapshotAt: "2026-06-03T23:00:00.000Z",
         tokenCount: 9,
+        tokens: [
+          {
+            eurPrice: 75_000,
+            eurValue: 697.36,
+            freeAmount: 0.009298,
+            lockedAmount: 0,
+            tokenName: "Bitcoin",
+            tokenSymbol: "BTC",
+            totalAmount: 0.009298
+          }
+        ],
         totalEurValue: 2311.23
       }
     ]);

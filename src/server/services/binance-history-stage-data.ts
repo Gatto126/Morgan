@@ -15,6 +15,11 @@ export async function getBinanceHistoricalPointsForStage(
 
   return snapshots.map((snapshot) => ({
     dateKey: snapshot.dateKey,
+    tokens: snapshot.tokens.map((token) => ({
+      tokenName: token.tokenName,
+      tokenSymbol: token.tokenSymbol,
+      valueCents: Math.round(token.eurValue * 100)
+    })),
     valueCents: Math.round(snapshot.totalEurValue * 100)
   }));
 }

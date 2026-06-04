@@ -10,7 +10,11 @@ import {
 describe("dashboard stage data normalizers", () => {
   it("normalizes malformed portfolio payloads before consumers call map", () => {
     const data = normalizePortfolioData({
-      binanceHistoricalPoints: [{ dateKey: "2026-06-03", valueCents: 234_500 }],
+      binanceHistoricalPoints: [{
+        dateKey: "2026-06-03",
+        tokens: [{ tokenName: "Bitcoin", tokenSymbol: "BTC", valueCents: 69_736 }],
+        valueCents: 234_500
+      }],
       dailyData: [{ month: "2026-06", providers: undefined, providerProducts: undefined }],
       monthlyData: undefined,
       providers: undefined
@@ -25,7 +29,11 @@ describe("dashboard stage data normalizers", () => {
       providers: {},
       total: 0
     }]);
-    expect(data.binanceHistoricalPoints).toEqual([{ dateKey: "2026-06-03", valueCents: 234_500 }]);
+    expect(data.binanceHistoricalPoints).toEqual([{
+      dateKey: "2026-06-03",
+      tokens: [{ tokenName: "Bitcoin", tokenSymbol: "BTC", valueCents: 69_736 }],
+      valueCents: 234_500
+    }]);
   });
 
   it("normalizes dashboard provider arrays and nested holdings", () => {

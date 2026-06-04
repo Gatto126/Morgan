@@ -63,9 +63,21 @@ function normalizeNumberRecord(value: unknown): Record<string, number> {
 
 function normalizeBinanceHistoricalPoint(value: unknown): BinanceHistoricalPoint {
   const point = isRecord(value) ? value : {};
+  const tokens = asArray(point.tokens)
+    .map((token) => {
+      const row = isRecord(token) ? token : {};
+
+      return {
+        tokenName: asOptionalString(row.tokenName),
+        tokenSymbol: asString(row.tokenSymbol),
+        valueCents: asNumber(row.valueCents)
+      };
+    })
+    .filter((token) => token.tokenSymbol.length > 0);
 
   return {
     dateKey: asString(point.dateKey),
+    ...(tokens.length > 0 ? { tokens } : {}),
     valueCents: asNumber(point.valueCents)
   };
 }
