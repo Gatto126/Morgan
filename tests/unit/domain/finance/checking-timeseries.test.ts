@@ -132,4 +132,41 @@ describe("checking time-series", () => {
       total: 309642
     });
   });
+
+  it("counts BBVA interest and cashback as income while keeping their own categories", () => {
+    const result = buildCheckingTimeSeries({
+      now: new Date("2026-01-01T12:00:00.000Z"),
+      transactions: [
+        transaction({
+          id: "bbva-interest",
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-01T00:00:00.000Z"),
+          typeLabel: "Interessi",
+          description: "Interest payment",
+          direction: "IN",
+          amountCents: 2303,
+          balanceCents: 2303
+        }),
+        transaction({
+          id: "bbva-cashback",
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-01T00:00:00.000Z"),
+          typeLabel: "Premio",
+          description: "Cash reward",
+          direction: "IN",
+          amountCents: 54,
+          balanceCents: 2357
+        })
+      ]
+    });
+
+    expect(result.providers.find((provider) => provider.sourceInstitution === BBVA_INSTITUTION)).toMatchObject({
+      cashback: 54,
+      income: 2357,
+      interest: 2303
+    });
+    expect(result.dailyData[0].providerIncome).toMatchObject({
+      [BBVA_INSTITUTION]: 2357
+    });
+  });
 });

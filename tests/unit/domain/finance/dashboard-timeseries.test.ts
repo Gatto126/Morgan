@@ -135,4 +135,62 @@ describe("dashboard time-series", () => {
       ])
     );
   });
+
+  it("counts BBVA interest and cashback in dashboard income buckets and summaries", () => {
+    const rows: DashboardTransactionRows = {
+      checkingTxs: [
+        {
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-01T00:00:00.000Z"),
+          typeLabel: "Interessi",
+          description: "Interest payment",
+          direction: "IN",
+          amountCents: 2303,
+          balanceCents: 2303
+        },
+        {
+          sourceInstitution: BBVA_INSTITUTION,
+          bookingDate: new Date("2026-01-01T00:00:00.000Z"),
+          typeLabel: "Premio",
+          description: "Cash reward",
+          direction: "IN",
+          amountCents: 54,
+          balanceCents: 2357
+        }
+      ],
+      cryptoTxs: [],
+      investmentTxs: []
+    };
+
+    const result = buildDashboardData({
+      transactions: mapDashboardTransactions(rows),
+      historyPrices: [],
+      priceKeys: [],
+      now: new Date("2026-01-01T12:00:00.000Z")
+    });
+
+    expect(result.dailyData[0]).toMatchObject({
+      providerCashback: {
+        [BBVA_INSTITUTION]: 54
+      },
+      providerIncome: {
+        [BBVA_INSTITUTION]: 2357
+      },
+      providerInterest: {
+        [BBVA_INSTITUTION]: 2303
+      }
+    });
+    expect(result.providerSummaries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceInstitution: BBVA_INSTITUTION,
+          checking: expect.objectContaining({
+            cashback: 54,
+            income: 2357,
+            interest: 2303
+          })
+        })
+      ])
+    );
+  });
 });

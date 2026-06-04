@@ -1,4 +1,5 @@
 import { resolveDailyEndingBalanceCents } from "@/domain/finance/checking-balance";
+import { BBVA_INSTITUTION } from "@/shared/institutions";
 
 export type CheckingTransaction = {
   id: string;
@@ -113,6 +114,10 @@ function applyProviderFlow(provider: CheckingProviderSummary, category: Checking
   provider[category] += amountCents;
 }
 
+export function shouldAlsoCountCheckingFlowAsIncome(sourceInstitution: string, category: CheckingFlowCategory) {
+  return sourceInstitution === BBVA_INSTITUTION && (category === "interest" || category === "cashback");
+}
+
 function addPeriodTotal(
   totals: Map<string, Record<string, number>>,
   periodKey: string,
@@ -174,6 +179,9 @@ export function buildCheckingTimeSeries({
 
     const category = classifyCheckingFlow(transaction);
     applyProviderFlow(provider, category, transaction.amountCents);
+    if (shouldAlsoCountCheckingFlowAsIncome(transaction.sourceInstitution, category)) {
+      applyProviderFlow(provider, "income", transaction.amountCents);
+    }
 
     if (provider.transactionCount === 1) {
       provider.total = transaction.balanceCents;

@@ -1,4 +1,8 @@
-import { classifyCheckingFlow, type CheckingFlowCategory } from "@/domain/finance/checking-timeseries";
+import {
+  classifyCheckingFlow,
+  shouldAlsoCountCheckingFlowAsIncome,
+  type CheckingFlowCategory
+} from "@/domain/finance/checking-timeseries";
 import { normalizeCryptoSymbol } from "@/domain/pricing/crypto-symbols";
 import { resolveDailyEndingBalanceCents } from "@/domain/finance/checking-balance";
 
@@ -195,6 +199,11 @@ function applyCheckingFlow(
   provider.checking[category] += amountCents;
   addPeriodTotal(monthlyTotals[category], monthKey, sourceInstitution, amountCents);
   addPeriodTotal(dailyTotals[category], dayKey, sourceInstitution, amountCents);
+  if (shouldAlsoCountCheckingFlowAsIncome(sourceInstitution, category)) {
+    provider.checking.income += amountCents;
+    addPeriodTotal(monthlyTotals.income, monthKey, sourceInstitution, amountCents);
+    addPeriodTotal(dailyTotals.income, dayKey, sourceInstitution, amountCents);
+  }
 }
 
 function applyInvestmentTransaction(provider: ProviderSummary, transaction: DashboardMappedTransaction) {
