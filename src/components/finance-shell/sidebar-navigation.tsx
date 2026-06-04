@@ -47,7 +47,7 @@ type NavigationButtonProps = {
 };
 
 const navigationButtonClass =
-  "flex h-12 w-12 cursor-pointer items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] transition-[background-color,border-color,color,transform,opacity] duration-200 has-lucide";
+  "flex h-12 w-12 items-center justify-center rounded-[16px] border bg-[color:var(--surface-panel)] transition-[background-color,border-color,color,transform,opacity] duration-200 has-lucide";
 
 function NavigationButton({
   active,
@@ -66,8 +66,8 @@ function NavigationButton({
         isFading
           ? "pointer-events-none scale-90 opacity-0 duration-300"
           : active
-            ? "border-white text-white"
-            : "border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)] hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
+            ? "cursor-default border-white text-white"
+            : "cursor-pointer border-[color:var(--line-strong)] text-[color:var(--text-dim)] hover:border-[color:var(--text-dim)] hover:bg-[color:var(--surface-elevated)] active:scale-[0.985]",
         className
       )}
       data-active={active}
