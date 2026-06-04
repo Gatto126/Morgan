@@ -15,6 +15,7 @@ import {
 import {
   fetchDashboardStageData,
   getDashboardStageCacheDateKey,
+  invalidateDashboardStageDataCache,
   seedDashboardStageDataCache
 } from "./dashboard-stage-data-cache";
 import {
@@ -1153,6 +1154,7 @@ export function invalidateFinanceProfile(userId: string) {
       financeStageRequests.delete(key);
     }
   }
+  invalidateDashboardStageDataCache(userId);
   binanceCurrentSyncDiagnostics.delete(userId);
   invalidateCurrentValuation(userId);
   publishFinanceSessionDiagnostics();

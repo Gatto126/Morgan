@@ -121,6 +121,7 @@ export function Dashboard({
   const { data, dataFresh, loading, error, importRefreshVersion } = useDashboardData({
     userId,
     isActive,
+    refreshKey: binanceRefreshKey,
     shouldLoad,
     transactionCount
   });

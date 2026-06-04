@@ -4,6 +4,7 @@ import { toSafeUser, toSafeUserSummary } from "@/server/auth/user-response";
 import { profileRepository } from "@/server/repositories/profile-repository";
 import { encryptSecret, makeBinanceApiKeyPreview } from "@/server/security/secrets";
 import { invalidateProfileDataCache } from "@/server/services/profile-data-cache";
+import { invalidateProfileStageSnapshots } from "@/server/services/profile-stage-snapshot";
 
 export class ProfileConflictError extends Error {
   constructor(message = "This profile already exists.") {
@@ -176,7 +177,8 @@ export async function updateProfileBinanceSettings(id: string, input: unknown) {
     await Promise.all([
       profileRepository.deleteBinanceBalances(id),
       profileRepository.deleteBinanceDailySnapshots(id),
-      profileRepository.deletePriceCache([`binance_sync_${id}`])
+      profileRepository.deletePriceCache([`binance_sync_${id}`]),
+      invalidateProfileStageSnapshots(id)
     ]);
   }
 

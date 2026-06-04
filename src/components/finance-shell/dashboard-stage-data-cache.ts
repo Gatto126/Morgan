@@ -152,6 +152,17 @@ function removeStoredDashboardStageData(cacheKey: string) {
   }
 }
 
+function matchesDashboardStageCacheKey(
+  cacheKey: string,
+  userId: string,
+  stageSet: Set<DashboardStageKey> | null
+) {
+  const [entryUserId, entryStage] = cacheKey.split(":");
+
+  return entryUserId === userId
+    && (!stageSet || stageSet.has(entryStage as DashboardStageKey));
+}
+
 function writeStoredDashboardStageData(
   cacheKey: string,
   stage: DashboardStageKey,
@@ -265,6 +276,42 @@ export function seedDashboardStageDataCache<TStage extends DashboardStageKey>(
     fetchedAt
   });
   writeStoredDashboardStageData(cacheKey, stage, userId, version, normalizedData, fetchedAt);
+}
+
+export function invalidateDashboardStageDataCache(userId: string, stages?: DashboardStageKey[]) {
+  const stageSet = stages ? new Set(stages) : null;
+
+  for (const cacheKey of [...dashboardStageDataCache.keys()]) {
+    if (matchesDashboardStageCacheKey(cacheKey, userId, stageSet)) {
+      dashboardStageDataCache.delete(cacheKey);
+      removeStoredDashboardStageData(cacheKey);
+    }
+  }
+
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    const storageKeysToDelete: string[] = [];
+
+    for (let index = 0; index < storage.length; index += 1) {
+      const storageKey = storage.key(index);
+      if (!storageKey?.startsWith(storageCachePrefix)) {
+        continue;
+      }
+
+      const cacheKey = storageKey.slice(storageCachePrefix.length);
+      if (matchesDashboardStageCacheKey(cacheKey, userId, stageSet)) {
+        storageKeysToDelete.push(storageKey);
+      }
+    }
+
+    storageKeysToDelete.forEach((storageKey) => storage.removeItem(storageKey));
+  } catch {
+    // Browser cache invalidation is best-effort; network refresh still corrects the next fetch.
+  }
 }
 
 export async function fetchDashboardStageData<TStage extends DashboardStageKey>(

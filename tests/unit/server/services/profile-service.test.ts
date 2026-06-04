@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   deleteBinanceDailySnapshots: vi.fn(),
   deleteProfile: vi.fn(),
   updateBinanceCredentials: vi.fn(),
+  invalidateProfileStageSnapshots: vi.fn(),
   encryptSecret: vi.fn((value: string | null | undefined) => value ? `encrypted:${value.trim()}` : null),
   makeBinanceApiKeyPreview: vi.fn((value: string | null | undefined) => value ? `${value.trim().slice(0, 8)}...` : null)
 }));
@@ -52,6 +53,10 @@ vi.mock("@/server/security/secrets", () => ({
   hasBinanceCredentials: (user: { binanceApiKeyEncrypted?: string | null; binanceApiSecretEncrypted?: string | null }) =>
     !!(user.binanceApiKeyEncrypted && user.binanceApiSecretEncrypted),
   getBinanceApiKeyPreview: (user: { binanceApiKeyPreview?: string | null }) => user.binanceApiKeyPreview ?? null
+}));
+
+vi.mock("@/server/services/profile-stage-snapshot", () => ({
+  invalidateProfileStageSnapshots: mocks.invalidateProfileStageSnapshots
 }));
 
 import {
@@ -100,6 +105,7 @@ describe("profile service", () => {
     mocks.deleteBinanceDailySnapshots.mockResolvedValue(undefined);
     mocks.deleteProfile.mockResolvedValue(undefined);
     mocks.updateBinanceCredentials.mockResolvedValue(profile);
+    mocks.invalidateProfileStageSnapshots.mockResolvedValue(undefined);
   });
 
   it("lists owned profiles with transaction counts", async () => {
@@ -204,6 +210,7 @@ describe("profile service", () => {
     expect(mocks.deleteBinanceBalances).toHaveBeenCalledWith("profile-1");
     expect(mocks.deleteBinanceDailySnapshots).toHaveBeenCalledWith("profile-1");
     expect(mocks.deletePriceCache).toHaveBeenCalledWith(["binance_sync_profile-1"]);
+    expect(mocks.invalidateProfileStageSnapshots).toHaveBeenCalledWith("profile-1");
     expect(mocks.updateBinanceCredentials).toHaveBeenCalledWith("profile-1", {
       binanceApiKeyEncrypted: null,
       binanceApiSecretEncrypted: null,
@@ -221,6 +228,7 @@ describe("profile service", () => {
     expect(mocks.deleteBinanceBalances).not.toHaveBeenCalled();
     expect(mocks.deleteBinanceDailySnapshots).not.toHaveBeenCalled();
     expect(mocks.deletePriceCache).not.toHaveBeenCalled();
+    expect(mocks.invalidateProfileStageSnapshots).not.toHaveBeenCalled();
     expect(mocks.updateBinanceCredentials).toHaveBeenCalledWith("profile-1", {
       binanceApiKeyEncrypted: null,
       binanceApiSecretEncrypted: null,

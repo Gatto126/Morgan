@@ -139,7 +139,8 @@ Stato verificato alla baseline `3610ebd`:
 - Cache stage client bumpata a versione 3 per scartare payload `sessionStorage` vecchi senza `binanceHistoricalPoints`.
 - Con Binance collegata, main e crypto non devono rendere visibile il chart solo perche' hanno stage data o balances: devono aspettare il `currentValuationPoint` committed, cosi' scala, topbar e punto corrente entrano insieme.
 - I date key current per chart Binance/Crypto usano `Europe/Rome`, come il cron storico.
-- Settings Binance delete semantics: `API ONLY` scollega solo le credenziali e preserva saldi/storico; `API + DATA` elimina credenziali, `BinanceBalance`, `BinanceDailySnapshot` con righe token in cascade e marker cache `binance_sync_*`, poi invalida la cache profilo.
+- Settings Binance delete semantics: `API ONLY` scollega solo le credenziali e preserva saldi/storico; `API + DATA` elimina credenziali, `BinanceBalance`, `BinanceDailySnapshot` con righe token in cascade, marker cache `binance_sync_*`, `ProfileStageSnapshot` del profilo e cache stage browser/sessionStorage, poi invalida la cache profilo.
+- Se una cancellazione Binance precedente e' stata parziale, la UI Settings deve permettere un wipe `DATA` anche quando non ci sono piu' API salvate, cosi' l'utente non deve ricollegare Binance solo per pulire lo storico/cache residui.
 
 Risultati smoke manuale comunicati il 2026-06-03:
 
@@ -601,7 +602,8 @@ Questa e' la memoria storica che piu' probabilmente servira' in futuro.
 - Se current sync fallisce, mantenere visibile l'ultima valuation committed e pubblicare diagnostica.
 - Dopo sync/update/delete credenziali Binance, invalidare la cache profilo server-side per evitare payload Binance/dashboard/crypto stale entro TTL.
 - Dopo connect, persistere il `binanceRefreshKey` client-side: il reload immediato deve continuare a leggere la versione Binance appena sincronizzata, non una vecchia cache `binance:0` prodotta prima delle credenziali.
-- In Settings, `API ONLY` cancella solo le credenziali cifrate e lascia i dati Binance raccolti. `API + DATA` cancella anche current balances, storico daily snapshot e marker cache di sync per quel profilo.
+- In Settings, `API ONLY` cancella solo le credenziali cifrate e lascia i dati Binance raccolti. `API + DATA` cancella anche current balances, storico daily snapshot, marker cache di sync e stage snapshot/cache per quel profilo.
+- Il comando `DATA` deve restare disponibile anche senza API salvate: serve a ripulire residui dopo una delete incompleta o dopo un precedente `API ONLY`.
 
 Primo connect Binance target:
 
@@ -677,7 +679,7 @@ Decisione operativa:
 - Lo snapshot e' idempotente: una sola riga per `userId + dateKey`; se esiste, il job non richiama Binance per quel profilo.
 - Lo storico salva tutto quello che Binance restituisce con saldo positivo, anche se sotto `0,49 EUR`.
 - La UI current continua a usare `BinanceBalance` filtrato/materiale e committed valuation snapshot.
-- Lo storico daily snapshot e' considerato dato Binance del profilo: deve essere eliminato da Settings quando l'utente sceglie `API + DATA`, ma non quando sceglie `API ONLY`.
+- Lo storico daily snapshot e' considerato dato Binance del profilo: deve essere eliminato da Settings quando l'utente sceglie `API + DATA`/`DATA`, ma non quando sceglie `API ONLY`.
 
 Non risolvere Binance history riusando current sync come se fosse un ledger storico. Il lavoro futuro su Binance history deve decidere:
 

@@ -60,15 +60,16 @@ export function PortfolioDashboard({
   binanceRefreshKey = 0,
   hasBinanceCredentials = false
 }: PortfolioDashboardProps) {
+  const isCryptoDashboard = config.priceQueryParam === "cryptos";
   const { data, dataFresh, loading, error, importRefreshVersion } = usePortfolioDashboardData({
     endpoint: config.endpoint,
     fetchErrorMessage: config.fetchErrorMessage,
     userId,
     transactionCount,
     isActive,
+    refreshKey: isCryptoDashboard ? binanceRefreshKey : 0,
     shouldLoad
   });
-  const isCryptoDashboard = config.priceQueryParam === "cryptos";
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [timeRange, setTimeRange] = useState<TimeRange>("ALL");
   const [selectedPoint, setSelectedPoint] = useState<PortfolioSelectedPoint | null>(null);

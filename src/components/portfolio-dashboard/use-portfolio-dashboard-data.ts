@@ -15,6 +15,7 @@ type UsePortfolioDashboardDataOptions = {
   userId: string;
   transactionCount: number;
   isActive: boolean;
+  refreshKey?: number;
   shouldLoad: boolean;
 };
 
@@ -28,6 +29,7 @@ export function usePortfolioDashboardData({
   userId,
   transactionCount,
   isActive,
+  refreshKey = 0,
   shouldLoad
 }: UsePortfolioDashboardDataOptions) {
   const stage = getPortfolioStageFromEndpoint(endpoint);
@@ -42,6 +44,7 @@ export function usePortfolioDashboardData({
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
   const pendingImportRefreshRef = useRef(false);
   const lastRefreshTransactionCountRef = useRef(transactionCount);
+  const lastRefreshKeyRef = useRef(refreshKey);
   const hasLoadedRef = useRef(false);
 
   const applyPortfolioPayload = useCallback((payload: PortfolioData) => {
@@ -172,6 +175,29 @@ export function usePortfolioDashboardData({
       window.removeEventListener("focus", handleFocus);
     };
   }, [fetchDashboard, fetchDashboardIfStale, isActive]);
+
+  useEffect(() => {
+    if (!shouldLoad || loading || lastRefreshKeyRef.current === refreshKey) {
+      return;
+    }
+
+    lastRefreshKeyRef.current = refreshKey;
+    setData(null);
+    setHasFreshData(false);
+    setLoading(true);
+    setError(null);
+
+    const refreshTimer = window.setTimeout(() => {
+      void fetchDashboard({ force: true });
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [
+    fetchDashboard,
+    loading,
+    refreshKey,
+    shouldLoad
+  ]);
 
   useEffect(() => {
     if (!shouldLoad || loading || lastRefreshTransactionCountRef.current === transactionCount) {

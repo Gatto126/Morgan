@@ -272,6 +272,70 @@ describe("dashboard stage data cache", () => {
     expect(cache.readDashboardStageDataCache("checking", "user-1", 4)).toEqual(payload);
   });
 
+  it("invalidates in-memory and persisted stage data for one profile", async () => {
+    const storage = createMemoryStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    const userPayload = {
+      dailyData: [],
+      monthlyData: [],
+      providers: [{
+        cashback: 0,
+        expenses: 0,
+        income: 0,
+        interest: 0,
+        products: [],
+        sourceInstitution: "Trade Republic",
+        tax: 0,
+        total: 0,
+        transactionCount: 0
+      }],
+      binanceHistoricalPoints: [{ dateKey: "2026-06-03", valueCents: 2_300_00 }]
+    };
+    const otherUserPayload = {
+      dailyData: [],
+      monthlyData: [],
+      providers: [{
+        cashback: 0,
+        expenses: 0,
+        income: 0,
+        interest: 0,
+        products: [],
+        sourceInstitution: "Other",
+        tax: 0,
+        total: 0,
+        transactionCount: 0
+      }]
+    };
+
+    let cache = await loadCacheModule();
+    cache.seedDashboardStageDataCache("crypto", "user-1", 4, userPayload);
+    cache.seedDashboardStageDataCache("dashboard", "user-1", 8, {
+      accountTotals: { checking: 0, crypto: 0, heritage: 0, investment: 0 },
+      dailyData: [],
+      monthlyData: [],
+      providerSummaries: [],
+      binanceHistoricalPoints: [{ dateKey: "2026-06-03", valueCents: 2_300_00 }]
+    });
+    cache.seedDashboardStageDataCache("crypto", "user-2", 0, otherUserPayload);
+
+    cache.invalidateDashboardStageDataCache("user-1");
+
+    expect(cache.readDashboardStageDataCache("crypto", "user-1", 4)).toBeNull();
+    expect(cache.readDashboardStageDataCache("dashboard", "user-1", 8)).toBeNull();
+    expect(cache.readDashboardStageDataCache("crypto", "user-2", 0)).toEqual(
+      normalizeDashboardStageData("crypto", otherUserPayload)
+    );
+
+    vi.resetModules();
+    cache = await import("@/components/finance-shell/dashboard-stage-data-cache");
+
+    expect(cache.readDashboardStageDataCache("crypto", "user-1", 4)).toBeNull();
+    expect(cache.readDashboardStageDataCache("dashboard", "user-1", 8)).toBeNull();
+    expect(cache.readDashboardStageDataCache("crypto", "user-2", 0)).toEqual(
+      normalizeDashboardStageData("crypto", otherUserPayload)
+    );
+  });
+
   it("clears failed requests so the next call can retry", async () => {
     const fetchMock = vi
       .fn()

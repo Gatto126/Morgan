@@ -11,6 +11,7 @@ import type { DashboardData } from "./types";
 type UseDashboardDataOptions = {
   userId: string;
   isActive: boolean;
+  refreshKey?: number;
   shouldLoad: boolean;
   transactionCount: number;
 };
@@ -43,6 +44,7 @@ function getProviderKeys(providerSummaries: ProviderKeySource[]) {
 export function useDashboardData({
   userId,
   isActive,
+  refreshKey = 0,
   shouldLoad,
   transactionCount
 }: UseDashboardDataOptions) {
@@ -57,6 +59,7 @@ export function useDashboardData({
   const knownProviderKeysRef = useRef<Set<string>>(new Set());
   const pendingImportRefreshRef = useRef(false);
   const lastRefreshTransactionCountRef = useRef(transactionCount);
+  const lastRefreshKeyRef = useRef(refreshKey);
   const hasLoadedRef = useRef(false);
 
   const applyDashboardPayload = useCallback((payload: DashboardData) => {
@@ -170,6 +173,29 @@ export function useDashboardData({
       window.removeEventListener("focus", handleFocus);
     };
   }, [fetchDashboard, fetchDashboardIfStale, isActive]);
+
+  useEffect(() => {
+    if (!shouldLoad || loading || lastRefreshKeyRef.current === refreshKey) {
+      return;
+    }
+
+    lastRefreshKeyRef.current = refreshKey;
+    setData(null);
+    setHasFreshData(false);
+    setLoading(true);
+    setError(null);
+
+    const refreshTimer = window.setTimeout(() => {
+      void fetchDashboard({ force: true });
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [
+    fetchDashboard,
+    loading,
+    refreshKey,
+    shouldLoad
+  ]);
 
   useEffect(() => {
     if (!shouldLoad || loading || lastRefreshTransactionCountRef.current === transactionCount) {
