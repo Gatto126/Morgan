@@ -6,8 +6,8 @@ import {
   ensureFinanceBinanceCurrentBalances,
   ensureFinanceCurrentValuation,
   ensureFinanceStageReady,
-  invalidateFinanceProfile,
-  invalidateFinanceProfileBinanceData
+  invalidateFinanceProfileBinanceData,
+  invalidateFinanceProfileBinanceStageData
 } from "./finance-session-orchestrator";
 import type { CurrentValuationSnapshot } from "./current-valuations-store";
 import { clearBinanceDashboardTopbarsForProfile } from "./dashboard-topbar-store";
@@ -209,13 +209,12 @@ export function useFinanceBinanceActions({
         hasBinanceData: updatedUser.hasBinanceData || tokenCount > 0
       };
 
-      setBinanceRefreshKey(nextRefreshKey);
       setActiveUser(updatedUser);
       clearApiKeyDraft();
       setUsers((prevUsers) =>
         prevUsers.map((user) => (user.id === activeUser.id ? updatedUser : user))
       );
-      invalidateFinanceProfile(activeUser.id);
+      invalidateFinanceProfileBinanceStageData(activeUser.id);
       setNotice(tokenCount > 0 ? "Preparing Binance valuation..." : "Checking Binance balances...");
       keepApiSettingsOpen();
 
@@ -244,6 +243,7 @@ export function useFinanceBinanceActions({
           ? valuationResult.value.snapshot
           : null
       }));
+      setBinanceRefreshKey(nextRefreshKey);
     } catch (err) {
       keepApiSettingsOpen();
       setError(err instanceof Error ? err.message : "Error saving API keys.");

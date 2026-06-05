@@ -11,10 +11,14 @@ import {
   getFinanceSessionDiagnostics,
   getPrioritizedProfileStageWarmupOrder,
   invalidateFinanceProfileBinanceData,
+  invalidateFinanceProfileBinanceStageData,
   preloadFinanceProfileStages,
   resetFinanceSessionOrchestrator
 } from "@/components/finance-shell/finance-session-orchestrator";
-import { getCurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
+import {
+  getCurrentValuationSnapshot,
+  refreshCurrentValuationFromCaches
+} from "@/components/finance-shell/current-valuations-store";
 import {
   readDashboardStageDataCache,
   seedDashboardStageDataCache
@@ -200,6 +204,42 @@ describe("finance session orchestrator", () => {
     expect(readDashboardStageDataCache("investment", wipeUser.id, wipeUser.investmentCount)).not.toBeNull();
     expect(readDashboardStageDataCache("crypto", wipeUser.id, wipeUser.cryptoCount)).not.toBeNull();
     expect(readDashboardStageDataCache("binance", wipeUser.id, 2)).toBeNull();
+  });
+
+  it("keeps the committed valuation visible while only Binance stage data is refreshed", () => {
+    const connectUser: UserRecord = {
+      ...user,
+      cryptoCount: 1,
+      hasBinanceCredentials: false,
+      hasBinanceData: false,
+      id: "profile-binance-connect",
+      investmentCount: 1,
+      transactionCount: 2
+    };
+
+    seedDashboardStageDataCache("dashboard", connectUser.id, connectUser.transactionCount, {
+      accountTotals: { checking: 100, crypto: 20, heritage: 150, investment: 30 },
+      dailyData: [],
+      monthlyData: [],
+      providerSummaries: []
+    });
+    seedDashboardStageDataCache("binance", connectUser.id, 2, {
+      balances: [
+        { eurValue: 10, freeAmount: 0.01, lockedAmount: 0, tokenName: "Bitcoin", tokenSymbol: "BTC" }
+      ],
+      hasApiKey: true,
+      isStale: false,
+      syncedAt: null
+    });
+
+    const committedSnapshot = refreshCurrentValuationFromCaches(connectUser, { binanceRefreshKey: 1 });
+    expect(committedSnapshot).not.toBeNull();
+
+    invalidateFinanceProfileBinanceStageData(connectUser.id);
+
+    expect(readDashboardStageDataCache("dashboard", connectUser.id, connectUser.transactionCount)).not.toBeNull();
+    expect(readDashboardStageDataCache("binance", connectUser.id, 2)).toBeNull();
+    expect(getCurrentValuationSnapshot(connectUser.id)).toBe(committedSnapshot);
   });
 
   it("starts active profile stage and Binance requests without waiting for the first stage response", async () => {

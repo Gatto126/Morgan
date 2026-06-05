@@ -144,6 +144,7 @@ Stato verificato alla baseline `3610ebd`:
 - Dopo una cancellazione Binance `API ONLY`, `API + DATA` o `DATA`, la UI deve invalidare solo la cache/stage Binance e la current valuation del profilo, non checking/investment/crypto/dashboard. Le tab/valori `BINANCE` devono sparire senza F5, mentre Trade Republic, ETF, checking, card e hover topbar restano vivi come stale-while-refresh fino al nuovo snapshot.
 - Il pannello Settings mostra il bidone Binance solo se il profilo ha API salvate o dati Binance residui (`BinanceBalance`/`BinanceDailySnapshot`) da cancellare.
 - Quando cambia la chiave refresh Binance, main dashboard e Crypto/Investment dashboard non devono smontare card/chart gia' renderizzati: mantengono lo stage data corrente come stale-while-refresh e lo sostituiscono appena arriva il payload pulito.
+- Durante il connect/salvataggio API Binance, la UI non deve bumpare il `binanceRefreshKey` visibile ne' invalidare il committed current snapshot finche' la nuova valuation Binance non e' pronta. La fase `Preparing Binance valuation...` deve lasciare visibili valori/card/topbar di Trade Republic, ETF/stock e checking, poi pubblicare il nuovo snapshot in un colpo solo.
 
 Risultati smoke manuale comunicati il 2026-06-03:
 

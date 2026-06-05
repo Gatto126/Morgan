@@ -1172,6 +1172,17 @@ export function invalidateFinanceProfileBinanceData(userId: string) {
   publishFinanceSessionDiagnostics();
 }
 
+export function invalidateFinanceProfileBinanceStageData(userId: string) {
+  for (const [key, entry] of financeStageRequests.entries()) {
+    if (entry.userId === userId && entry.stage === "binance") {
+      financeStageRequests.delete(key);
+    }
+  }
+  invalidateDashboardStageDataCache(userId, ["binance"]);
+  binanceCurrentSyncDiagnostics.delete(userId);
+  publishFinanceSessionDiagnostics();
+}
+
 export function resetFinanceSessionOrchestrator() {
   financeStageRequests.clear();
   binanceCurrentSyncRequests.clear();
