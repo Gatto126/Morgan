@@ -101,4 +101,5 @@ export interface PortfolioDashboardProps {
   onImportRefreshComplete?: () => void;
   binanceRefreshKey?: number;
   hasBinanceCredentials?: boolean;
+  hasBinanceData?: boolean;
 }

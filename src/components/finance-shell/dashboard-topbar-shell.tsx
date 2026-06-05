@@ -7,6 +7,7 @@ import {
   type DashboardStageKey
 } from "./dashboard-stage-items";
 import {
+  seedCurrentDashboardStageTopbars,
   seedCurrentDashboardStageTopbarsFromSnapshot
 } from "./dashboard-topbar-current-values";
 import {
@@ -82,7 +83,7 @@ function getDashboardFallbackItems(activeUser: UserRecord, activeStage: Dashboar
       });
     }
 
-    if (activeUser.cryptoCount > 0 || activeUser.hasBinanceCredentials) {
+    if (activeUser.cryptoCount > 0 || activeUser.hasBinanceCredentials || activeUser.hasBinanceData) {
       items.push({
         active: false,
         ariaLabel: "CRYPTO dashboard tab",
@@ -124,7 +125,8 @@ function getHydrationKey(user: UserRecord, stage: DashboardStageKey) {
     user.checkingCount,
     user.investmentCount,
     user.cryptoCount,
-    user.hasBinanceCredentials ? "binance" : "no-binance"
+    user.hasBinanceCredentials ? "binance" : "no-binance",
+    user.hasBinanceData ? "binance-data" : "no-binance-data"
   ].join(":");
 }
 
@@ -197,7 +199,10 @@ export function DashboardTopbarShell({
       && isCurrentValuationSnapshotCurrentForProfile(valuationSnapshot, activeUser, { binanceRefreshKey })
     ) {
       seedCurrentDashboardStageTopbarsFromSnapshot(activeUser, valuationSnapshot);
+      return;
     }
+
+    seedCurrentDashboardStageTopbars(activeUser, binanceRefreshKey);
   }, [activeStage, activeUser, binanceRefreshKey, valuationSnapshot]);
 
   useEffect(() => {

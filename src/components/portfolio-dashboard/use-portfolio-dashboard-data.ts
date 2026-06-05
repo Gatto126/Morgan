@@ -182,8 +182,6 @@ export function usePortfolioDashboardData({
     }
 
     lastRefreshKeyRef.current = refreshKey;
-    setHasFreshData(false);
-    setLoading(true);
     setError(null);
 
     const refreshTimer = window.setTimeout(() => {

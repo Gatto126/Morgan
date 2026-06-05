@@ -6,10 +6,11 @@ import {
   ensureFinanceBinanceCurrentBalances,
   ensureFinanceCurrentValuation,
   ensureFinanceStageReady,
-  invalidateFinanceProfile
+  invalidateFinanceProfile,
+  invalidateFinanceProfileBinanceData
 } from "./finance-session-orchestrator";
 import type { CurrentValuationSnapshot } from "./current-valuations-store";
-import { clearDashboardTopbarsForProfile } from "./dashboard-topbar-store";
+import { clearBinanceDashboardTopbarsForProfile } from "./dashboard-topbar-store";
 import type { SettingsSection } from "./settings-panel-types";
 import type { UserRecord } from "./types";
 
@@ -299,8 +300,8 @@ export function useFinanceBinanceActions({
         prevUsers.map((user) => (user.id === activeUser.id ? updatedUser : user))
       );
 
-      invalidateFinanceProfile(activeUser.id);
-      clearDashboardTopbarsForProfile(activeUser.id);
+      invalidateFinanceProfileBinanceData(activeUser.id);
+      clearBinanceDashboardTopbarsForProfile(activeUser.id);
       if (deleteData) {
         setBinanceRefreshKey((key) => key + 1);
       }

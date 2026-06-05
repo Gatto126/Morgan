@@ -10,11 +10,15 @@ import {
   getFinanceStageRequestKey,
   getFinanceSessionDiagnostics,
   getPrioritizedProfileStageWarmupOrder,
+  invalidateFinanceProfileBinanceData,
   preloadFinanceProfileStages,
   resetFinanceSessionOrchestrator
 } from "@/components/finance-shell/finance-session-orchestrator";
 import { getCurrentValuationSnapshot } from "@/components/finance-shell/current-valuations-store";
-import { readDashboardStageDataCache } from "@/components/finance-shell/dashboard-stage-data-cache";
+import {
+  readDashboardStageDataCache,
+  seedDashboardStageDataCache
+} from "@/components/finance-shell/dashboard-stage-data-cache";
 import type { UserRecord } from "@/components/finance-shell/types";
 import {
   globalLivePricesCache,
@@ -127,6 +131,75 @@ describe("finance session orchestrator", () => {
       cryptos: ["BTC"],
       isins: []
     });
+  });
+
+  it("invalidates only Binance caches when Binance data is wiped", () => {
+    const wipeUser: UserRecord = {
+      ...user,
+      id: "profile-binance-wipe",
+      checkingCount: 1,
+      cryptoCount: 1,
+      investmentCount: 1,
+      transactionCount: 3
+    };
+
+    seedDashboardStageDataCache("dashboard", wipeUser.id, wipeUser.transactionCount, {
+      accountTotals: { checking: 100, crypto: 20, heritage: 150, investment: 30 },
+      dailyData: [],
+      monthlyData: [],
+      providerSummaries: []
+    });
+    seedDashboardStageDataCache("checking", wipeUser.id, wipeUser.checkingCount, {
+      dailyData: [],
+      monthlyData: [],
+      providers: []
+    });
+    seedDashboardStageDataCache("investment", wipeUser.id, wipeUser.investmentCount, {
+      dailyData: [{ month: "2026-06-04", providerProducts: {}, providers: { trade_republic: 30 }, total: 30 }],
+      monthlyData: [],
+      providers: [{
+        cashback: 0,
+        expenses: 0,
+        income: 0,
+        interest: 0,
+        products: [{ cashback: 0, investedValue: 30, isin: "IE00B4L5Y983", productName: "ETF", quantity: 1 }],
+        sourceInstitution: "trade_republic",
+        tax: 0,
+        total: 30,
+        transactionCount: 1
+      }]
+    });
+    seedDashboardStageDataCache("crypto", wipeUser.id, wipeUser.cryptoCount, {
+      dailyData: [{ month: "2026-06-04", providerProducts: {}, providers: { trade_republic: 20 }, total: 20 }],
+      monthlyData: [],
+      providers: [{
+        cashback: 0,
+        expenses: 0,
+        income: 0,
+        interest: 0,
+        products: [{ cashback: 0, investedValue: 20, isin: "BTC", productName: "Bitcoin", quantity: 0.001 }],
+        sourceInstitution: "trade_republic",
+        tax: 0,
+        total: 20,
+        transactionCount: 1
+      }]
+    });
+    seedDashboardStageDataCache("binance", wipeUser.id, 2, {
+      balances: [
+        { eurValue: 10, freeAmount: 0.01, lockedAmount: 0, tokenName: "Bitcoin", tokenSymbol: "BTC" }
+      ],
+      hasApiKey: true,
+      isStale: false,
+      syncedAt: null
+    });
+
+    invalidateFinanceProfileBinanceData(wipeUser.id);
+
+    expect(readDashboardStageDataCache("dashboard", wipeUser.id, wipeUser.transactionCount)).not.toBeNull();
+    expect(readDashboardStageDataCache("checking", wipeUser.id, wipeUser.checkingCount)).not.toBeNull();
+    expect(readDashboardStageDataCache("investment", wipeUser.id, wipeUser.investmentCount)).not.toBeNull();
+    expect(readDashboardStageDataCache("crypto", wipeUser.id, wipeUser.cryptoCount)).not.toBeNull();
+    expect(readDashboardStageDataCache("binance", wipeUser.id, 2)).toBeNull();
   });
 
   it("starts active profile stage and Binance requests without waiting for the first stage response", async () => {

@@ -58,9 +58,11 @@ export function PortfolioDashboard({
   userSelectElement,
   onImportRefreshComplete,
   binanceRefreshKey = 0,
-  hasBinanceCredentials = false
+  hasBinanceCredentials = false,
+  hasBinanceData = false
 }: PortfolioDashboardProps) {
   const isCryptoDashboard = config.priceQueryParam === "cryptos";
+  const hasBinanceSource = isCryptoDashboard && (hasBinanceCredentials || hasBinanceData);
   const { data, dataFresh, loading, error, importRefreshVersion } = usePortfolioDashboardData({
     endpoint: config.endpoint,
     fetchErrorMessage: config.fetchErrorMessage,
@@ -91,33 +93,33 @@ export function PortfolioDashboard({
     binanceListRef
   } = useBinanceBalances({
     binanceRefreshKey,
-    shouldLoad: shouldLoad && isCryptoDashboard,
+    shouldLoad: shouldLoad && hasBinanceSource,
     userId
   });
   const dataForPriceKeys = useMemo(
-    () => data && isCryptoDashboard ? mergePortfolioDataWithBinance(data, binanceBalances) : data,
-    [binanceBalances, data, isCryptoDashboard]
+    () => data && hasBinanceSource ? mergePortfolioDataWithBinance(data, binanceBalances) : data,
+    [binanceBalances, data, hasBinanceSource]
   );
   const { livePrices } = usePortfolioLivePrices({
-    binanceBalances: isCryptoDashboard ? binanceBalances : undefined,
+    binanceBalances: hasBinanceSource ? binanceBalances : undefined,
     providers: dataForPriceKeys?.providers,
     priceQueryParam: config.priceQueryParam,
     isActive,
     shouldLoad: shouldLoad && !!data
   });
   const liveBinanceBalances = useMemo(
-    () => isCryptoDashboard ? applyLiveBinanceBalanceValues(binanceBalances, livePrices) : [],
-    [binanceBalances, isCryptoDashboard, livePrices]
+    () => hasBinanceSource ? applyLiveBinanceBalanceValues(binanceBalances, livePrices) : [],
+    [binanceBalances, hasBinanceSource, livePrices]
   );
   const dataForDisplay = useMemo(
-    () => data && isCryptoDashboard ? mergePortfolioDataWithBinance(data, liveBinanceBalances) : data,
-    [data, isCryptoDashboard, liveBinanceBalances]
+    () => data && hasBinanceSource ? mergePortfolioDataWithBinance(data, liveBinanceBalances) : data,
+    [data, hasBinanceSource, liveBinanceBalances]
   );
   const dataForChart = useMemo(
-    () => dataForDisplay && isCryptoDashboard
+    () => dataForDisplay && hasBinanceData
       ? mergePortfolioDataWithProviderHistory(dataForDisplay, "BINANCE", dataForDisplay.binanceHistoricalPoints ?? [])
       : dataForDisplay,
-    [dataForDisplay, isCryptoDashboard]
+    [dataForDisplay, hasBinanceData]
   );
   const [activeChartPoint, setActiveChartPoint] = useState<ChartPoint | null>(null);
   const isPanelOpen = showUploadView || showSettingsView || showUserSelectView;

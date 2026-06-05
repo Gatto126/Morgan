@@ -227,8 +227,9 @@ export function DashboardStageStack({
     >
       {renderedStageKeys.has("dashboard") && visibleStageKeys.has("dashboard") ? (
         <Dashboard
-          emptyStateElement={activeUser.transactionCount === 0 && !activeUser.hasBinanceCredentials ? renderInlineUploadState() : undefined}
+          emptyStateElement={activeUser.transactionCount === 0 && !activeUser.hasBinanceCredentials && !activeUser.hasBinanceData ? renderInlineUploadState() : undefined}
           hasBinanceCredentials={activeUser.hasBinanceCredentials}
+          hasBinanceData={!!activeUser.hasBinanceData}
           isActive={isActiveDashboardStageVisible}
           shouldLoad={isActiveDashboardStageVisible || shouldBackgroundLoadStage("dashboard")}
           key={`dashboard-${activeUser.id}`}
@@ -269,6 +270,7 @@ export function DashboardStageStack({
           userId={activeUser.id}
           binanceRefreshKey={binanceRefreshKey}
           hasBinanceCredentials={activeUser.hasBinanceCredentials}
+          hasBinanceData={!!activeUser.hasBinanceData}
           onImportRefreshComplete={stage === "crypto" ? onImportRefreshComplete : undefined}
           transactionCount={activeUser.cryptoCount}
         />

@@ -79,7 +79,7 @@ export function useBinanceBalances({
 
       return () => window.clearTimeout(hydrateTimer);
     }
-  }, [applyBinancePayload, binanceRefreshKey, userId]);
+  }, [applyBinancePayload, binanceRefreshKey, shouldLoad, userId]);
 
   useEffect(() => {
     if (!shouldLoad) {
@@ -95,12 +95,18 @@ export function useBinanceBalances({
     void fetchBinanceBalances(false);
   }, [fetchBinanceBalances, binanceRefreshKey, shouldLoad, userId]);
 
-  return {
-    binanceBalances,
-    binanceBalancesKnown:
+  const binanceBalancesKnown =
+    !shouldLoad
+    || (
       hasFreshBinanceBalances
-      && freshBinanceRefreshKey === binanceRefreshKey,
-    isBinanceNew,
+      && freshBinanceRefreshKey === binanceRefreshKey
+    );
+  const visibleBinanceBalances = shouldLoad && binanceBalancesKnown ? binanceBalances : [];
+
+  return {
+    binanceBalances: visibleBinanceBalances,
+    binanceBalancesKnown,
+    isBinanceNew: shouldLoad && isBinanceNew,
     isBinanceSyncing,
     filterSmallBinance,
     setFilterSmallBinance,

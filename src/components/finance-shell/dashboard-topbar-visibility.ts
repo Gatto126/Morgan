@@ -4,7 +4,7 @@ import type { UserRecord } from "./types";
 export function hasDashboardStageTopbarData(activeUser: UserRecord, activeStage: DashboardStageKey) {
   switch (activeStage) {
     case "binance":
-      return activeUser.hasBinanceCredentials;
+      return activeUser.hasBinanceCredentials || !!activeUser.hasBinanceData;
     case "checking":
       return activeUser.checkingCount > 0;
     case "crypto":
@@ -13,6 +13,6 @@ export function hasDashboardStageTopbarData(activeUser: UserRecord, activeStage:
       return activeUser.investmentCount > 0;
     case "dashboard":
     default:
-      return activeUser.transactionCount > 0 || activeUser.hasBinanceCredentials;
+      return activeUser.transactionCount > 0 || activeUser.hasBinanceCredentials || !!activeUser.hasBinanceData;
   }
 }

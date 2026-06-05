@@ -502,6 +502,72 @@ export function clearDashboardTopbarsForProfile(userId: string) {
   emitTopbarChange();
 }
 
+function isBinanceTopbarItem(item: DashboardTopbarItem) {
+  const id = item.id.trim().toLowerCase();
+  const label = item.label?.trim().toLowerCase() ?? "";
+
+  return id === "binance" || id.endsWith(":binance") || label === "binance";
+}
+
+function removeDashboardTopbarItems(
+  cacheKey: string,
+  shouldRemove: (item: DashboardTopbarItem) => boolean
+) {
+  let changed = false;
+  const entry = entries.get(cacheKey);
+  if (entry) {
+    const nextItems = entry.items.filter((item) => !shouldRemove(item));
+    if (nextItems.length !== entry.items.length) {
+      changed = true;
+      if (nextItems.length > 0) {
+        entries.set(cacheKey, {
+          items: nextItems,
+          updatedAt: Date.now()
+        });
+        writeStoredTopbarItems(cacheKey, nextItems);
+      } else {
+        entries.delete(cacheKey);
+        removeStoredTopbarItems(cacheKey);
+      }
+    }
+  }
+
+  const transientEntry = transientEntries.get(cacheKey);
+  if (transientEntry) {
+    const nextItems = transientEntry.items.filter((item) => !shouldRemove(item));
+    if (nextItems.length !== transientEntry.items.length) {
+      changed = true;
+      if (nextItems.length > 0) {
+        transientEntries.set(cacheKey, {
+          items: nextItems,
+          updatedAt: Date.now()
+        });
+      } else {
+        transientEntries.delete(cacheKey);
+      }
+    }
+  }
+
+  return changed;
+}
+
+export function clearBinanceDashboardTopbarsForProfile(userId: string) {
+  let changed = false;
+  const binanceCacheKey = getEntryKey(userId, "binance");
+  clearDelayedTopbarPublish(binanceCacheKey);
+  changed = entries.delete(binanceCacheKey) || changed;
+  changed = transientEntries.delete(binanceCacheKey) || changed;
+  removeStoredTopbarItems(binanceCacheKey);
+
+  const cryptoCacheKey = getEntryKey(userId, "crypto");
+  clearDelayedTopbarPublish(cryptoCacheKey);
+  changed = removeDashboardTopbarItems(cryptoCacheKey, isBinanceTopbarItem) || changed;
+
+  if (changed) {
+    emitTopbarChange();
+  }
+}
+
 export function readDashboardTopbarItems(stage: DashboardStageKey, userId: string) {
   const cacheKey = getEntryKey(userId, stage);
 

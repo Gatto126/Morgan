@@ -52,6 +52,7 @@ interface DashboardProps {
   binanceRefreshKey?: number;
   emptyStateElement?: ReactNode;
   hasBinanceCredentials?: boolean;
+  hasBinanceData?: boolean;
 }
 
 function isDashboardValuationSnapshotCurrent(
@@ -104,8 +105,10 @@ export function Dashboard({
   onImportRefreshComplete,
   binanceRefreshKey = 0,
   emptyStateElement,
-  hasBinanceCredentials = false
+  hasBinanceCredentials = false,
+  hasBinanceData = false
 }: DashboardProps) {
+  const hasBinanceSource = hasBinanceCredentials || hasBinanceData;
   const {
     binanceBalances,
     binanceBalancesKnown,
@@ -115,7 +118,7 @@ export function Dashboard({
     binanceListRef
   } = useBinanceBalances({
     userId,
-    shouldLoad,
+    shouldLoad: shouldLoad && hasBinanceSource,
     binanceRefreshKey
   });
   const { data, dataFresh, loading, error, importRefreshVersion } = useDashboardData({
@@ -142,8 +145,8 @@ export function Dashboard({
     () => getBinanceBalancesTotalCents(liveBinanceBalances),
     [liveBinanceBalances]
   );
-  const binanceHistoricalPoints = data?.binanceHistoricalPoints ?? [];
-  const hasBinancePortfolio = hasBinanceCredentials || binanceTotalCents > 0 || binanceHistoricalPoints.length > 0;
+  const binanceHistoricalPoints = hasBinanceData ? data?.binanceHistoricalPoints ?? [] : [];
+  const hasBinancePortfolio = hasBinanceSource || binanceTotalCents > 0 || binanceHistoricalPoints.length > 0;
   const storedValuationSnapshot = useCurrentValuationSnapshot(userId);
   const currentValuationSnapshot = useMemo(
     () => isDashboardValuationSnapshotCurrent(storedValuationSnapshot, {
@@ -169,7 +172,7 @@ export function Dashboard({
     [currentValuationSnapshot]
   );
   const dashboardValuesKnown = !!data && dataFresh;
-  const dashboardCryptoValuesKnown = cryptoPricesReady && (!hasBinanceCredentials || binanceBalancesKnown);
+  const dashboardCryptoValuesKnown = cryptoPricesReady && (!hasBinanceSource || binanceBalancesKnown);
   const hasCurrentValuationPoint = !!currentValuationChartPoint;
   const binanceInitialDataReady =
     !hasBinanceCredentials || hasCurrentValuationPoint;
