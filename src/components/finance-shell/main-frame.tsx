@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 
 import PlusIcon from "../ui/plus-icon";
 import { DashboardStageStack } from "./dashboard-stage-stack";
+import { getTransactionImportFileAccept } from "./file-input-accept";
 import { SidebarNavigation } from "./sidebar-navigation";
 import type { UserRecord } from "./types";
 import type { Stage } from "./use-finance-navigation";
@@ -85,6 +86,8 @@ export function FinanceShellMainFrame({
   onProfileClick,
   onSettingsClick
 }: FinanceShellMainFrameProps) {
+  const fileInputAccept = getTransactionImportFileAccept();
+
   return (
     <div ref={appContentRef} className="mx-auto flex min-h-dvh w-full max-w-[1800px] flex-col overflow-y-auto hide-scrollbar px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-5">
       <section className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_320px_auto] sm:grid-rows-[auto_480px_auto] md:grid-cols-[64px_minmax(0,1fr)] md:grid-rows-[auto_520px_auto] lg:grid-rows-[auto_600px_auto] gap-4 content-start lg:gap-5">
@@ -157,7 +160,9 @@ export function FinanceShellMainFrame({
             ) : null}
             <input
               ref={fileInputRef}
+              accept={fileInputAccept}
               aria-hidden="true"
+              suppressHydrationWarning
               style={{ display: "none" }}
               onChange={onFileSelection}
               type="file"
